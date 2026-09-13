@@ -1356,6 +1356,7 @@
   "usage.cost_comparison": "Cost Comparison",
   "usage.cost_comparison_hint": "what same workload costs elsewhere · 30 days",
   "usage.export_csv": "Export CSV",
+  "usage.open_cost_optimizer": "Cost Optimizer",
   "usage.fleet_note": "See Fleet for all machines.",
   "usage.from_otlp_message_processed": "from OTLP openclaw.message.processed",
   "usage.from_otlp_run_duration": "from OTLP openclaw.run.duration_ms",

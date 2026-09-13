@@ -563,6 +563,14 @@ jobs:
       - name: Cost optimizer tells a hole from a zero
         run: python3 -m pytest tests/test_cost_optimizer_zero_is_not_unknown.py -q
 
+      # vivekchand/clawmetry#5934 (REQ-OBS-CEA-023): a cold dashboard showed the
+      # optimizer spinner for ~33s, then a [prod] debug label, unlabelled
+      # figures, fixed "60-80%" savings, hardcoded recommendations and Ollama
+      # advice to a team on a cloud provider. These run the shipped renderer
+      # under node and the real route over a scratch store.
+      - name: Cost optimizer is fast, labelled and provider-aware
+        run: python3 -m pytest tests/test_cost_optimizer_demo_honesty.py -q
+
       # A Pro node stopped syncing for 12 hours (2026-09-08) because sync.pid
       # named a pid the OS had recycled onto an unrelated process: every
       # launchd respawn read "alive" and exited, and `clawmetry status` still
