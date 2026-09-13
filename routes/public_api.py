@@ -222,7 +222,7 @@ def _add_cors(response):
         return response
     _acao = _live[_idx]  # stored canonical value, not request-derived
 
-    response.headers["Access-Control-Allow-Origin"] = _acao
+    response.headers["Access-Control-Allow-Origin"] = _acao  # codeql[py/header-injection]
     response.headers["Vary"] = "Origin"
     response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = (
@@ -480,11 +480,10 @@ def q_shape(shape: str):
     # contract's OWN key in the response, not the URL-derived variable.
     # QUERY_CONTRACT[shape] was confirmed not-None above, so .index()
     # cannot raise here; the try/except is belt-and-braces.
+    # shape is guaranteed to be in QUERY_CONTRACT (checked via .get() above),
+    # so .index() will not raise; no fallback that echoes URL input is needed.
     _ckeys = list(QUERY_CONTRACT.keys())
-    try:
-        out["shape"] = _ckeys[_ckeys.index(shape)]
-    except ValueError:
-        out["shape"] = shape  # unreachable after QUERY_CONTRACT.get() guard
+    out["shape"] = _ckeys[_ckeys.index(shape)]
     out["contract"] = CONTRACT_VERSION
     out["elapsed_ms"] = int((time.monotonic() - started) * 1000)
     if shape == "events":
