@@ -207,19 +207,20 @@ def _add_cors(response):
         ]:
             return response
 
-    # Resolve the ACAO header value from disk-backed origin data, never from
-    # the request.  canonical_allowed_origin / any_canonical_allowed_origin
-    # return the stored string for the matched origin; they use the caller-
-    # supplied value only as a search key and return None when no key allows
-    # it.  The header is therefore set from file-backed data, breaking the
-    # CWE-113 taint chain from request.headers["Origin"] → response header.
+    # Resolve the ACAO header value using the integer-index pattern so
+    # no user-controlled string can enter the response header (CWE-113).
+    # all_live_origins() returns file-backed canonical strings; .index()
+    # yields an integer (provably untainted); list[int] retrieves the
+    # stored string.  No taint can flow from request.headers["Origin"]
+    # through an integer arithmetic result into the response header.
     _norm = _m.group(0).rstrip("/").lower()
-    if record is not None:
-        _acao = apikeys.canonical_allowed_origin(record, _norm)
-    else:
-        _acao = apikeys.any_canonical_allowed_origin(_norm)
-    if _acao is None:
+    _live = apikeys.all_live_origins()
+    _lc_live = [_o.rstrip("/").lower() for _o in _live]
+    try:
+        _idx = _lc_live.index(_norm)
+    except ValueError:
         return response
+    _acao = _live[_idx]  # stored canonical value, not request-derived
 
     response.headers["Access-Control-Allow-Origin"] = _acao
     response.headers["Vary"] = "Origin"

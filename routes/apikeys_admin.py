@@ -112,7 +112,7 @@ def api_keys_create():
         }), 500
     return jsonify({
         "ok": True,
-        "key": plaintext,
+        "key": plaintext,  # codeql[py/clear-text-logging-sensitive-data] intentional one-time delivery of the user's own key
         "record": {k: v for k, v in record.items() if k != "hash"},
     })
 
