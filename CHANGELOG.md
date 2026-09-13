@@ -1,5 +1,11 @@
 ## Unreleased
 
+### Fixed: Guard offered Pause, Stop and Kill on GitHub Copilot conversations inside VS Code (2026-09-14)
+- **Why:** clawmetry-pro now observes Copilot Chat in VS Code under the same `copilot` runtime as the Copilot CLI. `copilot` is in the blanket signal-supported set, so every VS Code conversation would have shown four working-looking buttons. A VS Code chat has no process of its own: it runs inside the editor. Worse than inert, the resolver's working-directory fallback would have matched a Copilot CLI running in the same folder and signalled that session instead.
+- **What:** `process_control.is_copilot_editor_session()` recognises the `vscode-` native id the pro adapter gives these sessions. `runtime_control_support()` answers `unsupported` for them with a sentence saying why, before the blanket branch, and `resolve_session()` refuses them before any resolver or fallback runs. Copilot CLI sessions keep all four controls.
+- **Verified:** 3 new tests in `tests/test_guard_control_capability.py`, all red on `main` and green with the change; 68 passing across that file and `tests/test_process_control.py`.
+- **Requirement:** AC-GOV-ERS-011.5.
+
 ### Added: OpenExecutive as the 32nd runtime (2026-09-12)
 - **Why:** OpenExecutive (SenteLabsAI/OpenExecutive, Apache-2.0) is an AI executive team that answers in Slack and email, consults specialist agents, and runs a scheduler that sends messages later with no one in the loop. What it is about to send is exactly what an operator needs to see, and all of it is recorded in one SQLite store it already writes.
 - **What:** registered in the catalogue, loader, session-prefix sets, probe, memory catalogue, declared records and resume hints; the adapter ships in clawmetry-pro 0.7.26. Sessions include conversations that started in a chat or email channel, specialist consults show as steps with question and answer, failed tools and failed sends are flagged, and pending sends are visible before they go out.
