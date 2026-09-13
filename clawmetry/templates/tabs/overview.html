@@ -669,8 +669,12 @@
         // loadAll on purpose), so it can't ride loadAll's coalesce window —
         // gate it directly so it doesn't fetch every 60s while backgrounded.
         if (typeof document !== 'undefined' && document.hidden) return;
-        fetch('/api/overview', {credentials: 'same-origin'})
-          .then(function(r){ return r.ok ? r.json() : null; })
+        // #5935: share the page's in-flight /api/overview instead of sending
+        // a third copy of it during startup.
+        (typeof fetchJsonWithTimeout === 'function'
+          ? fetchJsonWithTimeout('/api/overview', 15000)
+          : fetch('/api/overview', {credentials: 'same-origin'})
+              .then(function(r){ return r.ok ? r.json() : null; }))
           .then(function(d){
             if(d && d.heartbeat){ window.renderOverviewHeartbeat(d.heartbeat); }
           })

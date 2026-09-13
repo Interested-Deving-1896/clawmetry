@@ -415,6 +415,15 @@ jobs:
       - name: First-run report gate
         run: python3 -m pytest tests/test_first_run_gate_js.py -q
 
+      # Dashboard cold load (#5935). Startup used to send ~100 requests in its
+      # first 10 s -- the whole Overview, a Crons and Memory prefetch and twelve
+      # Flow tool details while the page sat on Sessions -- against the
+      # browser's six connections per origin, so the visible screen's own
+      # requests timed out in the browser queue. Node-based, named explicitly
+      # because this job runs FILE LISTS.
+      - name: Dashboard cold load boot
+        run: python3 -m pytest tests/test_cold_load_boot_js.py -q
+
       # Trail page + session-first landing: the live HTML must include
       # tabs/trail.html (Jinja render, not a template grep), the default
       # active page must be the Sessions list, and every Trail string must
@@ -831,6 +840,7 @@ jobs:
             tests/test_family_runtime_ingest.py \
             tests/test_phase4_adapter_move.py \
             tests/test_openclaw_detection_real.py \
+            tests/test_openclaw_doctor_cache.py \
             tests/test_repo_scan_daemon_wiring.py \
             tests/test_guard_workspace_kinds.py \
             tests/test_tool_risk.py \

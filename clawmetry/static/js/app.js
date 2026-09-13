@@ -1290,6 +1290,16 @@ function _cmIsOverviewTab() {
   return !_cmCurrentTab || _cmCurrentTab === 'overview';
 }
 
+// #5935: when an Overview widget last loaded successfully. Startup, the
+// refresh starters and switchTab('overview') can all want the same widget
+// within a second of each other; a load that just succeeded is not repeated.
+var _cmWidgetLoadedAt = {};
+function _cmMarkLoaded(key) { _cmWidgetLoadedAt[key] = Date.now(); }
+function _cmLoadedWithin(key, ms) {
+  var at = _cmWidgetLoadedAt[key];
+  return !!at && (Date.now() - at) < ms;
+}
+
 // Check alerts every 30s
 visibilitySetInterval(checkActiveAlerts, 30000);
 setTimeout(checkActiveAlerts, 3000);
@@ -2179,6 +2189,14 @@ function switchTab(name) {
   if (name !== 'crons' && _cronAutoRefreshTimer) { clearInterval(_cronAutoRefreshTimer); _cronAutoRefreshTimer = null; }
   if (name === 'inventory') { if (typeof renderInventory === 'function') renderInventory(); }
   if (name === 'overview') loadAll();
+  // #5935: startup no longer preloads Overview's system health and tasks when
+  // the page lands on another screen, so the first visit loads them here at
+  // once instead of waiting for the next 10-30 s refresh tick. A load that
+  // just succeeded (landing on Overview, or a quick tab round trip) is reused.
+  if (name === 'overview') {
+    if (typeof loadSystemHealth === 'function' && !_cmLoadedWithin('systemHealth', 10000)) loadSystemHealth();
+    if (typeof loadOverviewTasks === 'function' && !_cmLoadedWithin('overviewTasks', 10000)) loadOverviewTasks();
+  }
   if (name === 'overview') { if (typeof _velocityPollTimer !== 'undefined' && _velocityPollTimer) clearInterval(_velocityPollTimer); if (typeof loadTokenVelocity === 'function') _velocityPollTimer = visibilitySetInterval(function() { if (!_cmIsOverviewTab()) return; loadTokenVelocity(); }, 30000); }
   // Needs-you strip. loadAll() only runs on tab switch, so without this the
   // strip would go stale while you sit on Overview — and an agent that starts
@@ -4970,10 +4988,21 @@ async function loadAll() {
     // Usage may be slow on first run; keep trying in background with timeout.
     try {
       var usage = await fetchJsonWithTimeout('/api/usage', 5000);
+      window._cmLastUsage = usage;
       loadMiniWidgets(overview, usage);
     } catch (e) {
-      // Keep UI responsive with placeholder values until next refresh.
-      loadMiniWidgets(overview, {todayCost:0, weekCost:0, monthCost:0, month:0, today:0});
+      // #5935: this used to draw $0.00 and 0 tokens -- figures nobody had
+      // measured -- whenever usage was slow on a cold start, which read as
+      // "this machine has no spend". Keep the last real answer if there is
+      // one; otherwise render the rest of the widgets and put the cost and
+      // token tiles back on their "still loading" placeholders. The 10 s
+      // Overview refresh retries.
+      if (window._cmLastUsage) {
+        loadMiniWidgets(overview, window._cmLastUsage);
+      } else {
+        Promise.resolve(loadMiniWidgets(overview, {}))
+          .then(_cmUsageTilesStillLoading, _cmUsageTilesStillLoading);
+      }
     }
     // Health timeline (#2196 item #4) — fire-and-forget; renderer hides the
     // card if there's nothing to show.
@@ -4994,6 +5023,20 @@ async function loadAll() {
     _loadAllInFlight = null;
   });
   return _loadAllInFlight;
+}
+
+// #5935: the cost and token tiles when /api/usage has not answered yet and no
+// earlier answer exists. Their template placeholders, never $0.00 or 0: a
+// figure nobody measured must not read as a measured zero.
+function _cmUsageTilesStillLoading() {
+  var today = document.getElementById('cost-today');
+  if (today) today.innerHTML = '<span class="cm-fig-unknown">still loading</span>';
+  ['cost-week', 'cost-month', 'token-rate', 'tokens-today'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = '--';
+  });
+  window._cmCostTodayRaw = null;
+  window._cmTodayTokensRaw = undefined;
 }
 
 async function loadMiniWidgets(overview, usage) {
@@ -12586,8 +12629,10 @@ async function _cmLoadDetectedRuntimes() {
       var sp = await window.__cmSnap();
       det = sp && sp.detectedRuntimes;            // daemon-detected, server-blind
     } else {
-      var ov = await fetch('/api/overview', { credentials: 'same-origin' })
-        .then(function(r) { return r.json(); }).catch(function() { return null; });
+      // #5935: share the page's in-flight /api/overview rather than sending
+      // another copy of it during startup.
+      var ov = await fetchJsonWithTimeout('/api/overview', 15000)
+        .catch(function() { return null; });
       det = ov && (ov.detectedRuntimes || ov.detected_runtimes);
     }
     var run = {};
@@ -14504,8 +14549,9 @@ async function loadCrons() {
     loadQueueLanes();
     // Load multi-node cron status from fleet nodes
     loadCronsMultiNode();
-    // Load cron health monitor (GH #302)
-    loadCronHealth();
+    // (#5935) loadCronHealth() used to be called a second time here for the
+    // GH #302 monitor. It is the same panel and the same endpoint, so every
+    // Crons load sent two concurrent 5-9 s /api/cron/health-summary requests.
     // Start auto-refresh if checkbox is checked and timer not running
     var cb = document.getElementById('cron-auto-refresh');
     if (cb && cb.checked && !_cronAutoRefreshTimer) {
@@ -14518,8 +14564,13 @@ async function loadCrons() {
     var listEl = document.getElementById('cron-jobs-list')
               || document.getElementById('cron-jobs')
               || document.getElementById('crons-list');
+    // #5935: a sentence, not the raw error code ("Failed to load crons:
+    // timeout"). A timeout means the server is busy, not that there are none.
+    var _crSlow = (e === 'timeout') || !!(e && (e.name === 'AbortError' || e.name === 'TimeoutError'));
     var msg = '<div style="padding:16px;color:var(--text-error);font-size:13px;">'
-            + 'Failed to load crons: ' + escHtml(String(e && e.message || e))
+            + (_crSlow
+                ? 'Scheduled jobs are taking longer than usual to load. Your jobs are not gone; try again in a moment.'
+                : 'Scheduled jobs could not be loaded right now.')
             + ' <button onclick="loadCrons()" title="Server slow — usually clears within 30 s" '
             + 'style="margin-left:8px;background:transparent;border:1px solid var(--border-primary);'
             + 'color:var(--text-secondary);border-radius:4px;padding:2px 10px;font-size:11px;cursor:pointer;">Retry</button>'
@@ -17019,6 +17070,7 @@ async function _renderVersionRegression() {
 async function loadSystemHealth() {
   try {
     var d = await fetchJsonWithTimeout('/api/system-health', 18000);
+    _cmMarkLoaded('systemHealth');  // #5935: starters and switchTab reuse it
     // Connector liveness: surface a 'down' inbound channel loudly (incident:
     // a channel went deaf ~37h with no alarm). Driven by the same payload.
     try { _renderConnectorBanner(d.connector_liveness); } catch(e) {}
@@ -17470,10 +17522,15 @@ async function loadSystemHealth() {
   } catch(e) {
     // Issue #1257 part 3 — replace static "Unable to load right now"
     // with Failed-to-load + Retry. Mirrors Brain pattern (PR #1239).
-    console.error('System health load failed', e);
-    var errMsg = escHtml(String(e && e.message || e));
+    // #5935: a sentence, not the raw error code ("Failed to load: timeout"
+    // told a first-time user nothing and read as broken). A timeout is a busy
+    // server, which the 30 s Overview refresh retries on its own.
+    console.warn('System health load failed', e);
+    var _shSlow = (e === 'timeout') || !!(e && (e.name === 'AbortError' || e.name === 'TimeoutError'));
     var msg = '<div style="padding:8px 10px;background:var(--bg-error,rgba(220,38,38,0.08));border:1px solid rgba(220,38,38,0.3);border-radius:8px;font-size:12px;color:var(--text-error,#dc2626);">'
-      + 'Failed to load: ' + errMsg
+      + (_shSlow
+          ? 'System health is taking longer than usual to answer. It tries again on its own every 30 seconds.'
+          : 'System health could not be loaded right now.')
       + ' <button onclick="loadSystemHealth()" title="Server slow \u2014 usually clears within 30 s" '
       + 'style="margin-left:8px;background:transparent;border:1px solid var(--border-primary);'
       + 'color:var(--text-secondary);border-radius:4px;padding:1px 8px;font-size:11px;cursor:pointer;">Retry</button>'
@@ -17531,7 +17588,11 @@ async function _loadReliabilityWidget() {
   }
 }
 function startSystemHealthRefresh() {
-  loadSystemHealth();
+  // #5935: only load now when Overview is on screen and startup has not just
+  // loaded it. This used to fire unconditionally right after boot, sending a
+  // second /api/system-health (and its three siblings) while the page sat on
+  // Sessions. switchTab('overview') covers the first visit.
+  if (_cmIsOverviewTab() && !_cmLoadedWithin('systemHealth', 10000)) loadSystemHealth();
   if (window._sysHealthTimer) clearInterval(window._sysHealthTimer);
   // Tab-scoped: loadSystemHealth fans out to system-health + delegation-tree
   // + handler-latency + reliability (4 endpoints) and is an Overview widget.
@@ -23107,7 +23168,8 @@ function startOverviewRefresh() {
     _overviewRefreshRunning = true;
     try { await loadAll(); } finally { _overviewRefreshRunning = false; }
   }, 10000);
-  loadMainActivity();
+  // #5935: Overview widget; the 5 s poller below picks it up when Overview opens.
+  if (_cmIsOverviewTab()) loadMainActivity();
   if (window._mainActivityTimer) clearInterval(window._mainActivityTimer);
   window._mainActivityTimer = visibilitySetInterval(function() {
     if (!_cmIsOverviewTab()) return;
@@ -23975,7 +24037,12 @@ function initFlow() {
   // Hide unconfigured channels in the flow SVG
   hideUnconfiguredChannels(document);
 
-  fetchJsonWithTimeout('/api/overview', 5000).then(async function(d) {
+  // #5935: this is the FIRST /api/overview caller at startup, and every later
+  // caller (loadAll, the runtime switcher, the heartbeat card) shares its
+  // in-flight request, so its timer is the one that aborts it. 5 s aborted a
+  // request the server was still answering while it waited in the browser's
+  // connection queue.
+  fetchJsonWithTimeout('/api/overview', 15000).then(async function(d) {
     if (!d.model || d.model === 'unknown') {
       var fm = await resolvePrimaryModelFallback();
       if (fm && fm !== 'unknown') d.model = fm;
@@ -25333,6 +25400,7 @@ function _ovRenderCard(agent, idx) {
 async function loadOverviewTasks() {
   try {
     var data = await fetchJsonWithTimeout('/api/subagents', 4000);
+    _cmMarkLoaded('overviewTasks');  // #5935: starters and switchTab reuse it
     var el = document.getElementById('overview-tasks-list');
     var countBadge = document.getElementById('overview-tasks-count-badge');
     if (!el) return true;
@@ -25426,7 +25494,9 @@ async function loadOverviewTasks() {
 }
 
 function startOverviewTasksRefresh() {
-  loadOverviewTasks();
+  // #5935: same rule as startSystemHealthRefresh -- load now only when
+  // Overview is on screen and startup has not just loaded its tasks.
+  if (_cmIsOverviewTab() && !_cmLoadedWithin('overviewTasks', 10000)) loadOverviewTasks();
   if (_ovTasksTimer) clearInterval(_ovTasksTimer);
   _ovTasksTimer = visibilitySetInterval(function() {
     if (!_cmIsOverviewTab()) return;
@@ -27650,8 +27720,15 @@ function _prefetchToolData() {
     }).catch(function(){});
   });
 }
+// #5935: the modals only exist on the Flow / Overview diagrams. The 2 s
+// startup prefetch used to fire all twelve requests whatever screen the page
+// landed on (Sessions, by default) while that screen's own requests queued.
+function _prefetchToolDataIfVisible() {
+  if (window._cmCurrentTab && window._cmCurrentTab !== 'flow' && window._cmCurrentTab !== 'overview') return;
+  _prefetchToolData();
+}
 document.addEventListener('DOMContentLoaded', function() {
-  setTimeout(_prefetchToolData, 2000); // prefetch 2s after load
+  setTimeout(_prefetchToolDataIfVisible, 2000); // prefetch 2s after load, on a screen that uses it
   // visibilitySetInterval (PR #1270) so the cache-refresh poll pauses
   // when the browser tab is hidden — completes the lazy-load Phase 2
   // sweep this PR is closing out. Page-load fires once so no-leak risk
@@ -28678,23 +28755,37 @@ async function bootDashboard() {
     }
   } catch(e) { /* auth check hung -- boot anyway, safety timeout will fire */ }
 
-  setBootStep('overview', 'loading', 'Loading overview + model context');
-  setBootStep('tasks', 'loading', 'Loading active tasks');
-  setBootStep('health', 'loading', 'Loading system health');
+  // #5935: startup loads only the screen the page lands on. The page opens on
+  // Sessions (_cmBootLanding has already switched tabs by the time the auth
+  // check above resolves), yet this used to load the whole Overview too:
+  // ~100 requests in the first 10 s against the browser's six connections per
+  // origin, so the requests the visible screen needed sat in the browser's
+  // queue until their client timeouts fired ("Initial load failed timeout",
+  // "System health load failed timeout", "loadCrons failed timeout").
+  // switchTab('overview') loads these when Overview is opened.
+  if (_cmIsOverviewTab()) {
+    setBootStep('overview', 'loading', 'Loading overview + model context');
+    setBootStep('tasks', 'loading', 'Loading active tasks');
+    setBootStep('health', 'loading', 'Loading system health');
 
-  // Kick off all three primary steps in parallel. If any hangs we surface
-  // "delayed" but the overall boot still completes.
-  var results = await Promise.allSettled([
-    _withTimeout(Promise.resolve().then(loadAll), 5000, 'overview'),
-    _withTimeout(Promise.resolve().then(loadOverviewTasks), 5000, 'tasks'),
-    _withTimeout(Promise.resolve().then(loadSystemHealth), 12000, 'health'),
-  ]);
-  var okOverview = results[0].status === 'fulfilled' && results[0].value !== false;
-  var okTasks    = results[1].status === 'fulfilled' && results[1].value !== false;
-  var okHealth   = results[2].status === 'fulfilled' && results[2].value !== false;
-  setBootStep('overview', okOverview ? 'done' : 'fail', okOverview ? 'Overview ready' : 'Overview delayed');
-  setBootStep('tasks',    okTasks    ? 'done' : 'fail', okTasks    ? 'Tasks ready'    : 'Tasks delayed');
-  setBootStep('health',   okHealth   ? 'done' : 'fail', okHealth   ? 'System health ready' : 'System health delayed');
+    // Kick off all three primary steps in parallel. If any hangs we surface
+    // "delayed" but the overall boot still completes.
+    var results = await Promise.allSettled([
+      _withTimeout(Promise.resolve().then(loadAll), 5000, 'overview'),
+      _withTimeout(Promise.resolve().then(loadOverviewTasks), 5000, 'tasks'),
+      _withTimeout(Promise.resolve().then(loadSystemHealth), 12000, 'health'),
+    ]);
+    var okOverview = results[0].status === 'fulfilled' && results[0].value !== false;
+    var okTasks    = results[1].status === 'fulfilled' && results[1].value !== false;
+    var okHealth   = results[2].status === 'fulfilled' && results[2].value !== false;
+    setBootStep('overview', okOverview ? 'done' : 'fail', okOverview ? 'Overview ready' : 'Overview delayed');
+    setBootStep('tasks',    okTasks    ? 'done' : 'fail', okTasks    ? 'Tasks ready'    : 'Tasks delayed');
+    setBootStep('health',   okHealth   ? 'done' : 'fail', okHealth   ? 'System health ready' : 'System health delayed');
+  } else {
+    setBootStep('overview', 'done', 'Overview loads when you open it');
+    setBootStep('tasks', 'done', 'Tasks load when you open Overview');
+    setBootStep('health', 'done', 'System health loads when you open Overview');
+  }
   try { loadSandboxStatus(); } catch (e) {}
 
   // Connect live streams last so they don't eat the waitress thread pool
@@ -28704,12 +28795,11 @@ async function bootDashboard() {
   try { startHealthStream(); } catch (e) {}
   setBootStep('streams', 'done', 'Live streams connected');
 
-  // Prefetches and periodic refreshes are background work -- never let them
-  // block the overlay.
-  (async function backgroundPrefetch() {
-    try { await _withTimeout(loadCrons(), 5000, 'crons'); } catch (e) {}
-    try { await _withTimeout(loadMemory(), 5000, 'memory'); } catch (e) {}
-  })();
+  // (#5935) No background prefetch of the Crons and Memory screens here any
+  // more. Nothing outside those screens reads what they load, switchTab()
+  // loads each one when it is opened, and at startup they only competed with
+  // the visible screen for connections (the "loadCrons failed timeout" in the
+  // console was this prefetch).
 
   startSystemHealthRefresh();
   startOverviewRefresh();
