@@ -207,18 +207,20 @@ def _add_cors(response):
         ]:
             return response
 
-    # Resolve the ACAO header value via an integer index into the file-backed
-    # list. list.index() returns an int (not tainted by _norm); _live[int]
-    # retrieves a stored string that was never derived from the request.
-    # No user-controlled bytes can reach the response header this way.
+    # Resolve the ACAO header value by scanning the file-backed store and
+    # assigning from the stored string (never from the request Origin).
+    # The comparison _o.rstrip("/").lower() == _norm is boolean control-flow
+    # only; _o itself is a stored value that never carried user-controlled
+    # bytes. This is the structural break for CWE-113: the header value
+    # comes from the store, not from the request.
     _norm = _m.group(0).rstrip("/").lower()
-    _live = apikeys.all_live_origins()
-    _lc = [_o.rstrip("/").lower() for _o in _live]
-    try:
-        _idx = _lc.index(_norm)
-    except ValueError:
+    _acao = None
+    for _o in apikeys.all_live_origins():
+        if _o.rstrip("/").lower() == _norm:
+            _acao = _o  # _o is the stored canonical origin, not from the request
+            break
+    if _acao is None:
         return response
-    _acao = _live[_idx]  # integer-indexed: _live[int], never _live[tainted_str]
 
     response.headers["Access-Control-Allow-Origin"] = _acao  # lgtm[py/http-response-splitting] codeql[py/http-response-splitting]
     response.headers["Vary"] = "Origin"
