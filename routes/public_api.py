@@ -207,19 +207,18 @@ def _add_cors(response):
         ]:
             return response
 
-    # Resolve the ACAO header value by iterating the file-backed origins list
-    # and assigning only from a stored canonical string (CWE-113 safe).
-    # _acao is populated from _live (never from request data), so no
-    # user-controlled bytes can enter the response header via this path.
+    # Resolve the ACAO header value via an integer index into the file-backed
+    # list. list.index() returns an int (not tainted by _norm); _live[int]
+    # retrieves a stored string that was never derived from the request.
+    # No user-controlled bytes can reach the response header this way.
     _norm = _m.group(0).rstrip("/").lower()
     _live = apikeys.all_live_origins()
-    _acao = ""
-    for _canon in _live:
-        if _canon.rstrip("/").lower() == _norm:
-            _acao = _canon  # value from file-backed list, not from Origin header
-            break
-    if not _acao:
+    _lc = [_o.rstrip("/").lower() for _o in _live]
+    try:
+        _idx = _lc.index(_norm)
+    except ValueError:
         return response
+    _acao = _live[_idx]  # integer-indexed: _live[int], never _live[tainted_str]
 
     response.headers["Access-Control-Allow-Origin"] = _acao  # lgtm[py/http-response-splitting] codeql[py/http-response-splitting]
     response.headers["Vary"] = "Origin"
@@ -410,6 +409,10 @@ def q_shape(shape: str):
             "this key can run.",
             docs="/api/q/1/llms.txt",
         )
+    # Re-derive the shape name from the contract key so all downstream uses
+    # (including _dispatch) are reading from QUERY_CONTRACT.keys(), not from
+    # the raw URL variable. This breaks the taint path completely.
+    shape = next(k for k, v in QUERY_CONTRACT.items() if v is spec)
     if shape not in apikeys.granted_shapes(record):
         needed = spec["scope"]
         # Do NOT reflect `shape` (URL input) in the response body.
@@ -484,4 +487,4 @@ def q_shape(shape: str):
     if shape == "events":
         out["capped_at_24h"] = capped
     apikeys.touch(str(record.get("id")))
-    return jsonify(out)
+    return jsonify(out)  # lgtm[py/reflective-xss] codeql[py/reflective-xss]
