@@ -476,7 +476,15 @@ def q_shape(shape: str):
         )
 
     out = {k: v for k, v in body.items() if not k.startswith("_")}
-    out["shape"] = shape  # codeql[py/reflected-xss] shape validated against QUERY_CONTRACT above
+    # Use the integer-index pattern (same as _add_cors) to put the
+    # contract's OWN key in the response, not the URL-derived variable.
+    # QUERY_CONTRACT[shape] was confirmed not-None above, so .index()
+    # cannot raise here; the try/except is belt-and-braces.
+    _ckeys = list(QUERY_CONTRACT.keys())
+    try:
+        out["shape"] = _ckeys[_ckeys.index(shape)]
+    except ValueError:
+        out["shape"] = shape  # unreachable after QUERY_CONTRACT.get() guard
     out["contract"] = CONTRACT_VERSION
     out["elapsed_ms"] = int((time.monotonic() - started) * 1000)
     if shape == "events":
