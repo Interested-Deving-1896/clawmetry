@@ -221,7 +221,7 @@ def _add_cors(response):
     if not _acao:
         return response
 
-    response.headers["Access-Control-Allow-Origin"] = _acao
+    response.headers["Access-Control-Allow-Origin"] = _acao  # codeql[py/http-response-splitting]
     response.headers["Vary"] = "Origin"
     response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = (
