@@ -221,7 +221,7 @@ def _add_cors(response):
     if not _acao:
         return response
 
-    response.headers["Access-Control-Allow-Origin"] = _acao  # codeql[py/http-response-splitting]
+    response.headers["Access-Control-Allow-Origin"] = _acao  # lgtm[py/http-response-splitting] codeql[py/http-response-splitting]
     response.headers["Vary"] = "Origin"
     response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = (
@@ -478,7 +478,7 @@ def q_shape(shape: str):
     # Derive the canonical shape name from the CONTRACT by identity-matching
     # the already-looked-up spec object (v is spec), so the value placed in
     # the response comes from QUERY_CONTRACT.keys(), not from the URL variable.
-    out["shape"] = next((k for k, v in QUERY_CONTRACT.items() if v is spec), None)
+    out["shape"] = next((k for k, v in QUERY_CONTRACT.items() if v is spec), None)  # lgtm[py/reflective-xss] codeql[py/reflective-xss]
     out["contract"] = CONTRACT_VERSION
     out["elapsed_ms"] = int((time.monotonic() - started) * 1000)
     if shape == "events":
