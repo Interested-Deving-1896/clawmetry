@@ -16,7 +16,8 @@ What a reference MEANS, stated once because it is the easiest thing to get
 wrong: the finding is *relevant to* that item. It is not a claim that the risk
 is prevented, and no compliance or certification follows from it. Every
 finding is ``mode: "detect"`` and ``pre_action_control: False``: it is raised
-after the tool call it describes, from what the call's arguments contained.
+after the activity it describes, from what its family reads
+(:data:`FAMILY_SOURCES`), never before a tool runs.
 A kind with no honest identifier says ``none`` and why, instead of borrowing
 an unrelated one.
 
@@ -48,6 +49,19 @@ FINDING_CAPABILITY = {
     "detect": True,              # a finding is raised
     "evidence": True,            # the finding row keeps what it rested on
     "pre_action_control": False,  # raised after the call ran, never before it
+}
+
+#: What each finding family reads. Not every finding comes from tool-call
+#: arguments: workspace kinds read the folder, silent-failure kinds read
+#: results, errors and session starts. Rendered into the public doc so the
+#: coverage page never overstates where a finding came from.
+FAMILY_SOURCES: Dict[str, str] = {
+    "trajectory": "the sequence of tool calls in one session and the results they returned",
+    "behaviour": "tool-call arguments (and, for credentials, tool output), not syscalls",
+    "silent_failure": ("tool results, API error events, pending approvals or questions, and "
+                       "session (re)starts"),
+    "workspace": "configuration files in the session's working directory, not tool calls",
+    "fleet": "tool-call arguments across several unrelated sessions on the node",
 }
 
 # ── Framework editions, each identifier checked against the edition named ────
@@ -159,8 +173,10 @@ MAPPINGS: Dict[str, Dict[str, Any]] = {
                       "after a failed tool result without retrying or acknowledging it is the "
                       "precursor to that report."),
         "limits": ("Does not read the agent's final claim, so it cannot establish that a false "
-                   "completion was reported. ASI10 was considered and rejected: nothing here shows "
-                   "a compromised or malicious agent."),
+                   "completion was reported. The LLM 2026 v1.0 crosswalk relates LLM07 to ASI10 "
+                   "Rogue Agents for an agent that falsifies task completion. That link is not "
+                   "followed here: this finding sees only the step before a completion claim, not "
+                   "the falsified report or any sign of a rogue agent."),
         "requires": "a runtime whose adapter records tool results",
         "tests": {"positive": "tests/test_detectors.py::test_action_discrepancy_positive",
                   "benign": "tests/test_detectors.py::test_action_discrepancy_negative_retry"},
@@ -399,10 +415,17 @@ def render_coverage_markdown(kinds: Optional[List[str]] = None) -> str:
         "reviewer's attention to activity related to that item. It does not mean the risk is "
         "prevented, and no certification or conformance claim follows from it.",
         "",
-        "Every finding is raised after the tool call it describes, from what the call's arguments "
-        "contained. Capability for every kind: observe yes, detect yes, evidence yes, "
+        "Every finding is raised after the activity it describes, never before a tool runs. "
+        "Capability for every kind: observe yes, detect yes, evidence yes, "
         "pre-action control no. A Guard policy may pause, stop or kill a session after a finding; "
         "that is configured per node and is not counted as coverage here.",
+        "",
+        "What each family of findings reads:",
+        "",
+    ]
+    for family in dict.fromkeys(MAPPINGS[k]["family"] for k in order):
+        lines.append(f"* `{family}`: {FAMILY_SOURCES.get(family, 'not declared')}.")
+    lines += [
         "",
         "## Editions verified against",
         "",

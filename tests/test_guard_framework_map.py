@@ -274,6 +274,19 @@ def test_coverage_doc_matches_the_contract():
     assert _load_generator().main(["--check"]) == 0
 
 
+def test_coverage_doc_names_what_each_family_reads():
+    # Review of #5952: the intro said every finding came "from what the call's
+    # arguments contained", false for workspace (reads the folder) and
+    # silent-failure (reads errors, approvals, restarts) kinds.
+    families = {e["family"] for e in fm.MAPPINGS.values()}
+    assert families <= set(fm.FAMILY_SOURCES), families - set(fm.FAMILY_SOURCES)
+    doc = fm.render_coverage_markdown()
+    intro = doc[:doc.index("## Editions verified against")]
+    assert "arguments contained" not in intro
+    for family in families:
+        assert f"`{family}`" in intro and fm.FAMILY_SOURCES[family] in intro, family
+
+
 def test_coverage_doc_says_coverage_not_compliance_and_lists_gaps():
     with open(_DOC, encoding="utf-8") as fh:
         doc = fh.read()

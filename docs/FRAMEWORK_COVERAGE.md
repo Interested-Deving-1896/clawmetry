@@ -6,7 +6,15 @@ Mapping version `2026-09-14.1`.
 
 This page says which items of three published frameworks each Guard finding is relevant to. It describes **coverage, not compliance**. A reference means a finding can draw a reviewer's attention to activity related to that item. It does not mean the risk is prevented, and no certification or conformance claim follows from it.
 
-Every finding is raised after the tool call it describes, from what the call's arguments contained. Capability for every kind: observe yes, detect yes, evidence yes, pre-action control no. A Guard policy may pause, stop or kill a session after a finding; that is configured per node and is not counted as coverage here.
+Every finding is raised after the activity it describes, never before a tool runs. Capability for every kind: observe yes, detect yes, evidence yes, pre-action control no. A Guard policy may pause, stop or kill a session after a finding; that is configured per node and is not counted as coverage here.
+
+What each family of findings reads:
+
+* `trajectory`: the sequence of tool calls in one session and the results they returned.
+* `behaviour`: tool-call arguments (and, for credentials, tool output), not syscalls.
+* `silent_failure`: tool results, API error events, pending approvals or questions, and session (re)starts.
+* `workspace`: configuration files in the session's working directory, not tool calls.
+* `fleet`: tool-call arguments across several unrelated sessions on the node.
 
 ## Editions verified against
 
@@ -61,7 +69,7 @@ No identifier. A tool that keeps failing is a reliability signal. LLM06:2026 was
 ### `action_discrepancy`
 
 * **Why:** LLM07:2026 Scenario 7 is fabricated task completion. An agent carrying on after a failed tool result without retrying or acknowledging it is the precursor to that report.
-* **Limits:** Does not read the agent's final claim, so it cannot establish that a false completion was reported. ASI10 was considered and rejected: nothing here shows a compromised or malicious agent.
+* **Limits:** Does not read the agent's final claim, so it cannot establish that a false completion was reported. The LLM 2026 v1.0 crosswalk relates LLM07 to ASI10 Rogue Agents for an agent that falsifies task completion. That link is not followed here: this finding sees only the step before a completion claim, not the falsified report or any sign of a rogue agent.
 * **Needs:** a runtime whose adapter records tool results
 * **Fires on:** `tests/test_detectors.py::test_action_discrepancy_positive`
 * **Quiet on:** `tests/test_detectors.py::test_action_discrepancy_negative_retry`
