@@ -4935,7 +4935,13 @@ async function loadAll() {
     // Runtime scope banner on first paint (showTab only fires on tab switch).
     try { _cmApplyRuntimeScopeNote('overview'); } catch (e) {}
     // Render overview quickly; do not block on heavy usage aggregation.
-    var overview = await fetchJsonWithTimeout('/api/overview', 3000);
+    // #5935: 15 s, not 3 s. On a tab switch this is the first /api/overview
+    // caller, so its timer aborts the shared request. Measured with the daemon
+    // busy writing: opening Overview took longer than 3 s on the server, so a
+    // 3 s budget aborted a request that was about to answer, twice in a row,
+    // and left the tiles on "Load failed - retrying...". While it waits, the
+    // tiles already show their loading placeholders.
+    var overview = await fetchJsonWithTimeout('/api/overview', 15000);
     window._cmOverview = overview;
     try { renderOauthBanner(overview); } catch(e) {}
     try { _renderOverviewHero(); } catch(e) {}
@@ -24563,7 +24569,9 @@ function updateFlowStats() {
     }
   } catch (e) {}
   if (flowStats.events % 15 === 0) {
-    fetchJsonWithTimeout('/api/overview', 5000).then(function(d) {
+    // #5935: 15 s like every other /api/overview caller -- whichever caller
+    // starts the shared request sets the timer that can abort it for all.
+    fetchJsonWithTimeout('/api/overview', 15000).then(function(d) {
       var tok = document.getElementById('flow-tokens');
       if (tok) tok.textContent = _fmtFlowTokens(d.mainTokens);
     }).catch(function(){});

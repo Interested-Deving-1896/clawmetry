@@ -96,6 +96,19 @@ def test_duplicate_overview_callers_share_one_request() -> None:
     )
 
 
+def test_overview_budget_outlasts_a_busy_server() -> None:
+    """Every /api/overview caller shares one in-flight request, and the FIRST
+    caller's timer aborts it for all of them. With the daemon busy writing,
+    opening Overview took longer than 3 s on the server; loadAll's 3 s budget
+    aborted it twice and left the tiles on 'Load failed - retrying...'."""
+    src = _src()
+    budgets = [int(ms) for ms in re.findall(r"fetchJsonWithTimeout\('/api/overview',\s*(\d+)\)", src)]
+    assert budgets, "no /api/overview caller found"
+    assert min(budgets) >= 10000, (
+        f"an /api/overview caller aborts the shared request after {min(budgets)} ms"
+    )
+
+
 def test_slow_usage_never_draws_measured_looking_zeros() -> None:
     """AC 5: when /api/usage was slow on a cold start, loadAll drew $0.00 and
     0 tokens into the Overview tiles, which read as 'no spend on this machine'."""
