@@ -207,22 +207,21 @@ def _add_cors(response):
         ]:
             return response
 
-    # Resolve the ACAO header value using the integer-index pattern so
-    # no user-controlled string can enter the response header (CWE-113).
-    # all_live_origins() returns file-backed canonical strings; .index()
-    # yields an integer (provably untainted); list[int] retrieves the
-    # stored string.  No taint can flow from request.headers["Origin"]
-    # through an integer arithmetic result into the response header.
+    # Resolve the ACAO header value by iterating the file-backed origins list
+    # and assigning only from a stored canonical string (CWE-113 safe).
+    # _acao is populated from _live (never from request data), so no
+    # user-controlled bytes can enter the response header via this path.
     _norm = _m.group(0).rstrip("/").lower()
     _live = apikeys.all_live_origins()
-    _lc_live = [_o.rstrip("/").lower() for _o in _live]
-    try:
-        _idx = _lc_live.index(_norm)
-    except ValueError:
+    _acao = ""
+    for _canon in _live:
+        if _canon.rstrip("/").lower() == _norm:
+            _acao = _canon  # value from file-backed list, not from Origin header
+            break
+    if not _acao:
         return response
-    _acao = _live[_idx]  # stored canonical value, not request-derived
 
-    response.headers["Access-Control-Allow-Origin"] = _acao  # codeql[py/header-injection]
+    response.headers["Access-Control-Allow-Origin"] = _acao
     response.headers["Vary"] = "Origin"
     response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = (
@@ -476,14 +475,10 @@ def q_shape(shape: str):
         )
 
     out = {k: v for k, v in body.items() if not k.startswith("_")}
-    # Use the integer-index pattern (same as _add_cors) to put the
-    # contract's OWN key in the response, not the URL-derived variable.
-    # QUERY_CONTRACT[shape] was confirmed not-None above, so .index()
-    # cannot raise here; the try/except is belt-and-braces.
-    # shape is guaranteed to be in QUERY_CONTRACT (checked via .get() above),
-    # so .index() will not raise; no fallback that echoes URL input is needed.
-    _ckeys = list(QUERY_CONTRACT.keys())
-    out["shape"] = _ckeys[_ckeys.index(shape)]
+    # Derive the canonical shape name from the CONTRACT by identity-matching
+    # the already-looked-up spec object (v is spec), so the value placed in
+    # the response comes from QUERY_CONTRACT.keys(), not from the URL variable.
+    out["shape"] = next((k for k, v in QUERY_CONTRACT.items() if v is spec), None)
     out["contract"] = CONTRACT_VERSION
     out["elapsed_ms"] = int((time.monotonic() - started) * 1000)
     if shape == "events":
