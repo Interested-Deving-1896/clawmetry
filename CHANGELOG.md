@@ -96,6 +96,7 @@
 - **Public doc:** `docs/FRAMEWORK_COVERAGE.md` is generated from the contract and says coverage, not compliance, with the uncovered items listed as gaps; CI runs `scripts/gen_framework_coverage.py --check`.
 - **Verified:** `tests/test_guard_framework_map.py` (13 tests, in CI), with the kind list auto-discovered from `detectors.ALL_INCIDENT_KINDS`.
 - **Refs:** #5943.
+
 ### Added: OpenExecutive as the 32nd runtime (2026-09-12)
 - **Why:** OpenExecutive (SenteLabsAI/OpenExecutive, Apache-2.0) is an AI executive team that answers in Slack and email, consults specialist agents, and runs a scheduler that sends messages later with no one in the loop. What it is about to send is exactly what an operator needs to see, and all of it is recorded in one SQLite store it already writes.
 - **What:** registered in the catalogue, loader, session-prefix sets, probe, memory catalogue, declared records and resume hints; the adapter ships in clawmetry-pro 0.7.26. Sessions include conversations that started in a chat or email channel, specialist consults show as steps with question and answer, failed tools and failed sends are flagged, and pending sends are visible before they go out.
