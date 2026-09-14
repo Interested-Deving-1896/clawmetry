@@ -4,7 +4,7 @@
 > `python3 scripts/gen_module_map.py` (CI fails on drift via
 > `tests/test_module_map_drift.py`).
 
-256 modules, 82 Flask blueprints. `CLAUDE.md` carries a short curated table of the ones you reach for most often; this is the whole list.
+257 modules, 82 Flask blueprints. `CLAUDE.md` carries a short curated table of the ones you reach for most often; this is the whole list.
 
 Size bands are deliberately coarse so this file does not churn on every PR: **small** is under 200 lines, **medium** under 1k, **large** under 5k, **huge** is 5k and up.
 
@@ -188,6 +188,7 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/field_report.py` | medium | Field-failure reports from the sync daemon (Requirement: Daemon Field-Failure Reporting, AC-FFR-005). |
 | `clawmetry/flow_trace.py` | medium | Flow trace assembly for the Harness Engineering tab (REQ-HB-006). |
 | `clawmetry/framework_map.py` | medium | which published framework items a Guard finding is relevant to. |
+| `clawmetry/gateway_litellm.py` | medium | LiteLLM proxy telemetry: recognise it, and turn a proxied request into one gateway usage record (REQ-OBS-GWY-001, issue #5940). |
 | `clawmetry/gateway_protocol.py` | small | the single source of the OpenClaw gateway WebSocket protocol range every connect frame must advertise. |
 | `clawmetry/gateway_tap.py` | medium | live OpenClaw gateway WebSocket subscriber. |
 | `clawmetry/git_config_exec.py` | small | Which git config settings make git execute a program. |
