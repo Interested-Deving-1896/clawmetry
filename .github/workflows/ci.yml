@@ -926,6 +926,7 @@ jobs:
             tests/test_e2e_invariants.py \
             tests/test_e2e_telegram_brain_ingest.py \
             tests/test_rollup_session_runtime_attribution.py \
+            tests/test_project_attribution_budgets.py \
             tests/test_crons_local_store.py \
             tests/test_pr_provenance.py \
             -q

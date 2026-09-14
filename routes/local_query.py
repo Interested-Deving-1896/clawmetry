@@ -1160,6 +1160,17 @@ _DAEMON_METHODS = frozenset({
     # reads the per-team rollup through the daemon proxy. Every other method
     # the agent CLI calls was already allowlisted; guards-in-same-PR rule.
     "query_usage_by_team",
+    # Project attribution + per-project budgets (REQ-OBS-PRJ-001,
+    # routes/projects.py). Writes validate inside the store, so the
+    # proxy never carries an unchecked assignment or budget.
+    "query_project_usage",
+    "add_project_assignment",
+    "query_project_assignments",
+    "upsert_project_budget",
+    "delete_project_budget",
+    "query_project_budgets",
+    "project_budget_status",
+    "query_project_budget_alerts",
     # Guard baselines (learned normal per cohort). The daemon writes them on
     # every detector tick and a dashboard read needs the same proxy, because
     # the daemon holds the DuckDB writer lock

@@ -49,6 +49,7 @@ from clawmetry import ccr as _ccr  # reversible event-payload compression (#2843
 from clawmetry import event_shape as _event_shape  # v15 typed event columns
 from clawmetry import nonsecret_hash as _nsh
 from clawmetry.trail_store import TrailStoreMixin  # intent / back-fill / git join
+from clawmetry.local_store_projects import ProjectsMixin  # project attribution + budgets (REQ-OBS-PRJ-001)
 import threading
 import time
 import uuid
@@ -1372,6 +1373,58 @@ _DDL = [
         daily_limit_usd   DOUBLE,
         monthly_limit_usd DOUBLE,
         updated_at        BIGINT NOT NULL
+    )
+    """,
+    # REQ-OBS-PRJ-001 — project attribution and per-project budgets. The
+    # read/write surface is clawmetry/local_store_projects.py. A session's
+    # project is DERIVED when read (clawmetry/project_attribution.py); none
+    # of these tables is joined onto sessions at ingest.
+    #
+    # Assignments are append-only: a correction is a new row, so who/when/why
+    # of every earlier assignment survives. effective_from/to are ISO strings
+    # (NULL = unbounded) compared against the session's start.
+    """
+    CREATE TABLE IF NOT EXISTS project_assignments (
+        assignment_id  VARCHAR PRIMARY KEY,
+        match_type     VARCHAR NOT NULL,
+        match_value    VARCHAR NOT NULL,
+        project_name   VARCHAR NOT NULL,
+        effective_from VARCHAR,
+        effective_to   VARCHAR,
+        actor          VARCHAR,
+        reason         VARCHAR,
+        created_at     BIGINT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS project_budgets (
+        budget_id   VARCHAR PRIMARY KEY,
+        project_id  VARCHAR NOT NULL,
+        amount      DOUBLE NOT NULL,
+        currency    VARCHAR NOT NULL,
+        period      VARCHAR NOT NULL,
+        timezone    VARCHAR NOT NULL,
+        basis       VARCHAR NOT NULL,
+        actor       VARCHAR,
+        created_at  BIGINT NOT NULL,
+        updated_at  BIGINT NOT NULL
+    )
+    """,
+    # The once-per-threshold-per-period latch. The primary key IS the rule:
+    # a restart, a second evaluator or a re-read cannot record the same
+    # crossing twice. ``late`` marks a crossing found in an already-closed
+    # period because its usage arrived after the period ended.
+    """
+    CREATE TABLE IF NOT EXISTS project_budget_alerts (
+        budget_id     VARCHAR NOT NULL,
+        period_start  VARCHAR NOT NULL,
+        threshold_pct INTEGER NOT NULL,
+        project_id    VARCHAR,
+        spent_usd     DOUBLE,
+        amount        DOUBLE,
+        fired_at      BIGINT NOT NULL,
+        late          BOOLEAN DEFAULT FALSE,
+        PRIMARY KEY (budget_id, period_start, threshold_pct)
     )
     """,
     # Issue #605 follow-up (DuckDB-first rule) — cron-run timeline storage.
@@ -3564,7 +3617,7 @@ def _runtime_of_session_id(session_id: str, fallback: str = "openclaw") -> str:
     return fallback or "openclaw"
 
 
-class LocalStore(TrailStoreMixin):
+class LocalStore(ProjectsMixin, TrailStoreMixin):
     """Thread-safe local event store with a background batched flusher.
 
     `read_only=True` opens the DuckDB in RO mode — read paths work the same,
