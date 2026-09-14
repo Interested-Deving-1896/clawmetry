@@ -19149,12 +19149,12 @@ function renderGatewayUsage(gw, hasAgentTable) {
     ? 'Not added to the agent costs above: a call an agent made through LiteLLM is already in that agent\'s cost.'
     : 'Kept separate from agent costs: a call an agent made through LiteLLM is already in that agent\'s cost.');
   if (t.correlated > 0) {
-    notes.push(t.correlated + ' of ' + t.requests + ' requests share a trace with another source here. The other ' + (t.uncorrelated || 0) + ' could not be matched to an agent.');
+    notes.push(_e(t.correlated) + ' of ' + _e(t.requests) + ' requests share a trace with another source here. The other ' + _e(t.uncorrelated || 0) + ' could not be matched to an agent.');
   } else {
-    notes.push('None of these ' + t.requests + ' requests could be matched to an agent\'s trace.');
+    notes.push('None of these ' + _e(t.requests) + ' requests could be matched to an agent\'s trace.');
   }
-  if (t.cache_replays > 0) notes.push(t.cache_replays + ' answered from LiteLLM\'s cache, counted but not charged again.');
-  if (t.cost_not_reported > 0) notes.push(t.cost_not_reported + ' succeeded with no cost reported, so they are counted but not priced.');
+  if (t.cache_replays > 0) notes.push(_e(t.cache_replays) + ' answered from LiteLLM\'s cache, counted but not charged again.');
+  if (t.cost_not_reported > 0) notes.push(_e(t.cost_not_reported) + ' succeeded with no cost reported, so they are counted but not priced.');
   return '<div style="margin-top:' + (hasAgentTable ? '14px' : '0') + ';font-size:12px;font-weight:600;color:var(--text-primary);">Through your LiteLLM gateway</div>'
     + '<div style="font-size:11px;color:var(--text-muted);margin:2px 0 6px;">Spend as LiteLLM reported it, in ' + _e(gw.currency || 'USD') + ', last ' + (gw.window_days || 7) + ' days</div>'
     + '<table style="width:100%;border-collapse:collapse;">'
