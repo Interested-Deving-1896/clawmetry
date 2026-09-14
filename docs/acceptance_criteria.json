@@ -1201,12 +1201,6 @@
       "text": "The system shall produce a redacted evidence bundle that contains pins and sha256 of every fixture and stage outcomes, but no raw commands or file paths, and the bundle shall be deterministic given the same generated_at timestamp."
     },
     {
-      "id": "AC-OBS-OTR-001.8",
-      "doc": "Framework recipe: a LangGraph agent instrumented with OpenLLMetry, verified end to end",
-      "doc_id": "0130f6a6-3f5b-448f-bd59-d8820a4d5c88",
-      "text": "The recipe documentation page shall record the pinned framework and exporter versions that the automated check ran, name every semantic-convention attribute the identity resolution reads (conversation id, thread id, session id), and state which ClawMetry tabs the recipe populates and any tab that cannot be exercised from a remote exporter."
-    },
-    {
       "id": "AC-GOV-FWM-001.1",
       "doc": "Guard Framework References: OWASP LLM 2026, OWASP Agentic 2026 and MITRE ATLAS IDs on findings",
       "doc_id": "15504aea-9ca0-4a1a-a23d-8e825e4f78f9",
