@@ -1255,6 +1255,54 @@
       "text": "An incident raised only from received telemetry shall state that the action was observed after it ran and shall not state or imply that the action was prevented."
     },
     {
+      "id": "AC-OBS-FLEET-001.1",
+      "doc": "Fleet Install on Shared and Virtual Desktops",
+      "doc_id": "d673cdaa-3bdb-4b10-8a2d-d40ccb5ae630",
+      "text": "When a Linux user registers the collector for fleet use, the system shall request that the user's services persist after logout and report whether persistence is enabled, and if it could not be enabled, the exact administrator command that enables it."
+    },
+    {
+      "id": "AC-OBS-FLEET-001.2",
+      "doc": "Fleet Install on Shared and Virtual Desktops",
+      "doc_id": "d673cdaa-3bdb-4b10-8a2d-d40ccb5ae630",
+      "text": "When an administrator registers the collector for all users on Windows, the system shall register a single logon registration that starts a separate collector as each signed-in user, and shall not run the collector under a privileged account."
+    },
+    {
+      "id": "AC-OBS-FLEET-001.3",
+      "doc": "Fleet Install on Shared and Virtual Desktops",
+      "doc_id": "d673cdaa-3bdb-4b10-8a2d-d40ccb5ae630",
+      "text": "When fleet registration is removed, the system shall remove every registration it created and report what was removed."
+    },
+    {
+      "id": "AC-OBS-FLEET-001.4",
+      "doc": "Fleet Install on Shared and Virtual Desktops",
+      "doc_id": "d673cdaa-3bdb-4b10-8a2d-d40ccb5ae630",
+      "text": "When the collector runs from an isolated environment that the running user cannot write (an administrator-owned fleet install), the system shall not attempt an unattended self-update or restart for one, and fleet status shall report automatic updates as off with that reason and how the install is updated instead."
+    },
+    {
+      "id": "AC-OBS-FLEET-002.1",
+      "doc": "Fleet Install on Shared and Virtual Desktops",
+      "doc_id": "d673cdaa-3bdb-4b10-8a2d-d40ccb5ae630",
+      "text": "When an operator requests fleet status, the system shall report, per operating system, whether collection continues after the user logs off, and when it does not, the reason."
+    },
+    {
+      "id": "AC-OBS-FLEET-002.2",
+      "doc": "Fleet Install on Shared and Virtual Desktops",
+      "doc_id": "d673cdaa-3bdb-4b10-8a2d-d40ccb5ae630",
+      "text": "When the local data directory is readable by other local users, the system shall report it as not private, and fleet registration shall restrict it to the owning user."
+    },
+    {
+      "id": "AC-OBS-FLEET-003.1",
+      "doc": "Fleet Install on Shared and Virtual Desktops",
+      "doc_id": "d673cdaa-3bdb-4b10-8a2d-d40ccb5ae630",
+      "text": "The system shall provide a silent install example for Windows management tooling and one for Linux configuration management, each exercised in automated verification on that operating system."
+    },
+    {
+      "id": "AC-OBS-FLEET-003.2",
+      "doc": "Fleet Install on Shared and Virtual Desktops",
+      "doc_id": "d673cdaa-3bdb-4b10-8a2d-d40ccb5ae630",
+      "text": "The install examples shall not embed an enrollment credential and shall not print one to their output."
+    },
+    {
       "id": "AC-GOV-ATR-001.1",
       "doc": "Guard ATLAS OpenClaw replay: case studies AML.CS0048 to AML.CS0051 scored against Guard",
       "doc_id": "7616fb6b-63d6-49ec-a295-39ec7add4725",
