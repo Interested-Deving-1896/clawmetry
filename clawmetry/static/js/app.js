@@ -12321,24 +12321,28 @@ var _CM_RT_CAPS = {
   openclaw:    ['SESSIONS','EVENTS','COST','SUBAGENTS','CRONS','SKILLS','MEMORY','BRAIN','LOGS','GATEWAY_RPC','CHANNELS'],
   nemoclaw:    ['SESSIONS','EVENTS','COST','SUBAGENTS','CRONS','SKILLS','MEMORY','BRAIN','LOGS','GATEWAY_RPC','CHANNELS'], // sandboxed OpenClaw
   claude_code: ['SESSIONS','EVENTS','COST','SUBAGENTS'],
-  codex:       ['SESSIONS','EVENTS','COST'],
+  // SUBAGENTS on every entry below mirrors the adapter's _base_capabilities()
+  // as shipped in clawmetry-pro 0.7.28 (checked 2026-09-15). A local install
+  // overrides this map from /api/agents; the hosted dashboard has only this.
+  codex:       ['SESSIONS','EVENTS','COST','SUBAGENTS'],
   aider:       ['SESSIONS','EVENTS','COST'],
-  goose:       ['SESSIONS','EVENTS','COST'],
-  opencode:    ['SESSIONS','EVENTS','COST'],
-  qwen_code:   ['SESSIONS','EVENTS','COST'],
-  pi:          ['SESSIONS','EVENTS','COST'],
-  deepagents:  ['SESSIONS','EVENTS','COST'],
-  n8n:         ['SESSIONS','EVENTS','COST'],
+  goose:       ['SESSIONS','EVENTS','COST','SUBAGENTS'],
+  opencode:    ['SESSIONS','EVENTS','COST','SUBAGENTS'],
+  qwen_code:   ['SESSIONS','EVENTS','COST','SUBAGENTS'],
+  pi:          ['SESSIONS','EVENTS','COST','SUBAGENTS'],
+  deepagents:  ['SESSIONS','EVENTS','COST','SUBAGENTS'],
+  n8n:         ['SESSIONS','EVENTS','COST','SUBAGENTS'],
   antigravity: ['SESSIONS','EVENTS','COST','SUBAGENTS'],
-  copilot:     ['SESSIONS','EVENTS','COST'],
-  grok:        ['SESSIONS','EVENTS','COST'],
+  copilot:     ['SESSIONS','EVENTS','COST','SUBAGENTS'],
+  grok:        ['SESSIONS','EVENTS','COST','SUBAGENTS'],
   // No COST: Grok Bot persists no tokens, model or spend locally.
   grok_bot:    ['SESSIONS','EVENTS'],
   // No COST: Lovable bills credits in the vendor cloud; the local clone
   // records commits, not tokens or spend.
   lovable:     ['SESSIONS','EVENTS'],
   deepseek_harness: ['SESSIONS','EVENTS','COST','SUBAGENTS'],
-  exo: ['SESSIONS','EVENTS','COST','SUBAGENTS'],
+  // Exo declares no SUBAGENTS (pro 0.7.28).
+  exo: ['SESSIONS','EVENTS','COST'],
   kimi: ['SESSIONS','EVENTS','COST','SUBAGENTS'],
   // Gemini CLI records a per-turn token split AND the model id, plus
   // nested chats/<parentSessionId>/ transcripts for agent-tool children.
@@ -12348,16 +12352,23 @@ var _CM_RT_CAPS = {
   // OpenHands: real token counts + a per-call cost list on disk, and
   // delegated sub-agents persist as nested conversations.
   openhands: ['SESSIONS','EVENTS','COST','SUBAGENTS'],
-  // Devin CLI: tokens + ACUs per message, but no subagent lineage in the
-  // local store, so no SUBAGENTS panel rather than an empty one.
-  devin: ['SESSIONS','EVENTS','COST'],
+  // Devin CLI: tokens + ACUs per message; the adapter now emits sub-agent
+  // children with their lineage (pro 0.7.28).
+  devin: ['SESSIONS','EVENTS','COST','SUBAGENTS'],
   // OpenExecutive: cost is a floor (specialist calls write no usage row);
   // specialists are steps, not child sessions, so no SUBAGENTS panel.
   openexecutive: ['SESSIONS','EVENTS','COST'],
   hermes:      ['SESSIONS','EVENTS','COST','SUBAGENTS'],
-  cursor:      ['SESSIONS','EVENTS'],   // no COST
-  picoclaw:    ['SESSIONS','EVENTS'],   // no COST
-  nanoclaw:    ['SESSIONS','EVENTS']    // no COST
+  cursor:      ['SESSIONS','EVENTS','SUBAGENTS'],   // no COST
+  picoclaw:    ['SESSIONS','EVENTS','SUBAGENTS'],   // no COST
+  nanoclaw:    ['SESSIONS','EVENTS','SUBAGENTS'],   // COST is computed per install; /api/agents adds it locally
+  // Muse Code, OpenWorker, qm and Replit had no entry, so the sidebar showed
+  // them every tab (OpenClaw's included). Declared caps, pro 0.7.28.
+  muse_code:   ['SESSIONS','EVENTS','COST','SUBAGENTS','BRAIN'],
+  openworker:  ['SESSIONS','EVENTS','COST','SUBAGENTS'],
+  qm:          ['SESSIONS','EVENTS','COST','SUBAGENTS','BRAIN'],
+  // No COST: Replit Agent persists no tokens or spend in the workspace.
+  replit:      ['SESSIONS','EVENTS']
 };
 // Capability -> the sidebar tabs it enables. A tab shows iff the runtime
 // declares (at least) one capability that enables it.
@@ -12629,6 +12640,11 @@ async function _cmLoadDeclaredCaps() {
     });
     if (changed) {
       try { _cmApplyRuntimeTabVisibility(); } catch (e) {}
+      // System Health scopes from the same map; re-render instead of showing
+      // the fallback's answer until the next 30s refresh.
+      try {
+        if (typeof loadSystemHealth === 'function' && (typeof _cmCurrentTab === 'undefined' || !_cmCurrentTab || _cmCurrentTab === 'overview')) loadSystemHealth();
+      } catch (e) {}
     }
   } catch (e) { /* non-fatal: the static fallback map applies */ }
 }
@@ -17153,8 +17169,12 @@ async function loadSystemHealth() {
     document.getElementById('sh-crons').innerHTML = chtml;
     }
 
-    // Sub-agents
-    if (scope.has('SUBAGENTS')) {
+    // Sub-agents. Shown when the runtime declares SUBAGENTS, or when it has
+    // runs anyway: the static _CM_RT_CAPS fallback (all the hosted dashboard
+    // has) can lag an adapter, and real children must never be hidden.
+    var showSa = scope.has('SUBAGENTS') || (typeof subagents.runs === 'number' && subagents.runs > 0);
+    _shShow('sh-subagents-wrap', showSa);
+    if (showSa) {
     var sa = subagents;
     var sahtml;
     if (sa.available === false) {

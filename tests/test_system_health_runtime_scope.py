@@ -205,6 +205,39 @@ def test_runtime_switch_reloads_the_panel():
     assert "loadSystemHealth()" in body
 
 
+def test_every_shipped_runtime_has_a_capability_entry():
+    # Burned 2026-09-15: muse_code, openworker, qm and replit had no entry, so
+    # the sidebar showed them every tab (OpenClaw's crons and gateway tabs
+    # included) and the hosted dashboard, which has no /api/agents override,
+    # could not scope System Health for them.
+    from clawmetry import entitlements
+    block = re.search(r"var _CM_RT_CAPS = \{(.*?)\n\};", _src(_APP_JS), re.S).group(1)
+    caps = {m.group(1): set(re.findall(r"'([A-Z_]+)'", m.group(2)))
+            for m in re.finditer(r"^\s*(\w+):\s*\[(.*?)\]", block, re.M)}
+    shipped = set(entitlements.FREE_RUNTIMES) | set(entitlements.PAID_RUNTIMES)
+    missing = sorted(shipped - set(caps))
+    assert not missing, f"runtimes with no _CM_RT_CAPS entry: {missing}"
+    openclaw_only = {"GATEWAY_RPC", "CRONS", "CHANNELS"}
+    leaks = {rt: sorted(c & openclaw_only) for rt, c in caps.items()
+             if rt not in ("openclaw", "nemoclaw") and c & openclaw_only}
+    assert not leaks, f"OpenClaw-only capabilities on another runtime: {leaks}"
+
+
+def test_subagent_card_shows_real_runs_even_if_caps_map_lags():
+    # The hosted dashboard only has the static _CM_RT_CAPS map; a runtime whose
+    # adapter emits children must not have them hidden by a stale entry.
+    body = _function_body(_src(_APP_JS), "async function loadSystemHealth()")
+    assert "var showSa = scope.has('SUBAGENTS') || (typeof subagents.runs === 'number' && subagents.runs > 0);" in body
+    assert "_shShow('sh-subagents-wrap', showSa);" in body
+    assert "if (showSa) {" in body
+
+
+def test_declared_caps_override_rerenders_system_health():
+    body = _function_body(_src(_APP_JS), "async function _cmLoadDeclaredCaps()")
+    changed = body[body.index("if (changed) {"):]
+    assert "loadSystemHealth()" in changed
+
+
 @pytest.mark.skipif(not shutil.which("node"), reason="node not installed")
 def test_scope_resolves_from_declared_caps_under_node():
     src = _src(_APP_JS)
@@ -228,6 +261,7 @@ console.log(JSON.stringify(out));
     assert out["all"] == {"gw": True, "crons": True, "sub": True}
     assert out["openclaw"]["gw"] and out["nemoclaw"]["gw"]
     assert out["claude_code"] == {"gw": False, "crons": False, "sub": True}
-    assert out["codex"] == {"gw": False, "crons": False, "sub": False}
+    # Codex emits Collab child threads as sub-agents (pro 0.7.28).
+    assert out["codex"] == {"gw": False, "crons": False, "sub": True}
     # An unmapped runtime is not OpenClaw: it gets machine-wide checks only.
     assert out["not_a_runtime"] == {"gw": False, "crons": False, "sub": False}
