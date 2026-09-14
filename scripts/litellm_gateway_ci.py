@@ -34,7 +34,17 @@ import os
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
+
+_LOOPBACK = {"localhost", "127.0.0.1", "::1"}
+
+
+def _assert_local_url(url: str) -> None:
+    host = urllib.parse.urlparse(url).hostname or ""
+    if host not in _LOOPBACK:
+        raise SystemExit(f"Refusing to connect to non-loopback host: {host!r}")
+
 
 TEAMS = {
     "team-alpha": {"alias": "Alpha", "user": "alice", "email": "alice@example.test", "key_alias": "alpha-ci"},
@@ -241,6 +251,8 @@ def main(argv=None):
     args = p.parse_args(argv)
     args.dashboard = args.dashboard.rstrip("/")
     args.proxy = args.proxy.rstrip("/")
+    _assert_local_url(args.dashboard)
+    _assert_local_url(args.proxy)
     (drive if args.phase == "drive" else after_restart)(args)
     return 0
 
