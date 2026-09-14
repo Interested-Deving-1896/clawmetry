@@ -468,3 +468,33 @@ def redact_event(event: dict[str, Any]) -> dict[str, Any]:
         }
     except Exception:
         return event
+
+
+# Span columns (see local_store.ingest_span) that are typed identifiers/
+# metrics, never free text — same role as _STRUCTURAL_KEYS for an event.
+_SPAN_STRUCTURAL_KEYS = frozenset({
+    "span_id", "trace_id", "parent_span_id", "agent_type", "agent_id",
+    "node_id", "session_id", "service_name", "name", "kind",
+    "status_code", "status", "start_ts", "end_ts", "duration_ms",
+    "duration_ns", "model", "tool_name", "cost_usd", "token_count",
+    "tokens_input", "tokens_output", "ts", "created_at",
+})
+
+
+def redact_span(span: dict[str, Any]) -> dict[str, Any]:
+    """Return a redacted copy of an OTel-shaped span dict (see
+    ``local_store.LocalStore.ingest_span``). Structural/typed columns pass
+    through untouched; the free-text fields a span carries — ``input``,
+    ``output``, ``attributes``, ``events``, ``links``, ``status_message`` —
+    are scrubbed the same way :func:`redact_event` scrubs an event's ``data``
+    payload. Spans reach OTLP trace ingest (``/v1/traces``), a path
+    :func:`redact_event` never sees on its own (#5938)."""
+    if _disabled() or not isinstance(span, dict):
+        return span
+    try:
+        return {
+            k: (v if k in _SPAN_STRUCTURAL_KEYS else _redact_value(v, k if isinstance(k, str) else ""))
+            for k, v in span.items()
+        }
+    except Exception:
+        return span

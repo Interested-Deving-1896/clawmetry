@@ -707,6 +707,88 @@ def test_openllmetry_openai_chat_shape_end_to_end(app):
     assert sp_body["spans"][0]["span_id"] == _hx(0x90)
 
 
+# ── #5938: tool-call spans reach Guard detectors, and are redacted ──────────
+
+
+def test_tool_call_span_reaches_guard_detectors(app):
+    """An OTLP tool-call span (gen_ai.operation.name=execute_tool +
+    gen_ai.tool.name + gen_ai.tool.input, the shape clawmetry.trace.tool_call
+    emits) must be normalized into a tool_call event Guard can see. Before
+    the fix, spans only ever landed in the ``spans`` table, which
+    detectors.run_all/query_events never scans, so a destructive command
+    reported only over OTLP traces raised no incident at all."""
+    a, ls = app
+    c = a.test_client()
+    base = time.time() - 5
+    req = _build_req([{
+        "span_id_hex": _hx(0xA0), "start_ts": base, "name": "execute_tool bash",
+        "str_attrs": {
+            "session.id": "s-guard-tool",
+            "gen_ai.operation.name": "execute_tool",
+            "gen_ai.tool.name": "bash",
+            "gen_ai.tool.input": _json.dumps({"command": "rm -rf /"}),
+        },
+    }])
+    r = c.post("/v1/traces", data=req.SerializeToString(),
+               content_type="application/x-protobuf")
+    assert r.status_code == 200, r.get_data(as_text=True)[:200]
+    _drain(ls)
+
+    store = ls.get_store()
+    events = store.query_events(session_id="s-guard-tool", event_type="tool_call")
+    assert events, "tool-call span was never normalized into a tool_call event"
+    data = events[0].get("data")
+    if isinstance(data, str):
+        data = _json.loads(data)
+    assert data.get("tool") == "bash"
+    assert data.get("args", {}).get("command") == "rm -rf /"
+
+    from clawmetry import detectors as _det
+    incidents = _det.run_all(events, "s-guard-tool", "custom")
+    assert any(inc.get("kind") == "file_blast_radius" for inc in incidents), (
+        f"a tool span running 'rm -rf /' must raise a Guard incident; got {incidents}"
+    )
+
+
+def test_tool_call_span_input_email_redacted_at_rest(app):
+    """An email inside gen_ai.tool.input must be masked before the span
+    persists — not just in the ``events`` table (redact_event), which a
+    trace-only span never reached (#5938)."""
+    a, ls = app
+    c = a.test_client()
+    base = time.time() - 5
+    req = _build_req([{
+        "span_id_hex": _hx(0xA1), "start_ts": base, "name": "execute_tool send_email",
+        "str_attrs": {
+            "session.id": "s-guard-pii",
+            "gen_ai.operation.name": "execute_tool",
+            "gen_ai.tool.name": "send_email",
+            "gen_ai.tool.input": _json.dumps({"to": "victim@example.com"}),
+        },
+    }])
+    r = c.post("/v1/traces", data=req.SerializeToString(),
+               content_type="application/x-protobuf")
+    assert r.status_code == 200, r.get_data(as_text=True)[:200]
+    _drain(ls)
+
+    store = ls.get_store()
+    rows = store._fetch(
+        "SELECT attributes FROM spans WHERE session_id='s-guard-pii'", [])
+    assert rows, "tool span was not persisted"
+    raw = rows[0][0]
+    blob = raw.decode() if isinstance(raw, (bytes, bytearray)) else raw
+    assert "victim@example.com" not in blob, (
+        f"email must be redacted before the span persists; got {blob!r}"
+    )
+
+    events = store.query_events(session_id="s-guard-pii", event_type="tool_call")
+    assert events, "tool-call span was never normalized into a tool_call event"
+    ev_blob = _json.dumps(events[0].get("data"))
+    assert "victim@example.com" not in ev_blob, (
+        f"email must be redacted in the synthesized event too; got {ev_blob!r}"
+    )
+
+
 class _RecordingProxy:
     """Stand-in for the dashboard-process _ProxyStore: records every method
     call (args + kwargs) and no-ops, mirroring how the real proxy forwards to

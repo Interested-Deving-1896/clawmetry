@@ -4792,6 +4792,56 @@ def _otel_to_row(span, resource_attrs):
     }
 
 
+def _tool_call_event_from_span(row, attrs):
+    """Build a Guard-visible ``tool_call`` event from an OTel GenAI tool span
+    (``gen_ai.operation.name == execute_tool`` and/or ``gen_ai.tool.name``,
+    the same shape ``clawmetry.trace.tool_call`` emits), so a tool call
+    reported only over OTLP traces reaches the same
+    ``ingest()`` -> redact -> ``query_events`` / ``run_all`` path a
+    transcript or ``/v1/logs`` tool_call event does (#5938). Untouched, the
+    span lands ONLY in the ``spans`` table, which Guard's detectors never
+    scan. Returns ``None`` when the span isn't a tool call, or carries no
+    session to evaluate it under.
+
+    ``row`` is the (already redacted) dict :func:`_otel_to_row` produced;
+    ``attrs`` is its raw span-attribute dict, read here for the
+    tool-call-only conventions (``gen_ai.tool.input``) that never became
+    typed columns.
+    """
+    session_id = row.get("session_id")
+    if not session_id:
+        return None
+    operation = str(attrs.get("gen_ai.operation.name") or "").lower()
+    tool = row.get("tool_name")
+    if operation != "execute_tool" and not tool:
+        return None
+    raw_args = (attrs.get("gen_ai.tool.input") or attrs.get("gen_ai.tool.call.arguments")
+                or attrs.get("tool.arguments"))
+    args = {}
+    if isinstance(raw_args, str):
+        try:
+            args = json.loads(raw_args)
+        except Exception:
+            args = raw_args
+    elif raw_args is not None:
+        args = raw_args
+    start_ts = row.get("start_ts") or time.time()
+    try:
+        ts = datetime.fromtimestamp(float(start_ts), timezone.utc).isoformat()
+    except (TypeError, ValueError):
+        ts = datetime.now(timezone.utc).isoformat()
+    return {
+        "id": "otlp:span:" + str(row.get("span_id") or ""),
+        "node_id": row.get("node_id") or "otlp",
+        "agent_type": row.get("agent_type") or "custom",
+        "agent_id": row.get("agent_id") or "main",
+        "session_id": str(session_id),
+        "ts": ts,
+        "event_type": "tool_call",
+        "data": {"tool": str(tool or "tool"), "args": args, "_otlp": True},
+    }
+
+
 def _process_otlp_traces(pb_data, content_encoding=None, content_type=None):
     """Decode OTLP traces protobuf and extract relevant span data.
 
@@ -4813,6 +4863,12 @@ def _process_otlp_traces(pb_data, content_encoding=None, content_type=None):
     # on the session so turn anatomy can sum them.
     _otlp_wait_events = []
     _wait_tool_by_span = {}  # span_id -> tool_name, to name a wait by its parent
+    # #5938: a tool-call span (gen_ai.operation.name == execute_tool /
+    # gen_ai.tool.name) only ever lands in the ``spans`` table, which Guard's
+    # detectors never scan (they read ``store.query_events``). Synthesize a
+    # normal ``tool_call`` event for each one so it reaches the same
+    # ingest() -> redact -> detectors path any other tool call does.
+    _otlp_tool_events = []
 
     # Resolve the local store lazily so unit tests that monkeypatch the
     # singleton in advance (or run without DuckDB) don't pay the import
@@ -4934,7 +4990,29 @@ def _process_otlp_traces(pb_data, content_encoding=None, content_type=None):
                         # routes/local_query._DAEMON_METHODS so the daemon
                         # executes the real write.
                         _row = _otel_to_row(span, resource_attrs)
+                        # #5938: redaction previously ran ONLY in
+                        # LocalStore.ingest (the events path); a span's
+                        # input/output/attributes/events/links persisted
+                        # verbatim. Scrub before the write, same primitives
+                        # ``redact_event`` uses on an events-table row.
+                        try:
+                            from clawmetry import redaction as _redaction
+                            _row = _redaction.redact_span(_row)
+                        except Exception:
+                            pass
                         _store.put_span(span=_row)
+                        # #5938: a tool-call span is otherwise invisible to
+                        # Guard (which scans ``query_events``, never
+                        # ``spans``). Queue a normalized tool_call event from
+                        # the (already redacted) row/attrs; flushed below
+                        # alongside the waiting_on_user events.
+                        try:
+                            _tev = _tool_call_event_from_span(
+                                _row, _row.get("attributes") or {})
+                        except Exception:
+                            _tev = None
+                        if _tev is not None:
+                            _otlp_tool_events.append(_tev)
                         # Track for session materialization (WO-55). OpenClaw
                         # sessions come from transcripts; only foreign apps
                         # need a span-derived sessions row.
@@ -4996,7 +5074,7 @@ def _process_otlp_traces(pb_data, content_encoding=None, content_type=None):
                         except Exception:
                             pass
 
-    if _store is not None and _otlp_wait_events:
+    if _store is not None and (_otlp_wait_events or _otlp_tool_events):
         # A wait span may carry no tool name of its own (measured live); its
         # parent tool span does.
         for _wev in _otlp_wait_events:
@@ -5020,12 +5098,12 @@ def _process_otlp_traces(pb_data, content_encoding=None, content_type=None):
             except Exception:
                 pass
         try:
-            _store.put_otlp_batch(records=[], events=_otlp_wait_events)
+            _store.put_otlp_batch(records=[], events=_otlp_wait_events + _otlp_tool_events)
         except Exception as e:
             try:
                 import logging as _lg
                 _lg.getLogger("clawmetry.dashboard").warning(
-                    "waiting_on_user events write failed: %s", e)
+                    "waiting_on_user/tool_call events write failed: %s", e)
             except Exception:
                 pass
 
