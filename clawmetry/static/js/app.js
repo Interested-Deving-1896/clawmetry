@@ -19344,7 +19344,7 @@ function renderSessionCostChart() {
       var over = threshold > 0 && (r.cost_usd||0) >= threshold;
       var rowStyle = over ? 'background:rgba(239,68,68,0.1);' : '';
       tableHtml += '<tr style="border-top:1px solid var(--border-secondary);' + rowStyle + '">';
-      tableHtml += '<td style="padding:4px 8px;font-family:monospace;font-size:11px;color:var(--text-muted);">' + _e((r.session_id||'').slice(-16)) + (over ? ' <span style="color:#ef4444;">⚠</span>' : '') + '</td>';
+      tableHtml += '<td style="padding:4px 8px;font-family:monospace;font-size:11px;color:var(--text-muted);">' + escHtml((r.session_id||'').slice(-16)) + (over ? ' <span style="color:#ef4444;">⚠</span>' : '') + '</td>';
       tableHtml += '<td style="text-align:right;padding:4px 8px;font-size:12px;">' + ((r.tokens||0) >= 1000 ? ((r.tokens||0)/1000).toFixed(0)+'K' : (r.tokens||0)) + '</td>';
       // Four decimals, as this table always showed; the column heading
       // carries the basis, and an unknown cost reads "not available".
