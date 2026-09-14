@@ -12786,6 +12786,9 @@ function _cmApplyRuntimeSelection(val) {
   try { if (typeof _applyRuntimeFlowDiagram === 'function') _applyRuntimeFlowDiagram(val); } catch (e) {}
   // Reload the current tab so any runtime-aware view re-filters in place.
   if (typeof switchTab === 'function' && _cmCurrentTab) switchTab(_cmCurrentTab);
+  // System Health refreshes on a 30s timer and is not part of loadAll, so
+  // re-scope it now or the previous runtime's checks linger.
+  try { if (typeof loadSystemHealth === 'function') loadSystemHealth(); } catch (e) {}
   try { _cmRefreshHarnessNav(); } catch (e) {}
 }
 
@@ -17016,18 +17019,60 @@ async function _renderVersionRegression() {
   }
 }
 
+// System Health mixes machine-wide checks (disk, sandbox, daemon, handler
+// latency) with checks that exist for one runtime family only: the OpenClaw
+// gateway and its vitals, heartbeat, config diagnostics, inference/security
+// read from openclaw.json, crons and chat channels. Under a specific runtime
+// the panel shows only what that runtime declares in _CM_RT_CAPS, so Claude
+// Code is never shown an "OpenClaw Gateway" it does not have. 'all' shows all.
+function _shRuntimeScope() {
+  var rt = (typeof _cmRuntimeFilter === 'function') ? _cmRuntimeFilter() : 'all';
+  if (!rt || rt === 'all') return { rt: 'all', has: function () { return true; } };
+  var caps = (typeof _cmCapsForRuntime === 'function' && _cmCapsForRuntime(rt)) || [];
+  return { rt: rt, has: function (cap) { return caps.indexOf(cap) !== -1; } };
+}
+function _shShow(id, show) {
+  var el = document.getElementById(id);
+  if (el) el.style.display = show ? '' : 'none';
+}
+
 async function loadSystemHealth() {
+  var scope = _shRuntimeScope();
+  // GATEWAY_RPC is declared only by OpenClaw and NemoClaw (sandboxed OpenClaw).
+  var isOc = scope.has('GATEWAY_RPC');
+  // Scope the sections before the fetch, so a slow or failed request never
+  // paints OpenClaw's cards (or their error state) under another runtime.
+  _shShow('sh-crons-wrap', scope.has('CRONS'));
+  _shShow('sh-subagents-wrap', scope.has('SUBAGENTS'));
+  _shShow('sh-heartbeat-wrap', isOc);
   try {
-    var d = await fetchJsonWithTimeout('/api/system-health', 18000);
+    var d = await fetchJsonWithTimeout('/api/system-health' + (scope.rt === 'all' ? '' : '?runtime=' + encodeURIComponent(scope.rt)), 18000);
     // Connector liveness: surface a 'down' inbound channel loudly (incident:
     // a channel went deaf ~37h with no alarm). Driven by the same payload.
     try { _renderConnectorBanner(d.connector_liveness); } catch(e) {}
-    try { _renderVersionRegression(); } catch(e) {}
+    try {
+      if (isOc) _renderVersionRegression();
+      else { var vr = document.getElementById('sh-version-regression'); if (vr) vr.innerHTML = ''; }
+    } catch(e) {}
+    var noteEl = document.getElementById('sh-scope-note');
+    if (noteEl) {
+      if (scope.rt === 'all') {
+        noteEl.style.display = 'none';
+      } else {
+        noteEl.textContent = 'Showing ' + _cmRuntimeLabel(scope.rt) + ' checks and machine-wide health (disk, daemon, latency).';
+        noteEl.style.display = '';
+      }
+    }
     var services = Array.isArray(d.services) ? d.services : [];
-    var channels = Array.isArray(d.channels) ? d.channels : [];
+    if (!isOc) services = services.filter(function (s) { return !/openclaw/i.test(String(s && s.name || '')); });
+    var channels = (scope.has('CHANNELS') && Array.isArray(d.channels)) ? d.channels : [];
     var disks = Array.isArray(d.disks) ? d.disks : [];
     var crons = (d.crons && typeof d.crons === 'object') ? d.crons : {enabled: 0, ok24h: 0, failed: []};
-    var subagents = (d.subagents && typeof d.subagents === 'object') ? d.subagents : {runs: 0, successPct: 0};
+    var subagents = (d.subagents && typeof d.subagents === 'object') ? d.subagents : {runs: null, successPct: null};
+    // Only user-configured services (EXTRA_SERVICES, Mission Control) remain
+    // off-OpenClaw; with none, the section is omitted rather than left empty.
+    _shShow('sh-services-label', isOc || services.length > 0);
+    _shShow('sh-services', isOc || services.length > 0);
 
     // Services
     var shtml = '';
@@ -17082,6 +17127,7 @@ async function loadSystemHealth() {
     document.getElementById('sh-disks').innerHTML = dhtml;
 
     // Crons
+    if (scope.has('CRONS')) {
     var c = crons;
     var cFailed = Array.isArray(c.failed) ? c.failed : [];
     var chtml = '<div style="display:flex;gap:12px;flex-wrap:wrap;">'
@@ -17097,21 +17143,37 @@ async function loadSystemHealth() {
       chtml += '</div>';
     }
     document.getElementById('sh-crons').innerHTML = chtml;
+    }
 
     // Sub-agents
+    if (scope.has('SUBAGENTS')) {
     var sa = subagents;
-    var pctColor = sa.successPct >= 100 ? 'var(--text-success)' : (sa.successPct > 80 ? 'var(--text-warning)' : 'var(--text-error)');
-    var sahtml = '<div style="display:flex;gap:12px;flex-wrap:wrap;">'
-      + '<div style="flex:1;min-width:100px;padding:12px 16px;background:var(--bg-secondary);border-radius:8px;text-align:center;border:1px solid var(--border-secondary);">'
-      + '<div style="font-size:24px;font-weight:700;color:var(--text-primary,#e6edf5);">' + sa.runs + '</div>'
-      + '<div style="font-size:11px;color:var(--text-muted,#7c8a9d);text-transform:uppercase;letter-spacing:0.5px;">Runs</div></div>'
-      + '<div style="flex:1;min-width:100px;padding:12px 16px;background:var(--bg-secondary,#1a1a2e);border-radius:8px;text-align:center;border:1px solid var(--border-secondary,#333);">'
-      + '<div style="font-size:24px;font-weight:700;color:' + pctColor + ';">' + sa.successPct + '%</div>'
-      + '<div style="font-size:11px;color:var(--text-muted,#7c8a9d);text-transform:uppercase;letter-spacing:0.5px;">Success</div></div></div>';
+    var sahtml;
+    if (sa.available === false) {
+      sahtml = '<div style="padding:8px 10px;background:var(--bg-secondary);border:1px solid var(--border-secondary);border-radius:8px;font-size:12px;color:var(--text-muted);">Sub-agent data unavailable: the local store could not be read.</div>';
+    } else {
+      var saRuns = (typeof sa.runs === 'number') ? sa.runs : 0;
+      // Only a payload with completed/failed counts carries a measured rate.
+      // Older payloads send successPct alone, and that value was a default.
+      var saPct = (typeof sa.completed === 'number' && typeof sa.successPct === 'number') ? sa.successPct : null;
+      var pctColor = saPct === null ? 'var(--text-muted)' : (saPct >= 100 ? 'var(--text-success)' : (saPct > 80 ? 'var(--text-warning)' : 'var(--text-error)'));
+      sahtml = '<div style="display:flex;gap:12px;flex-wrap:wrap;">'
+        + '<div style="flex:1;min-width:100px;padding:12px 16px;background:var(--bg-secondary);border-radius:8px;text-align:center;border:1px solid var(--border-secondary);">'
+        + '<div style="font-size:24px;font-weight:700;color:var(--text-primary,#e6edf5);">' + saRuns + '</div>'
+        + '<div style="font-size:11px;color:var(--text-muted,#7c8a9d);text-transform:uppercase;letter-spacing:0.5px;">Runs</div></div>'
+        + '<div style="flex:1;min-width:100px;padding:12px 16px;background:var(--bg-secondary,#1a1a2e);border-radius:8px;text-align:center;border:1px solid var(--border-secondary,#333);">'
+        + '<div style="font-size:24px;font-weight:700;color:' + pctColor + ';">' + (saPct === null ? 'N/A' : saPct + '%') + '</div>'
+        + '<div style="font-size:11px;color:var(--text-muted,#7c8a9d);text-transform:uppercase;letter-spacing:0.5px;">' + (saPct === null ? 'No finished runs' : 'Success') + '</div></div></div>';
+    }
     document.getElementById('sh-subagents').innerHTML = sahtml;
+    }
 
-    // Delegation chain panel (AgentWeave-inspired provenance view)
-    try {
+    // Delegation chain panel (AgentWeave-inspired provenance view). Chains are
+    // keyed by OpenClaw's parent channel (telegram, whatsapp, ...).
+    if (!isOc) {
+      var dcp = document.getElementById('delegation-chains-panel');
+      if (dcp) dcp.innerHTML = '';
+    } else try {
       var chainData = await fetchJsonWithTimeout('/api/delegation-tree', 4000).catch(function(){return {chains:[]};});
       var chains = (chainData && chainData.chains) || [];
       var chainsEl = document.getElementById('delegation-chains-panel');
@@ -17160,8 +17222,8 @@ async function loadSystemHealth() {
       }
     } catch(e) { /* delegation tree is optional */ }
 
-    // Heartbeat status in system health
-    try {
+    // Heartbeat status in system health (OpenClaw's HEARTBEAT.md cadence).
+    if (isOc) try {
       var hbData = await fetchJsonWithTimeout('/api/heartbeat-status', 3000);
       var hbEl = document.getElementById('sh-heartbeat');
       if (hbEl) {
@@ -17193,7 +17255,9 @@ async function loadSystemHealth() {
       var ingest = (d && Array.isArray(d.channel_ingest)) ? d.channel_ingest : [];
       var ciWrap = document.getElementById('sh-channel-ingest-wrap');
       var ciEl = document.getElementById('sh-channel-ingest');
-      if (ciEl && ciWrap) {
+      if (ciWrap && !scope.has('CHANNELS')) {
+        ciWrap.style.display = 'none';
+      } else if (ciEl && ciWrap) {
         // Always show the wrap — even empty state is diagnostic (#1321).
         ciWrap.style.display = '';
         var emoji = function(p) {
@@ -17360,7 +17424,7 @@ async function loadSystemHealth() {
     // was invisible from the dashboard until this card landed.
     var gwWrap = document.getElementById('sh-gateway-wrap');
     var gwEl = document.getElementById('sh-gateway');
-    if (d.gateway && gwEl) {
+    if (d.gateway && gwEl && isOc) {
       var gw = d.gateway;
       var gwStatus = gw.status || 'not_running';
       var gwDot, gwLabel, gwColor;
@@ -17437,7 +17501,7 @@ async function loadSystemHealth() {
     // Inference Provider (conditional)
     var infWrap = document.getElementById('sh-inference-wrap');
     var infEl = document.getElementById('sh-inference');
-    if (d.inference && infEl) {
+    if (d.inference && infEl && _shRuntimeScope().has('GATEWAY_RPC')) {
       var inf = d.inference;
       infEl.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--bg-secondary);border-radius:8px;border:1px solid var(--border-secondary);font-size:13px;">'
         + '🤖 <span style="font-weight:600;color:var(--text-primary);">' + (inf.provider || 'Unknown') + '</span>'
@@ -17449,7 +17513,7 @@ async function loadSystemHealth() {
     // Security Posture (conditional)
     var secWrap = document.getElementById('sh-security-wrap');
     var secEl = document.getElementById('sh-security');
-    if (d.security && secEl) {
+    if (d.security && secEl && _shRuntimeScope().has('GATEWAY_RPC')) {
       var sec = d.security;
       var badges = '';
       if (sec.sandbox_enabled) badges += '<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:rgba(34,197,94,0.15);color:#22c55e;margin-right:4px;">🔒 Sandboxed</span>';
@@ -17489,6 +17553,8 @@ async function _loadReliabilityWidget() {
   var wrap = document.getElementById('sh-reliability-wrap');
   var el = document.getElementById('sh-reliability');
   if (!wrap || !el) return;
+  // A node-wide trend over every runtime's errors: not shown under one runtime.
+  if (_shRuntimeScope().rt !== 'all') { wrap.style.display = 'none'; return; }
   try {
     var r = await fetchJsonWithTimeout('/api/reliability', 4000);
     if (r.direction === 'insufficient_data' || r.error) {
@@ -17545,6 +17611,10 @@ function startSystemHealthRefresh() {
 async function loadDiagnostics() {
   var el = document.getElementById('sh-diagnostics');
   if (!el) return false;
+  // Gateway URL, workspace, auth token and flags all describe OpenClaw.
+  var diagOc = _shRuntimeScope().has('GATEWAY_RPC');
+  _shShow('sh-diagnostics-wrap', diagOc);
+  if (!diagOc) return true;
   // Diagnostics inspect local processes and on-disk OpenClaw config — neither
   // exists in the cloud iframe. The cloud server returns 410 / 404 for both
   // URLs, which the browser logs as console errors on every System Health
@@ -17645,7 +17715,7 @@ async function loadSandboxStatus() {
     // --- Inference card ---
     var infWrap = document.getElementById('sh-inference-wrap');
     var infEl   = document.getElementById('sh-inference');
-    if (d.inference && infEl) {
+    if (d.inference && infEl && _shRuntimeScope().has('GATEWAY_RPC')) {
       var inf = d.inference;
       infEl.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;'
         + 'background:var(--bg-secondary);border-radius:8px;border:1px solid var(--border-secondary);font-size:13px;">'
@@ -17661,7 +17731,7 @@ async function loadSandboxStatus() {
     // --- Security badge (Sandboxed) ---
     var secWrap = document.getElementById('sh-security-wrap');
     var secEl   = document.getElementById('sh-security');
-    if (d.security && secEl) {
+    if (d.security && secEl && _shRuntimeScope().has('GATEWAY_RPC')) {
       var sec = d.security;
       var badges = '';
       if (sec.sandbox_enabled) {
