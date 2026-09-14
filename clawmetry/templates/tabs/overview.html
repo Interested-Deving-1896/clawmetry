@@ -642,6 +642,11 @@
       window.renderOverviewHeartbeat = function(hb){
         var card = document.getElementById('overview-heartbeat-card');
         if(!card || !hb) return;
+        // OpenClaw's 30-minute heartbeat session: other runtimes have none.
+        if(typeof _shRuntimeScope === 'function' && !_shRuntimeScope().has('GATEWAY_RPC')){
+          card.style.display = 'none';
+          return;
+        }
         card.style.display = 'flex';
         var dot = document.getElementById('overview-hb-dot');
         if(dot){

@@ -184,6 +184,22 @@ def test_diagnostics_and_reliability_follow_the_switcher():
     assert "_shRuntimeScope()" in _function_body(src, "async function _loadReliabilityWidget()")
 
 
+def test_openclaw_heartbeat_cards_hide_under_other_runtimes():
+    # "Is your agent alive?" and the header heartbeat card both read
+    # OpenClaw's 30-minute HEARTBEAT_OK session (routes/overview.py).
+    src = _src(_APP_JS)
+    hb = _function_body(src, "async function loadHeartbeat()")
+    assert "_shShow('heartbeat-panel', hbOc)" in hb
+    assert hb.index("if (!hbOc) return;") < hb.index("/api/heartbeat")
+    panel = _function_body(src, "async function loadSystemHealth()")
+    assert "_shShow('heartbeat-panel', isOc)" in panel
+    assert "_shShow('overview-heartbeat-card', false)" in panel
+    html = _src(_OVERVIEW)
+    render = html[html.index("window.renderOverviewHeartbeat"):html.index("function pollOnce")]
+    assert "_shRuntimeScope().has('GATEWAY_RPC')" in render
+    assert render.index("has('GATEWAY_RPC')") < render.index("card.style.display = 'flex'")
+
+
 def test_runtime_switch_reloads_the_panel():
     body = _function_body(_src(_APP_JS), "function _cmApplyRuntimeSelection(val)")
     assert "loadSystemHealth()" in body

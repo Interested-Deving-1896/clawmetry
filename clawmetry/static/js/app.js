@@ -2873,6 +2873,10 @@ async function loadAutonomy() {
 
 // ── Heartbeat: is your agent alive? ──────────────────────────────────────────
 async function loadHeartbeat() {
+  // OpenClaw's 30-minute heartbeat session; other runtimes have none to show.
+  var hbOc = _shRuntimeScope().has('GATEWAY_RPC');
+  _shShow('heartbeat-panel', hbOc);
+  if (!hbOc) return;
   try {
     var d = await (typeof fetchJsonWithTimeout === 'function'
       ? fetchJsonWithTimeout('/api/heartbeat', 5000)
@@ -17045,6 +17049,10 @@ async function loadSystemHealth() {
   _shShow('sh-crons-wrap', scope.has('CRONS'));
   _shShow('sh-subagents-wrap', scope.has('SUBAGENTS'));
   _shShow('sh-heartbeat-wrap', isOc);
+  // The Overview heartbeat cards poll on their own timers; hide them on a
+  // runtime switch now rather than on their next tick.
+  _shShow('heartbeat-panel', isOc);
+  if (!isOc) _shShow('overview-heartbeat-card', false);
   try {
     var d = await fetchJsonWithTimeout('/api/system-health' + (scope.rt === 'all' ? '' : '?runtime=' + encodeURIComponent(scope.rt)), 18000);
     // Connector liveness: surface a 'down' inbound channel loudly (incident:
