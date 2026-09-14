@@ -5048,6 +5048,14 @@ async function loadAll() {
 // earlier answer exists. Their template placeholders, never $0.00 or 0: a
 // figure nobody measured must not read as a measured zero.
 function _cmUsageTilesStillLoading() {
+  // A runtime is selected: loadMiniWidgets just drew that runtime's cost and
+  // tokens from /api/runtime-summary, which DID answer. Those figures are
+  // measured, so they stay; only the node-wide tiles wait for /api/usage.
+  if (window._cmRuntimeScope) return;
+  // loadMiniWidgets(overview, {}) badged the tile "basis unknown" for a
+  // payload that has no figures yet. No figure, no basis claim beside it.
+  var badge = document.getElementById('cost-basis-badge');
+  if (badge) badge.innerHTML = '';
   var today = document.getElementById('cost-today');
   if (today) today.innerHTML = '<span class="cm-fig-unknown">still loading</span>';
   ['cost-week', 'cost-month', 'token-rate', 'tokens-today'].forEach(function (id) {

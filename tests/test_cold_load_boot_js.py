@@ -84,15 +84,76 @@ def test_flow_tool_prefetch_waits_for_a_screen_that_uses_it() -> None:
     )
 
 
-def test_duplicate_overview_callers_share_one_request() -> None:
-    """AC 3: every consumer goes through the one shared overview request.
-    Behaviour (concurrent callers -> one fetch) is pinned in the Node suite."""
+_FRONTEND_ROOTS = (
+    os.path.join(_HERE, "..", "clawmetry", "static", "js"),
+    os.path.join(_HERE, "..", "clawmetry", "templates"),
+)
+# A quoted string that names the /api/overview endpoint itself (optionally with
+# a query string), in any quote style. /api/overview-foo is a different route.
+_OVERVIEW_LITERAL = re.compile(r"""(['"`])[^'"`\n]*/api/overview(?![\w-])[^'"`\n]*\1""")
+_COMMENT_LINE = re.compile(r"^\s*(//|\*|/\*|<!--|\{#)")
+_TRAILING_COMMENT = re.compile(r"\s//\s.*$")
+
+
+def _frontend_files() -> list:
+    """Every JS and HTML file the dashboard serves, discovered, not listed:
+    a new tab template or script that fetches /api/overview is covered the
+    day it lands."""
+    found = []
+    for root in _FRONTEND_ROOTS:
+        for dirpath, _dirs, files in os.walk(root):
+            for name in files:
+                if name.endswith((".js", ".html")):
+                    found.append(os.path.normpath(os.path.join(dirpath, name)))
+    return sorted(found)
+
+
+def _overview_requests(path: str) -> list:
+    """(line number, line) for each /api/overview URL literal outside a comment."""
+    hits = []
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        for n, line in enumerate(fh, 1):
+            if _COMMENT_LINE.match(line):
+                continue
+            if _OVERVIEW_LITERAL.search(_TRAILING_COMMENT.sub("", line)):
+                hits.append((n, line.strip()))
+    return hits
+
+
+def test_every_overview_request_goes_through_the_shared_helper() -> None:
+    """AC 3, the whole class: across every served script and template, the ONLY
+    place that names the /api/overview URL is _cmFetchOverviewShared. A direct
+    fetch anywhere else (the heartbeat card's old fallback was one) sends a
+    second request with its own timer, which is what this PR removed."""
+    files = _frontend_files()
+    names = {os.path.basename(p) for p in files}
+    assert {"app.js", "overview.html"} <= names, f"scan found no dashboard sources: {sorted(names)[:5]}"
+    assert len(files) >= 10, f"scan found only {len(files)} frontend files; the roots moved"
+
+    app_js = os.path.normpath(_APP_JS)
     src = _src()
-    # The only direct /api/overview fetch in app.js is the shared helper.
-    direct = re.findall(r"fetch(?:JsonWithTimeout)?\(\s*'/api/overview'", src)
-    assert len(direct) == 1, (
-        f"{len(direct)} direct /api/overview fetches in app.js; consumers must use _cmFetchOverviewShared()"
+    helper = re.search(r"^function _cmFetchOverviewShared\b[\s\S]*?^\}", src, re.M)
+    assert helper, "_cmFetchOverviewShared is gone from app.js"
+    helper_lines = range(src.count("\n", 0, helper.start()) + 1, src.count("\n", 0, helper.end()) + 2)
+
+    stray = []
+    inside_helper = 0
+    for path in files:
+        for n, line in _overview_requests(path):
+            if path == app_js and n in helper_lines:
+                inside_helper += 1
+            else:
+                stray.append(f"{os.path.relpath(path, os.path.join(_HERE, '..'))}:{n}: {line[:120]}")
+    assert inside_helper == 1, f"_cmFetchOverviewShared names /api/overview {inside_helper} times, expected 1"
+    assert not stray, (
+        "/api/overview requested outside _cmFetchOverviewShared(); call the shared helper instead:\n  "
+        + "\n  ".join(stray)
     )
+
+
+def test_duplicate_overview_callers_share_one_request() -> None:
+    """AC 3: the named consumers go through the one shared overview request.
+    Behaviour (concurrent callers -> one fetch) is pinned in the Node suite."""
     for name, is_async in (("loadAll", True), ("_cmLoadDetectedRuntimes", True),
                            ("initFlow", False), ("updateFlowStats", False)):
         assert "_cmFetchOverviewShared()" in _function(name, is_async=is_async), (

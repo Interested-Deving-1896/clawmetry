@@ -203,6 +203,24 @@ async function sharedOverview() {
   return { missing: false, duringFlight, same, afterSettle: fetches };
 }
 
+// ── 5. slow /api/usage never erases figures that WERE measured ────────────
+// A runtime is selected and /api/usage times out with no earlier answer:
+// loadMiniWidgets has just drawn that runtime's cost and tokens from
+// /api/runtime-summary. The still-loading placeholders must not replace them.
+function stillLoadingWith(scope) {
+  const ids = ['cost-today', 'cost-week', 'cost-month', 'token-rate', 'tokens-today', 'cost-basis-badge'];
+  const els = {};
+  ids.forEach((id) => { els[id] = fakeElement(); els[id].textContent = 'measured'; els[id].innerHTML = 'measured'; });
+  const sandbox = {
+    window: { _cmRuntimeScope: scope, _cmCostTodayRaw: 1.5, _cmTodayTokensRaw: 42 },
+    document: { getElementById: (id) => els[id] || null },
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(extract('_cmUsageTilesStillLoading', false) + '\nthis._f = _cmUsageTilesStillLoading;', sandbox);
+  sandbox._f();
+  return { els, win: sandbox.window };
+}
+
 (async function main() {
   console.log('bootDashboard: startup loads only the screen the page lands on');
   const onSessions = await bootWith('transcripts');
@@ -243,6 +261,16 @@ async function sharedOverview() {
     eq(so.same, true, 'every consumer receives the same answer');
     eq(so.afterSettle, 2, 'a refresh after the request settled fetches fresh data');
   }
+
+  console.log('slow usage: placeholders only where nothing was measured');
+  const scoped = stillLoadingWith({ runtime: 'codex', cost: 1.5 });
+  eq(scoped.els['cost-today'].innerHTML, 'measured', 'a runtime-scoped cost tile keeps its measured figure');
+  eq(scoped.els['tokens-today'].textContent, 'measured', 'a runtime-scoped token tile keeps its measured figure');
+  eq(scoped.win._cmCostTodayRaw, 1.5, 'the hero still reads the runtime-scoped cost');
+  const nodeWide = stillLoadingWith(null);
+  eq(/still loading/.test(nodeWide.els['cost-today'].innerHTML), true, 'node-wide cost tile shows still loading');
+  eq(nodeWide.els['cost-week'].textContent, '--', 'node-wide week tile shows its placeholder, not $0.00');
+  eq(nodeWide.els['cost-basis-badge'].innerHTML, '', 'no basis badge beside a figure that is still loading');
 
   console.log('');
   console.log(passed + ' passed, ' + failed + ' failed');
