@@ -19110,13 +19110,14 @@ function gatewaySpendEntry(gw, path, v) {
 function gatewayMoney(gw, path, v, label) {
   var unreported = v === null || v === undefined;
   var n = Number(v) || 0;
+  var cur = _e((gw && gw.currency) || 'USD');
   var exact = unreported ? '' : ', ' + (n >= 0.01 || n <= 0 ? n.toFixed(4) : n.toPrecision(3))
-    + ' ' + ((gw && gw.currency) || 'USD') + ' as reported';
+    + ' ' + cur + ' as reported';
   if (window.cmProv) {
     return window.cmProv.figure(unreported ? null : n, gatewaySpendEntry(gw, path, v),
       { label: label + exact, noBadge: true, emptyText: 'not reported' });
   }
-  return costCardText(unreported ? 'not reported' : n.toFixed(4) + ' ' + ((gw && gw.currency) || 'USD'));
+  return _e(unreported ? 'not reported' : n.toFixed(4) + ' ' + ((gw && gw.currency) || 'USD'));
 }
 function gatewaySpendBadge(gw) {
   var entry = ((gw && gw.provenance) || {})['teams[].cost_usd'];
