@@ -834,6 +834,7 @@ jobs:
             tests/test_provenance.py \
             tests/test_provenance_render_coverage.py \
             tests/test_transcript_local_store.py \
+            tests/test_interceptor_daemon_tail.py \
             tests/test_snapshot_transcripts_runtime_fair.py \
             tests/test_moat_perf_benchmark.py \
             tests/test_runtime_detection_snapshot.py \
