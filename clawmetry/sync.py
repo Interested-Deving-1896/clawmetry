@@ -4159,10 +4159,10 @@ def _extract_cost_tokens_model(obj: dict) -> tuple:
                         pass
             return 0
 
-        _in = _utok("input_tokens", "inputTokens", "prompt_tokens", "promptTokens")
-        _out = _utok("output_tokens", "outputTokens", "completion_tokens", "completionTokens")
-        _cr = _utok("cache_read_input_tokens", "cacheReadInputTokens", "cache_read_tokens")
-        _cw = _utok("cache_creation_input_tokens", "cacheCreationInputTokens", "cache_write_tokens")
+        _in = _utok("input_tokens", "inputTokens", "prompt_tokens", "promptTokens", "input")
+        _out = _utok("output_tokens", "outputTokens", "completion_tokens", "completionTokens", "output")
+        _cr = _utok("cache_read_input_tokens", "cacheReadInputTokens", "cache_read_tokens", "cacheRead")
+        _cw = _utok("cache_creation_input_tokens", "cacheCreationInputTokens", "cache_write_tokens", "cacheWrite")
         if _in or _out or _cr or _cw:
             try:
                 from clawmetry.providers_pricing import estimate_event_cost_usd
@@ -22281,6 +22281,18 @@ def _emit_detector_incidents(store, state: dict) -> int:
             log.warning("detectors: run_all errored for %s: %s", sid, e)
             incidents = []
         if incidents:
+            # A session whose whole tool stream was RECEIVED as telemetry was
+            # seen after each action ran; nothing held it. Say so on the
+            # incident rather than let a Guard row read as prevention
+            # (REQ-OBS-OTG-001).
+            try:
+                from clawmetry import otlp_guard as _og
+                _obs = _og.observation_label(events)
+                if _obs:
+                    for _inc in incidents:
+                        _og.label_incident(_inc, _obs)
+            except Exception as _oe:  # noqa: BLE001
+                log.debug("detectors: observation label skipped: %s", _oe)
             all_incidents.extend(incidents)
             # Remember when this session FIRST looked wrong, so the next tick
             # can say how long it has been that way (and price the stretch).
@@ -22372,6 +22384,10 @@ def _emit_detector_incidents(store, state: dict) -> int:
                         # cooldown latch held or nothing is configured; the
                         # incident_alerts table has the last delivery time.
                         "delivered_via": delivered_via,
+                        # Present only when the session was seen through
+                        # received telemetry alone: observed after the fact,
+                        # never prevented (REQ-OBS-OTG-001).
+                        "observation": inc.get("observation"),
                         # Framework references, as stamped when it was found.
                         "frameworks": inc.get("frameworks"),
                     },
