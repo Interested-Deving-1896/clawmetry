@@ -84,9 +84,15 @@
   };
 
   function esc(s) {
-    var n = document.createElement('span');
-    n.textContent = String(s == null ? '' : s);
-    return n.innerHTML.replace(/"/g, '&quot;');
+    s = String(s == null ? '' : s);
+    // DOM path: CodeQL-recognised sanitizer in browsers. Fallback for Node.js
+    // test environments that load this file without a real document.
+    if (typeof document !== 'undefined') {
+      var n = document.createElement('span');
+      n.textContent = s;
+      return n.innerHTML.replace(/"/g, '&quot;');
+    }
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
   function isNum(v) {
