@@ -22,7 +22,10 @@ Criteria declared here:
   financial basis: ``test_every_usage_cost_entry_names_its_financial_basis``,
   ``test_the_snapshot_cost_slice_names_its_financial_basis``,
   ``test_the_sessions_cost_breakdown_is_labelled``,
-  ``test_the_flow_brain_panel_cost_is_a_labelled_number``.
+  ``test_the_flow_brain_panel_cost_is_a_labelled_number``,
+  ``test_the_usage_session_cost_chart_and_table_show_their_basis``,
+  ``test_the_flow_brain_call_list_cost_is_labelled``,
+  ``test_the_flow_brain_call_list_renders_its_basis``.
 * AC-OBS-CEA-025.2 -- contract and actual labels need evidence:
   ``test_contract_or_actual_without_evidence_is_unavailable_not_upgraded``.
 * AC-OBS-CEA-025.3 -- a runtime-reported cost is a source, not actual spend:
@@ -377,6 +380,143 @@ def test_the_badge_is_focusable_and_carries_rate_source_and_route():
     labels, hints = json.loads(words.stdout.strip())
     assert labels == cost_basis.COST_BASIS_LABEL
     assert hints == cost_basis.COST_BASIS_HINT
+
+
+_CTX_STUB = (
+    "var _ctx = new Proxy({}, {get: function (t, k) {"
+    " return (k in t) ? t[k] : function () {}; },"
+    " set: function (t, k, v) { t[k] = v; return true; }});")
+
+
+def _run_session_cost_chart(rows, entry):
+    app = open(APP_JS, encoding="utf-8").read()
+    prog = "\n".join([
+        "var window = globalThis;",
+        open(PROV_JS, encoding="utf-8").read(),
+        _CTX_STUB,
+        "var els = {",
+        " 'usage-session-cost-bar': {getContext: function () { return _ctx; },"
+        "   parentElement: {clientWidth: 600}, style: {}},",
+        " 'usage-session-cost-table': {innerHTML: ''},",
+        " 'usage-session-cost-basis': {innerHTML: ''},",
+        " 'session-cost-threshold': {value: '0.5'}};",
+        "var document = {getElementById: function (id) { return els[id] || null; }};",
+        "function t(k, v, fb) { return fb; }",
+        "function escHtml(s) { return String(s == null ? '' : s)"
+        ".replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }",
+        "window._sessionCostData = %s;" % json.dumps(rows),
+        "window._sessionCostEntry = %s;" % json.dumps(entry),
+        _extract_function(app, "renderSessionCostChart"),
+        "renderSessionCostChart();",
+        "console.log(JSON.stringify({table: els['usage-session-cost-table'].innerHTML,"
+        " caption: els['usage-session-cost-basis'].innerHTML}));",
+    ])
+    out = subprocess.run([_node(), "-e", prog], capture_output=True,
+                         text=True, timeout=30)
+    assert out.returncode == 0, out.stderr
+    return json.loads(out.stdout.strip().splitlines()[-1])
+
+
+def test_the_usage_session_cost_chart_and_table_show_their_basis():
+    """AC-OBS-CEA-025.1: the Usage tab's session cost chart and its table
+    print costs, so they print the basis. loadUsage used to keep only the
+    rows and drop the provenance on the floor."""
+    import routes.sessions as sessions_mod
+    rows = [{"session_id": "sess-priced", "tokens": 1200, "cost_usd": 1.25,
+             "model": "m", "day": "2026-09-01"},
+            {"session_id": "sess-unknown", "tokens": 50, "cost_usd": None,
+             "model": "m", "day": "2026-09-01"}]
+    payload = sessions_mod._stamp_cost_breakdown(
+        {"sessions": [], "top10": rows, "total_cost_usd": 1.25},
+        "duckdb:sessions")
+    entry = payload["provenance"]["top10[].cost_usd"]
+    got = _run_session_cost_chart(rows, entry)
+    assert ">published rates</span>" in got["caption"], got["caption"]
+    head = got["table"].split("</thead>")[0]
+    assert ">published rates</span>" in head, "the Cost column has no basis"
+    assert "$1.2500" in got["table"]
+    unknown_row = got["table"].split("sess-unknown")[1].split("</tr>")[0]
+    assert "not available" in unknown_row and "$0.0000" not in unknown_row
+    # With no entry (an older daemon) nothing is invented.
+    bare = _run_session_cost_chart(rows[:1], None)
+    assert bare["caption"] == "" and "cm-prov" not in bare["table"]
+    assert "$1.2500" in bare["table"]
+    app = open(APP_JS, encoding="utf-8").read()
+    assert "cmProv.of(cbd, 'top10[].cost_usd')" in app, (
+        "loadUsage drops the cost breakdown's basis before the chart renders")
+
+
+def _brain_payload():
+    import routes.components as comp
+    calls = [
+        {"timestamp": "2026-09-01T10:00:00", "session": "main",
+         "tokens_in": 1000, "tokens_out": 200, "cost": "$0.0042",
+         "cost_raw": 0.0042, "duration_ms": 900},
+        {"timestamp": "2026-09-01T10:01:00", "session": "main",
+         "tokens_in": 500, "tokens_out": 20, "cost": "$0.0000",
+         "cost_raw": 0.0, "duration_ms": 0},
+    ]
+    return comp._brain_call_costs({
+        "stats": comp._brain_cost_stats({"today_calls": 2}, 0.0042, 1,
+                                        "duckdb"),
+        "calls": calls, "total": 2}, "duckdb:events")
+
+
+def test_the_flow_brain_call_list_cost_is_labelled():
+    """AC-OBS-CEA-025.1: the Flow brain panel's per-call cost list, not only
+    its summary card. A call with tokens and no price is unavailable, never a
+    confident $0.0000."""
+    payload = _brain_payload()
+    provenance.assert_labelled(payload, "brain panel")
+    _assert_cost_labelled(payload, "brain panel")
+    assert [c["cost_usd"] for c in payload["calls"]] == [0.0042, None]
+    assert payload["provenance"]["calls[].cost_usd"]["cost_basis"] == \
+        cost_basis.PUBLISHED_RATE
+
+
+def _run_brain_panel(data):
+    app = open(APP_JS, encoding="utf-8").read()
+    prog = "\n".join([
+        "var window = globalThis;",
+        open(PROV_JS, encoding="utf-8").read(),
+        "var els = {'comp-modal-body': {innerHTML: ''},"
+        " 'comp-modal-footer': {textContent: ''}};",
+        "var document = {getElementById: function (id) { return els[id] || null; }};",
+        "function t(k, v, fb) { return fb; }",
+        "function escapeHtml(s) { return String(s == null ? '' : s)"
+        ".replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }",
+        "var _brainPage = 0;",
+        "function isCompModalActive() { return true; }",
+        "function _compModalError(a, b, e) { return 'ERR ' + e.message; }",
+        "function fetchJsonWithTimeout() { return Promise.resolve(%s); }"
+        % json.dumps(data),
+        _extract_function(app, "loadBrainData"),
+        "loadBrainData(false);",
+        "setTimeout(function () {"
+        " console.log(JSON.stringify({html: els['comp-modal-body'].innerHTML})); }, 50);",
+    ])
+    out = subprocess.run([_node(), "-e", prog], capture_output=True,
+                         text=True, timeout=30)
+    assert out.returncode == 0, out.stderr
+    return json.loads(out.stdout.strip().splitlines()[-1])["html"]
+
+
+def test_the_flow_brain_call_list_renders_its_basis():
+    html = _run_brain_panel(_brain_payload())
+    assert "ERR" not in html, html
+    listing = html.split("Cost per call: ", 1)
+    assert len(listing) == 2, "the per-call cost list carries no basis"
+    assert listing[1].lstrip().startswith('<span class="cm-prov')
+    assert ">published rates</span>" in listing[1].split("</div>")[0]
+    assert "$0.0042" in listing[1]
+    assert "$0.0000" not in listing[1] and "not available" in listing[1]
+    # A legacy payload with no entry keeps its strings and invents no label.
+    legacy = _brain_payload()
+    legacy.pop("provenance")
+    for c in legacy["calls"]:
+        c.pop("cost_usd")
+    old = _run_brain_panel(legacy)
+    assert "Cost per call" not in old and "$0.0042" in old
 
 
 def test_the_focus_explanation_is_styled():

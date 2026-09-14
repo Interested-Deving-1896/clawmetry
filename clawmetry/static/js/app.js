@@ -18524,6 +18524,10 @@ async function loadUsage() {
     // Load session cost breakdown
     fetch('/api/sessions/cost-breakdown').then(r => r.json()).then(function(cbd) {
       window._sessionCostData = cbd.top10 || [];
+      // Keep the basis with the rows (REQ-OBS-CEA-025.1): the chart and its
+      // table print these costs, so they print what kind of money they are.
+      window._sessionCostEntry = window.cmProv
+        ? window.cmProv.of(cbd, 'top10[].cost_usd') : null;
       renderSessionCostChart();
     }).catch(function() {
       var el = document.getElementById('usage-session-cost-table');
@@ -19163,6 +19167,16 @@ function renderSessionCostChart() {
   var rows = window._sessionCostData || [];
   var canvas = document.getElementById('usage-session-cost-bar');
   var tableEl = document.getElementById('usage-session-cost-table');
+  // The bars are drawn on a canvas, which cannot hold a focusable badge, so
+  // the basis for the bar values sits in a caption above it
+  // (REQ-OBS-CEA-025.1). No entry (an older daemon): no invented label.
+  var costEntry = window._sessionCostEntry || null;
+  var basisEl = document.getElementById('usage-session-cost-basis');
+  if (basisEl) {
+    basisEl.innerHTML = (costEntry && window.cmProv && rows.length)
+      ? 'Bar values and the Cost column: ' + window.cmProv.badge(costEntry, { label: 'Session cost' })
+      : '';
+  }
   var threshold = parseFloat((document.getElementById('session-cost-threshold') || {}).value || '0.5') || 0;
   if (!canvas) return;
   var ctx = canvas.getContext('2d');
@@ -19224,7 +19238,9 @@ function renderSessionCostChart() {
     tableHtml += '<thead><tr style="color:var(--text-muted);font-size:11px;">';
     tableHtml += '<th style="text-align:left;padding:4px 8px;">Session</th>';
     tableHtml += '<th style="text-align:right;padding:4px 8px;">Tokens</th>';
-    tableHtml += '<th style="text-align:right;padding:4px 8px;">Cost</th>';
+    tableHtml += '<th style="text-align:right;padding:4px 8px;">Cost'
+      + ((costEntry && window.cmProv) ? ' ' + window.cmProv.badge(costEntry, { label: 'Session cost' }) : '')
+      + '</th>';
     tableHtml += '<th style="text-align:left;padding:4px 8px;">Model</th>';
     tableHtml += '<th style="text-align:left;padding:4px 8px;">Date</th>';
     tableHtml += '</tr></thead><tbody>';
@@ -19232,9 +19248,16 @@ function renderSessionCostChart() {
       var over = threshold > 0 && (r.cost_usd||0) >= threshold;
       var rowStyle = over ? 'background:rgba(239,68,68,0.1);' : '';
       tableHtml += '<tr style="border-top:1px solid var(--border-secondary);' + rowStyle + '">';
-      tableHtml += '<td style="padding:4px 8px;font-family:monospace;font-size:11px;color:var(--text-muted);">' + (r.session_id||'').slice(-16) + (over ? ' <span style="color:#ef4444;">⚠</span>' : '') + '</td>';
+      tableHtml += '<td style="padding:4px 8px;font-family:monospace;font-size:11px;color:var(--text-muted);">' + escHtml((r.session_id||'').slice(-16)) + (over ? ' <span style="color:#ef4444;">⚠</span>' : '') + '</td>';
       tableHtml += '<td style="text-align:right;padding:4px 8px;font-size:12px;">' + ((r.tokens||0) >= 1000 ? ((r.tokens||0)/1000).toFixed(0)+'K' : (r.tokens||0)) + '</td>';
-      tableHtml += '<td style="text-align:right;padding:4px 8px;font-size:12px;color:' + (over ? '#ef4444' : 'var(--text-success)') + ';font-weight:600;">$' + (r.cost_usd||0).toFixed(4) + '</td>';
+      // Four decimals, as this table always showed; the column heading
+      // carries the basis, and an unknown cost reads "not available".
+      tableHtml += '<td style="text-align:right;padding:4px 8px;font-size:12px;color:' + (over ? '#ef4444' : 'var(--text-success)') + ';font-weight:600;">'
+        + (window.cmProv
+            ? window.cmProv.figure(r.cost_usd == null ? null : '$' + Number(r.cost_usd).toFixed(4), costEntry,
+                                   { format: 'raw', noBadge: true, label: 'Session cost' })
+            : escHtml(r.cost_usd == null ? 'not available' : '$' + Number(r.cost_usd).toFixed(4)))
+        + '</td>';
       tableHtml += '<td style="padding:4px 8px;font-size:11px;color:var(--text-muted);">' + escHtml(r.model||'') + '</td>';
       tableHtml += '<td style="padding:4px 8px;font-size:11px;color:var(--text-muted);">' + escHtml(r.day||'') + '</td>';
       tableHtml += '</tr>';
@@ -26612,20 +26635,37 @@ function loadBrainData(isRefresh) {
     if (calls.length === 0) {
       html += '<div style="text-align:center;padding:20px;color:var(--text-muted);">No LLM calls found today</div>';
     } else {
+      // Every call's cost is the same kind of money, so the list is labelled
+      // once, above it (REQ-OBS-CEA-025.1). No entry (an older daemon or a
+      // hosted payload): the legacy string, and no invented label.
+      var callCostEntry = (window.cmProv && data.provenance)
+        ? window.cmProv.of(data, 'calls[].cost_usd') : null;
+      if (callCostEntry) {
+        html += '<div class="brain-call-cost-basis" style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">Cost per call: '
+          + window.cmProv.badge(callCostEntry, { label: 'Call cost' }) + '</div>';
+      }
       html += '<div style="display:flex;flex-direction:column;gap:6px;max-height:400px;overflow-y:auto;">';
       var TOOL_ICONS = {read:'📄',write:'✏️',edit:'🔧',exec:'⚡',process:'⚙️',browser:'🌐',web_search:'🔍',web_fetch:'🌍',message:'💬',tts:'🔊',image:'🖼️',canvas:'🎨',nodes:'📱'};
       var TOOL_COLORS = {exec:'#f59e0b',browser:'#3b82f6',web_search:'#8b5cf6',web_fetch:'#06b6d4',message:'#ec4899',read:'#6b7280',write:'#22c55e',edit:'#f97316',tts:'#a855f7',image:'#ef4444',canvas:'#14b8a6',nodes:'#6366f1',process:'#64748b'};
       calls.forEach(function(c) {
         var ts = c.timestamp ? new Date(c.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '';
-        var costVal = parseFloat((c.cost||'$0').replace('$',''));
-        var cColor = costVal > 0.50 ? '#f59e0b' : costVal > 1.0 ? '#ef4444' : '#22c55e';
+        var costVal = (typeof c.cost_usd === 'number') ? c.cost_usd
+          : parseFloat(String(c.cost || '0').replace('$', ''));
+        // Largest threshold first: the old order made red unreachable.
+        var cColor = costVal > 1.0 ? '#ef4444' : costVal > 0.50 ? '#f59e0b' : '#22c55e';
         var dur = c.duration_ms > 0 ? (c.duration_ms >= 1000 ? (c.duration_ms/1000).toFixed(1)+'s' : c.duration_ms+'ms') : '--';
         html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg-secondary);border-radius:8px;border:1px solid var(--border-secondary);font-size:11px;flex-wrap:wrap;">';
         html += '<span style="color:var(--text-tertiary);min-width:58px;">' + ts + '</span>';
         html += '<span style="color:var(--text-muted);font-size:10px;min-width:50px;">' + escapeHtml(c.session||'main') + '</span>';
         html += '<span style="color:#3b82f6;min-width:45px;" title="In">' + (c.tokens_in>=1000?(c.tokens_in/1000).toFixed(1)+'K':c.tokens_in) + '-></span>';
         html += '<span style="color:#8b5cf6;min-width:40px;" title="Out">' + (c.tokens_out>=1000?(c.tokens_out/1000).toFixed(1)+'K':c.tokens_out) + '</span>';
-        html += '<span style="color:' + cColor + ';min-width:50px;">' + (c.cost||'$0') + '</span>';
+        // Four decimals, as the list always showed. A call with tokens but
+        // no price reads "not available", never $0.0000.
+        var callCostHtml = callCostEntry
+          ? window.cmProv.figure(c.cost_usd == null ? null : '$' + Number(c.cost_usd).toFixed(4), callCostEntry,
+                                 { format: 'raw', noBadge: true, label: 'Call cost' })
+          : escapeHtml(c.cost || 'not available');
+        html += '<span style="color:' + (c.cost_usd === null ? 'var(--text-muted)' : cColor) + ';min-width:50px;">' + callCostHtml + '</span>';
         html += '<span style="color:var(--text-muted);min-width:35px;">' + dur + '</span>';
         if (c.thinking) html += '<span style="background:#7c3aed22;color:#7c3aed;padding:1px 5px;border-radius:4px;font-size:10px;" title="Thinking enabled">🧠</span>';
         if (c.cache_read > 0) html += '<span style="background:#22c55e22;color:#22c55e;padding:1px 5px;border-radius:4px;font-size:10px;" title="Cache hit: ' + c.cache_read + ' tokens">💾' + (c.cache_read>=1000?(c.cache_read/1000).toFixed(0)+'K':c.cache_read) + '</span>';

@@ -63,6 +63,28 @@ def _brain_cost_stats(stats, total_cost, unpriced_calls, source):
         pass
     return stats
 
+
+def _brain_call_costs(result, source):
+    """Label the brain panel's per-call cost list (REQ-OBS-CEA-025.1).
+
+    Each call gets ``cost_usd``: the call's cost as a number, or ``None``
+    when the call carried tokens but no price, so an unpriced call reads
+    "not available" rather than a confident $0.0000. The list is labelled
+    once, under ``calls[].cost_usd``. ``cost`` stays the pre-formatted
+    string older renderers print. Never raises.
+    """
+    try:
+        for c in result.get("calls") or []:
+            raw = float(c.get("cost_raw") or 0.0)
+            tokens = int(c.get("tokens_in") or 0) + int(c.get("tokens_out") or 0)
+            c["cost_usd"] = None if (raw == 0 and tokens > 0) else round(raw, 6)
+        _prov.stamp(result, {"calls[].cost_usd": _cost_basis.published_rate(
+            "this one call's cost", source, window="one assistant call",
+            note="a call with tokens but no price shows as not available")})
+    except Exception:
+        pass
+    return result
+
 # Per-tool response cache (15s TTL) — only used by api_component_tool
 _api_tool_cache = {}
 _api_tool_cache_time = {}
@@ -1806,7 +1828,7 @@ def _try_local_store_component_brain(limit: int, offset: int):
     thinking_count = sum(1 for c in calls if c.get("thinking"))
     cache_hit_count = sum(1 for c in calls if c.get("cache_read", 0) > 0)
 
-    return {
+    return _brain_call_costs({
         "stats": _brain_cost_stats({
             "today_calls":     total,
             "today_tokens":    {
@@ -1825,7 +1847,7 @@ def _try_local_store_component_brain(limit: int, offset: int):
         "calls":   calls[offset: offset + limit],
         "total":   total,
         "_source": "local_store",
-    }
+    }, "duckdb:events (message events), the runtime's own per-call cost")
 
 
 @bp_components.route("/api/component/brain")
@@ -2060,7 +2082,9 @@ def api_component_brain():
         "calls": calls[offset : offset + limit],
         "total": total,
     }
-    return jsonify(result)
+    return jsonify(_brain_call_costs(
+        result, "session transcripts: the runtime's own per-call cost, else "
+                "ClawMetry's published price table"))
 
 
 def _try_local_store_component_mcp():
