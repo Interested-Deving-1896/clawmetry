@@ -210,6 +210,11 @@ def test_guard_inventory_route_and_card(monkeypatch):
     for text in ("Nothing inventoried yet.", "Could not read the inventory",
                  "No MCP servers, skills, plugins"):
         assert text in js
+    # The hosted dashboard answers 410 for this route; the card must say the
+    # inventory lives on the agent's machine, not "nothing inventoried".
+    loader = js[js.index("function loadGuardInventory() {"):]
+    loader = loader[:loader.index("\nfunction ")]
+    assert "r.status === 410" in loader and "_cloud_disabled" in loader
     ql = open(os.path.join(_REPO_ROOT, "routes", "local_query.py"), encoding="utf-8").read()
     assert '"query_agent_inventory"' in ql
 

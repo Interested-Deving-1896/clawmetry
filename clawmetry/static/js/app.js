@@ -31614,7 +31614,17 @@ function loadGuardInventory() {
   if (!el) return;
   var sum = document.getElementById('guard-inventory-summary');
   if (sum) sum.textContent = '';
-  fetch('/api/guard/inventory').then(function (r) { return r.json(); }).then(function (d) {
+  fetch('/api/guard/inventory').then(function (r) {
+    // The hosted dashboard disables this route with HTTP 410: the inventory
+    // lives in the store on the agent's machine and is not in the snapshot.
+    // Say that, rather than "nothing inventoried" for a node that has one.
+    if (r.status === 410) return { _cloud_disabled: true };
+    return r.ok ? r.json() : null;
+  }).then(function (d) {
+    if (d && d._cloud_disabled) {
+      el.innerHTML = '<div class="empty-state">The inventory is read from the store on the machine your agents run on, so it is shown on the dashboard running on that machine (http://localhost:8900).</div>';
+      return;
+    }
     if (!d || d.store_available === false) {
       el.innerHTML = '<div class="empty-state">Could not read the inventory from the local store right now. Try Refresh in a moment.</div>';
       return;
