@@ -327,7 +327,10 @@ MAPPINGS: Dict[str, Dict[str, Any]] = {
         "limits": ("Reports that an MCP server, skill or plugin appeared or its content hash changed "
                    "after the baseline, not that it is hostile. It reads configuration only and "
                    "never starts a component, so an MCP server's tool descriptions and anything a "
-                   "server downloads at run time are not covered."),
+                   "server downloads at run time are not covered. The first inventory of a scope "
+                   "is a silent baseline, so a component already present when ClawMetry first "
+                   "reads a configuration (a freshly cloned repository's .mcp.json, say) is "
+                   "never reported."),
         "requires": "the agent's configuration files are readable on the node",
         "tests": {"positive": "tests/test_agent_supply_chain_inventory.py::test_a_new_mcp_server_after_the_baseline_raises_a_component_change",
                   "benign": "tests/test_agent_supply_chain_inventory.py::test_the_first_inventory_is_a_silent_baseline"},

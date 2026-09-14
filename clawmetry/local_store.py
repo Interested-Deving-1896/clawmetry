@@ -7455,13 +7455,20 @@ class LocalStore(ProjectsMixin, TrailStoreMixin):
         return out
 
     def record_agent_inventory(self, scope_key: str, scope: str, workspace: str,
-                               components: list, now_ms: int = 0) -> dict:
+                               components: list, now_ms: int = 0,
+                               unreadable_sources=None, complete=None) -> dict:
         """Diff one scope's fresh inventory against what is stored and write it.
 
         Returns ``{"baseline": bool, "changes": [...], "written": n}``. The
         first pass of a scope is a baseline: rows are written, no change is
-        reported (clawmetry/agent_inventory.diff_inventory). Never raises.
+        reported (clawmetry/agent_inventory.diff_inventory). Rows from a source
+        the collection could not read are kept, not removed; both arguments
+        default to what an ``agent_inventory.Collection`` carries. Never raises.
         """
+        if unreadable_sources is None:
+            unreadable_sources = list(getattr(components, "unreadable", ()) or ())
+        if complete is None:
+            complete = bool(getattr(components, "complete", True))
         out: dict = {"baseline": False, "changes": [], "written": 0}
         try:
             from clawmetry import agent_inventory as _inv
@@ -7481,7 +7488,8 @@ class LocalStore(ProjectsMixin, TrailStoreMixin):
                     [str(scope or ""), str(workspace or "")]).fetchall())
                 rows, changes = _inv.diff_inventory(
                     prev, [c for c in (components or []) if isinstance(c, dict)],
-                    baseline=baseline, now_ms=now_ms)
+                    baseline=baseline, now_ms=now_ms,
+                    unreadable_sources=unreadable_sources, complete=complete)
                 marks = ", ".join("?" for _ in self._AGENT_COMPONENT_COLS)
                 for r in rows:
                     self._conn.execute(

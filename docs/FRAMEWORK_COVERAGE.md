@@ -148,7 +148,7 @@ No identifier. A crash loop is a reliability signal; no item in these frameworks
 ### `agent_component_change`
 
 * **Why:** ASI04 covers third-party tools and components an agent loads at runtime. AML.T0010.005 is compromising an agent tool to reach a victim, and names a poisoned MCP server; AML.T0081 is modifying the configuration that tells the agent which tools to load.
-* **Limits:** Reports that an MCP server, skill or plugin appeared or its content hash changed after the baseline, not that it is hostile. It reads configuration only and never starts a component, so an MCP server's tool descriptions and anything a server downloads at run time are not covered.
+* **Limits:** Reports that an MCP server, skill or plugin appeared or its content hash changed after the baseline, not that it is hostile. It reads configuration only and never starts a component, so an MCP server's tool descriptions and anything a server downloads at run time are not covered. The first inventory of a scope is a silent baseline, so a component already present when ClawMetry first reads a configuration (a freshly cloned repository's .mcp.json, say) is never reported.
 * **Needs:** the agent's configuration files are readable on the node
 * **Fires on:** `tests/test_agent_supply_chain_inventory.py::test_a_new_mcp_server_after_the_baseline_raises_a_component_change`
 * **Quiet on:** `tests/test_agent_supply_chain_inventory.py::test_the_first_inventory_is_a_silent_baseline`

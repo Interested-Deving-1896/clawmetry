@@ -186,24 +186,61 @@ def _dir_sha(root: str) -> Tuple[str, bool]:
     return _sha(_canon(sorted(entries))), complete
 
 
-def _read_text(path: str, limit: int = _MAX_JSON_BYTES) -> Optional[str]:
+#: A source file's read outcome. ``UNREADABLE`` is a file that exists but could
+#: not be read, parsed or was over the size cap: it says nothing about what the
+#: file declares, so its previously recorded components must be kept, not
+#: reported removed (and then "new" again when the next read succeeds). The
+#: runtimes rewrite these files in place (Claude Code rewrites ~/.claude.json
+#: constantly), so a torn read is routine, not exotic.
+ABSENT, OK, UNREADABLE = "absent", "ok", "unreadable"
+
+
+class Collection(list):
+    """A scope's components plus what the collection could not see.
+
+    ``unreadable`` holds the ``source`` labels of files that exist but could
+    not be read; ``complete`` is False when a whole collection step failed.
+    :func:`diff_inventory` keeps previous rows it cannot vouch for.
+    """
+
+    def __init__(self, items=(), unreadable=(), complete: bool = True):
+        super().__init__(items)
+        self.unreadable = set(unreadable)
+        self.complete = bool(complete)
+
+
+def _read_text_status(path: str, limit: int = _MAX_JSON_BYTES) -> Tuple[str, Optional[str]]:
     try:
-        if not os.path.isfile(path) or os.path.getsize(path) > limit:
-            return None
+        if not os.path.isfile(path):
+            return ABSENT, None
+        if os.path.getsize(path) > limit:
+            return UNREADABLE, None
         with open(path, encoding="utf-8", errors="replace") as fh:
-            return fh.read()
+            return OK, fh.read()
     except OSError:
-        return None
+        # Gone between the check and the open is an absence; anything else
+        # (permissions, I/O) is a file we could not read.
+        return (UNREADABLE if os.path.lexists(path) else ABSENT), None
+
+
+def _read_text(path: str, limit: int = _MAX_JSON_BYTES) -> Optional[str]:
+    status, text = _read_text_status(path, limit)
+    return text if status == OK else None
+
+
+def _read_json_status(path: str) -> Tuple[str, Any]:
+    status, text = _read_text_status(path)
+    if status != OK:
+        return status, None
+    try:
+        return OK, json.loads(text)
+    except ValueError:
+        return UNREADABLE, None
 
 
 def _read_json(path: str) -> Optional[Any]:
-    text = _read_text(path)
-    if text is None:
-        return None
-    try:
-        return json.loads(text)
-    except ValueError:
-        return None
+    status, data = _read_json_status(path)
+    return data if status == OK else None
 
 
 # ── records ──────────────────────────────────────────────────────────────────
@@ -254,8 +291,15 @@ _SECRET_MAPS = ("env", "headers", "environment", "http_headers", "env_http_heade
 def _command_basename(command: Any) -> str:
     if isinstance(command, list):
         command = command[0] if command else ""
-    first = str(command or "").strip().split()
-    return os.path.basename(first[0]) if first else ""
+    tokens = str(command or "").strip().split()
+    # "API_KEY=... node server.js": a leading assignment is an environment
+    # value, often a credential, never the program. Skip it.
+    while tokens and _ENV_ASSIGNMENT.match(tokens[0]):
+        tokens.pop(0)
+    return os.path.basename(tokens[0]) if tokens else ""
+
+
+_ENV_ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 
 
 def _url_host(url: Any) -> str:
@@ -302,14 +346,16 @@ _TOML_SECTION = re.compile(r"^\s*\[([^\]]+)\]\s*(?:#.*)?$")
 _TOML_MCP = re.compile(r'^mcp_servers\.("([^"]+)"|[A-Za-z0-9_-]+)(\.(.+))?$')
 
 
-def _codex_mcp(path: str, source: str) -> List[dict]:
+def _codex_mcp(path: str, source: str, unreadable: Optional[set] = None) -> List[dict]:
     """``[mcp_servers.<name>]`` tables in Codex's config.toml.
 
     Not a TOML parser (Python 3.9 has none in the standard library). It groups
     each server's lines, including sub-tables, drops the values of secret
     tables and ``env = {...}`` lines, and hashes what is left.
     """
-    text = _read_text(path)
+    status, text = _read_text_status(path)
+    if status == UNREADABLE and unreadable is not None:
+        unreadable.add(source)
     if text is None:
         return []
     servers: Dict[str, List[str]] = {}
@@ -393,7 +439,7 @@ def _skills_under(root: str, readers, scope, workspace, source_base, prefix) -> 
     return out
 
 
-def _claude_plugins(home: str, workspace: str) -> List[dict]:
+def _claude_plugins(home: str, workspace: str, unreadable: Optional[set] = None) -> List[dict]:
     """Installed Claude Code plugins, from the manifest Claude Code writes.
 
     The manifest, not a walk of ``~/.claude/plugins``: ``marketplaces/`` lists
@@ -403,10 +449,12 @@ def _claude_plugins(home: str, workspace: str) -> List[dict]:
     workspace, only plugins installed for that project.
     """
     manifest = os.path.join(home, ".claude", "plugins", "installed_plugins.json")
-    data = _read_json(manifest)
+    source = _label(manifest, home, "~/")
+    status, data = _read_json_status(manifest)
+    if status == UNREADABLE and unreadable is not None:
+        unreadable.add(source)
     if not isinstance(data, dict) or not isinstance(data.get("plugins"), dict):
         return []
-    source = _label(manifest, home, "~/")
     out: List[dict] = []
     for full_name, entries in data["plugins"].items():
         if not isinstance(entries, list):
@@ -518,7 +566,10 @@ def _count_hooks(node: Any) -> int:
 
 def hook_file_fingerprint(path: str) -> Optional[Tuple[str, dict]]:
     """``(content_hash, details)`` for a hook or settings file, or None when
-    absent. Hook entries ClawMetry installed are excluded from both hashes."""
+    absent or unreadable. Hook entries ClawMetry installed are excluded from
+    both hashes. A file that does not parse comes back with ``parsed: False``;
+    the inventory treats that as unreadable (a runtime loads no hook from it,
+    and it is usually a torn read of a file being rewritten)."""
     text = _read_text(path)
     if text is None:
         return None
@@ -540,15 +591,18 @@ def hook_file_fingerprint(path: str) -> Optional[Tuple[str, dict]]:
 
 
 def _files(specs, scope: str, base: str, prefix: str, workspace: str,
-           kind: str) -> List[dict]:
+           kind: str, unreadable: Optional[set] = None) -> List[dict]:
     out: List[dict] = []
     for readers, spec_scope, rel in specs:
         if spec_scope != scope:
             continue
         path = os.path.join(base, rel)
+        source = _label(path, base, prefix)
         if kind == "hooks":
             fp = hook_file_fingerprint(path)
-            if fp is None:
+            if fp is None or fp[1].get("parsed") is False:
+                if os.path.isfile(path) and unreadable is not None:
+                    unreadable.add(source)
                 continue
             digest, details = fp
         else:
@@ -556,8 +610,9 @@ def _files(specs, scope: str, base: str, prefix: str, workspace: str,
                 continue
             digest, details = _file_sha(path), {}
             if not digest:
+                if unreadable is not None:
+                    unreadable.add(source)
                 continue
-        source = _label(path, base, prefix)
         out.append(_component(kind, source, scope, workspace, source, readers,
                               digest, details=details))
     return out
@@ -565,16 +620,22 @@ def _files(specs, scope: str, base: str, prefix: str, workspace: str,
 
 # ── collection ───────────────────────────────────────────────────────────────
 def collect_global(home: Optional[str] = None) -> List[dict]:
-    """Every component the user's home configuration declares. Never raises."""
+    """Every component the user's home configuration declares, as a
+    :class:`Collection` that also names the sources it could not read.
+    Never raises."""
     h = _home(home)
     out: List[dict] = []
+    unreadable: set = set()
+
     def _global_mcp():
         res = []
         for readers, scope, rel, key in _MCP_JSON_SOURCES:
             if scope != "global":
                 continue
             path = os.path.join(h, rel)
-            data = _read_json(path)
+            status, data = _read_json_status(path)
+            if status == UNREADABLE:
+                unreadable.add(_label(path, h, "~/"))
             if isinstance(data, dict):
                 res.extend(_mcp_from_map(data.get(key), readers, "global", "",
                                          _label(path, h, "~/")))
@@ -583,29 +644,32 @@ def collect_global(home: Optional[str] = None) -> List[dict]:
     steps = (
         _global_mcp,
         lambda: _codex_mcp(os.path.join(_codex_home(h), "config.toml"),
-                           _label(os.path.join(_codex_home(h), "config.toml"), h, "~/")),
+                           _label(os.path.join(_codex_home(h), "config.toml"), h, "~/"),
+                           unreadable),
         lambda: [c for readers, scope, rel in _SKILL_ROOTS if scope == "global"
                  for c in _skills_under(os.path.join(h, rel), readers, "global", "", h, "~/")],
         lambda: _skills_under(os.path.join(_codex_home(h), "skills"), ("codex",),
                               "global", "", h, "~/"),
         lambda: _skills_under(os.path.join(_openclaw_home(h), "skills"), ("openclaw",),
                               "global", "", h, "~/"),
-        lambda: _claude_plugins(h, ""),
-        lambda: _files(_INSTRUCTION_FILES, "global", h, "~/", "", "instructions"),
+        lambda: _claude_plugins(h, "", unreadable),
+        lambda: _files(_INSTRUCTION_FILES, "global", h, "~/", "", "instructions", unreadable),
         lambda: _files(((("codex",), "global", os.path.relpath(
             os.path.join(_codex_home(h), "AGENTS.md"), h)),), "global", h, "~/", "",
-            "instructions"),
-        lambda: _files(_HOOK_FILES, "global", h, "~/", "", "hooks"),
+            "instructions", unreadable),
+        lambda: _files(_HOOK_FILES, "global", h, "~/", "", "hooks", unreadable),
         lambda: _files(((("codex",), "global", os.path.relpath(
             os.path.join(_codex_home(h), "hooks.json"), h)),), "global", h, "~/", "",
-            "hooks"),
+            "hooks", unreadable),
     )
+    complete = True
     for step in steps:
         try:
             out.extend(step() or [])
         except Exception:  # noqa: BLE001 - one broken source costs its records
+            complete = False
             continue
-    return _dedupe(out)
+    return Collection(_dedupe(out), unreadable, complete)
 
 
 def workspace_is_scannable(workspace: str, home: Optional[str] = None) -> bool:
@@ -621,15 +685,19 @@ def workspace_is_scannable(workspace: str, home: Optional[str] = None) -> bool:
 
 
 def collect_workspace(workspace: str, home: Optional[str] = None) -> List[dict]:
-    """Every component a project directory declares. Never raises."""
+    """Every component a project directory declares, as a :class:`Collection`.
+    Never raises."""
     if not workspace_is_scannable(workspace, home):
-        return []
+        return Collection()
     h = _home(home)
     ws = os.path.realpath(workspace)
     out: List[dict] = []
+    unreadable: set = set()
 
     def _claude_local_scope():
-        data = _read_json(os.path.join(h, ".claude.json"))
+        status, data = _read_json_status(os.path.join(h, ".claude.json"))
+        if status == UNREADABLE:
+            unreadable.add(CLAUDE_PROJECT_SOURCE)
         projects = data.get("projects") if isinstance(data, dict) else None
         if not isinstance(projects, dict):
             return []
@@ -640,7 +708,7 @@ def collect_workspace(workspace: str, home: Optional[str] = None) -> List[dict]:
             except (OSError, ValueError):
                 continue
             return _mcp_from_map(proj.get("mcpServers"), ("claude_code",), "project", ws,
-                                 "~/.claude.json (this project)")
+                                 CLAUDE_PROJECT_SOURCE)
         return []
 
     def _project_mcp():
@@ -648,10 +716,12 @@ def collect_workspace(workspace: str, home: Optional[str] = None) -> List[dict]:
         for readers, scope, rel, key in _MCP_JSON_SOURCES:
             if scope != "project":
                 continue
-            data = _read_json(os.path.join(ws, rel))
+            label = rel.replace(os.sep, "/")
+            status, data = _read_json_status(os.path.join(ws, rel))
+            if status == UNREADABLE:
+                unreadable.add(label)
             if isinstance(data, dict):
-                res.extend(_mcp_from_map(data.get(key), readers, "project", ws,
-                                         rel.replace(os.sep, "/")))
+                res.extend(_mcp_from_map(data.get(key), readers, "project", ws, label))
         return res
 
     steps = (
@@ -659,16 +729,22 @@ def collect_workspace(workspace: str, home: Optional[str] = None) -> List[dict]:
         _claude_local_scope,
         lambda: [c for readers, scope, rel in _SKILL_ROOTS if scope == "project"
                  for c in _skills_under(os.path.join(ws, rel), readers, "project", ws, ws, "")],
-        lambda: _claude_plugins(h, ws),
-        lambda: _files(_INSTRUCTION_FILES, "project", ws, "", ws, "instructions"),
-        lambda: _files(_HOOK_FILES, "project", ws, "", ws, "hooks"),
+        lambda: _claude_plugins(h, ws, unreadable),
+        lambda: _files(_INSTRUCTION_FILES, "project", ws, "", ws, "instructions", unreadable),
+        lambda: _files(_HOOK_FILES, "project", ws, "", ws, "hooks", unreadable),
     )
+    complete = True
     for step in steps:
         try:
             out.extend(step() or [])
         except Exception:  # noqa: BLE001
+            complete = False
             continue
-    return _dedupe(out)
+    return Collection(_dedupe(out), unreadable, complete)
+
+
+#: The source label of a project's MCP servers stored in ~/.claude.json.
+CLAUDE_PROJECT_SOURCE = "~/.claude.json (this project)"
 
 
 def _dedupe(items: List[dict]) -> List[dict]:
@@ -680,19 +756,37 @@ def _dedupe(items: List[dict]) -> List[dict]:
 
 # ── diff ─────────────────────────────────────────────────────────────────────
 def diff_inventory(previous: Iterable[dict], current: Iterable[dict], *,
-                   baseline: bool, now_ms: int) -> Tuple[List[dict], List[dict]]:
+                   baseline: bool, now_ms: int,
+                   unreadable_sources: Optional[Iterable[str]] = None,
+                   complete: Optional[bool] = None) -> Tuple[List[dict], List[dict]]:
     """``(rows_to_write, changes)`` for one scope.
 
     ``previous`` are the stored rows of that scope, ``current`` a fresh
     collection. On a ``baseline`` pass (the scope has never been inventoried)
     every component is recorded with ``last_change="baseline"`` and no change
     is reported: "everything is new" on install is noise, not a finding.
+
+    A previous row whose ``source`` is in ``unreadable_sources`` (a file that
+    exists but could not be read or parsed), or any previous row when the
+    collection was not ``complete``, is kept as stored rather than reported
+    removed. A removed component that comes back with the hash it had is
+    restored without a change: both cases are reads ClawMetry could not
+    vouch for, and reporting them turned one torn read of ~/.claude.json into
+    a "New MCP server" warning on every running session. Both default to
+    what a :class:`Collection` carries.
     """
+    if unreadable_sources is None:
+        unreadable_sources = getattr(current, "unreadable", ()) or ()
+    keep_sources = {str(s) for s in unreadable_sources}
+    if complete is None:
+        complete = bool(getattr(current, "complete", True))
     prev = {r.get("component_id"): r for r in previous if isinstance(r, dict)}
     rows: List[dict] = []
     changes: List[dict] = []
     for comp in current:
         p = prev.pop(comp["component_id"], None)
+        was_removed = p is not None and p.get("status") == "removed"
+        restored = was_removed and p.get("content_hash") == comp["content_hash"]
         row = dict(comp)
         row["details"] = dict(comp.get("details") or {})
         row["status"] = "present"
@@ -702,13 +796,18 @@ def diff_inventory(previous: Iterable[dict], current: Iterable[dict], *,
             # change replaced travels in it: grading needs "did the HOOKS
             # change", not merely "did the file change".
             pdet = (p or {}).get("details") or {}
-            if p is None or p.get("status") == "removed":
+            if p is None or (was_removed and not restored):
                 row["details"]["previous_hooks_hash"] = ""
             elif p.get("content_hash") != comp["content_hash"]:
                 row["details"]["previous_hooks_hash"] = str(pdet.get("hooks_hash") or "")
             else:
                 row["details"]["previous_hooks_hash"] = str(pdet.get("previous_hooks_hash") or "")
-        if p is None or p.get("status") == "removed":
+        if restored:
+            row.update(first_seen=int(p.get("first_seen") or now_ms),
+                       previous_hash=str(p.get("previous_hash") or ""),
+                       last_change="restored", changed_at=now_ms,
+                       change_count=int(p.get("change_count") or 0))
+        elif p is None or was_removed:
             row["first_seen"] = int((p or {}).get("first_seen") or now_ms)
             row["previous_hash"] = str((p or {}).get("content_hash") or "") if p else ""
             if baseline and p is None:
@@ -733,6 +832,8 @@ def diff_inventory(previous: Iterable[dict], current: Iterable[dict], *,
     for p in prev.values():
         if p.get("status") == "removed":
             continue
+        if not complete or str(p.get("source") or "") in keep_sources:
+            continue  # not seen, not gone either: the stored row stands
         row = dict(p)
         row.update(status="removed", last_change="removed", changed_at=now_ms,
                    change_count=int(p.get("change_count") or 0) + 1)

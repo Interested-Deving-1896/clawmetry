@@ -21756,9 +21756,13 @@ def _agent_inventory_pass(store, state: dict, facts_by_session: dict,
             continue
         try:
             comps = _inv.collect_global() if scope == "global" else _inv.collect_workspace(ws)
+            # A torn read of a config file must not read as "removed" and
+            # then "new": pass what the collection could not see.
             res = store.record_agent_inventory(
-                scope_key=key, scope=scope, workspace=ws, components=comps,
-                now_ms=int(now * 1000)) or {}
+                scope_key=key, scope=scope, workspace=ws, components=list(comps),
+                now_ms=int(now * 1000),
+                unreadable_sources=sorted(getattr(comps, "unreadable", ()) or ()),
+                complete=bool(getattr(comps, "complete", True))) or {}
         except Exception as e:  # noqa: BLE001
             log.debug("agent-inventory: %s failed: %s", key, e)
             continue

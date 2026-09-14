@@ -31644,7 +31644,7 @@ function loadGuardInventory() {
       var present = rows.filter(function (c) { return c.status !== 'removed'; }).length;
       var hours = Math.max(1, Math.round((Number(d.window_secs) || 3600) / 3600));
       sum.textContent = present + ' component' + (present === 1 ? '' : 's') +
-        (d.recent ? ', ' + d.recent + ' changed in the last ' + (hours === 1 ? 'hour' : hours + ' hours') : '');
+        (d.recent ? ', ' + d.recent + ' added, changed or removed in the last ' + (hours === 1 ? 'hour' : hours + ' hours') : '');
     }
     var html = '<table class="data-table"><thead><tr>' +
       '<th>Component</th><th>Kind</th><th>Read by</th><th>Where</th><th>Version</th><th>First seen</th><th>Status</th>' +

@@ -315,6 +315,86 @@ def test_the_first_inventory_is_a_silent_baseline(home, workspace, store):
                                      "claude_code:s", "claude_code", "", now_ms=_NOW + 3000) == []
 
 
+def test_a_torn_config_read_is_neither_a_removal_nor_a_new_component(home, workspace, store,
+                                                                     monkeypatch):
+    """
+    AC-GOV-SCI-002.2 -- no finding when nothing changed: a config file read
+    mid-rewrite (truncated JSON), a file briefly absent and back identical, or
+    a collection step that failed must not report "removed" and then "New MCP
+    server" on every running session.
+    """
+    _populate(home, workspace)
+    local = os.path.join(workspace, ".claude", "settings.local.json")
+    _write(local, {"hooks": {"PreToolUse": [{"hooks": [
+        {"type": "command", "command": "/opt/audit.sh"}]}]}})
+    assert _scan(store)["baseline"] is True
+    assert _scan(store, workspace)["baseline"] is True
+
+    claude_json = os.path.join(home, ".claude.json")
+    whole = open(claude_json, encoding="utf-8").read()
+    whole_local = open(local, encoding="utf-8").read()
+
+    # 1. Torn reads: ~/.claude.json (global AND this-project scope) and a
+    #    gitignored hook file. Nothing is removed, nothing is reported.
+    _write(claude_json, whole[:len(whole) // 2])
+    _write(local, whole_local[:len(whole_local) // 2])
+    torn_g = _scan(store, now_ms=_NOW + 1000)
+    torn_w = _scan(store, workspace, now_ms=_NOW + 1000)
+    assert torn_g["changes"] == [] and torn_w["changes"] == []
+    rows = {r["name"]: r for r in store.query_agent_inventory()["components"]}
+    assert rows["fs"]["status"] == "present" and rows["remote"]["status"] == "present"
+    assert rows[".claude/settings.local.json"]["status"] == "present"
+
+    # 2. The identical files read cleanly again: still nothing to report.
+    _write(claude_json, whole)
+    _write(local, whole_local)
+    later = _NOW + 2000
+    back_g = _scan(store, now_ms=later)
+    back_w = _scan(store, workspace, now_ms=later)
+    assert back_g["changes"] == [] and back_w["changes"] == []
+    recent = _recent(store, later)
+    for runtime in ("claude_code", "cursor"):
+        assert inv.incidents_for_session(recent, runtime + ":s", runtime, workspace,
+                                         now_ms=later) == []
+
+    # 3. Briefly absent (a rename into place), then back with the same hash:
+    #    the removal is recorded, the return is a restore, not "new".
+    os.remove(claude_json)
+    gone = _scan(store, now_ms=_NOW + 3000)
+    assert [(c["name"], c["last_change"]) for c in gone["changes"]] == [("fs", "removed")]
+    _write(claude_json, whole)
+    restored = _scan(store, now_ms=_NOW + 4000)
+    assert restored["changes"] == []
+    rows = {r["name"]: r for r in store.query_agent_inventory()["components"]}
+    assert rows["fs"]["status"] == "present" and rows["fs"]["last_change"] == "restored"
+    assert rows["fs"]["first_seen"] == _NOW
+    assert inv.incidents_for_session(_recent(store, _NOW + 4000), "claude_code:s",
+                                     "claude_code", "", now_ms=_NOW + 4000) == []
+
+    # 4. A collection step that raised removes nothing.
+    real = inv._skills_under
+
+    def _boom(*a, **k):
+        raise RuntimeError("walk failed")
+    monkeypatch.setattr(inv, "_skills_under", _boom)
+    partial = inv.collect_global()
+    assert partial.complete is False
+    assert _scan(store, now_ms=_NOW + 5000)["changes"] == []
+    monkeypatch.setattr(inv, "_skills_under", real)
+    rows = {r["name"]: r for r in store.query_agent_inventory()["components"]}
+    assert rows["review"]["status"] == "present"
+
+    # The guard does not go blind: a real edit after all that still reports,
+    # and a genuinely different server under an old name is "changed".
+    _claude_json(home, {"fs": {"command": "npx", "args": ["-y", "@evil/fs"]}},
+                 projects={workspace: {"mcpServers": {
+                     "remote": {"type": "http", "url": "https://mcp.example.com/x?key=sekrit-url"}}}})
+    real_change = _scan(store, now_ms=_NOW + 6000)
+    assert [(c["name"], c["last_change"]) for c in real_change["changes"]] == [("fs", "changed")]
+    # And a leading NAME=value in a command is never stored as the program.
+    assert inv._command_basename("API_KEY=sekrit-env node server.js") == "node"
+
+
 def test_component_change_is_policy_named_and_framework_tagged():
     """
     AC-GOV-SCI-002.3 -- incident shape, framework references, and only a
