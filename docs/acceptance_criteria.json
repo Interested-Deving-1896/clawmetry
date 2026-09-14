@@ -1153,6 +1153,42 @@
       "text": "Claude Code is a paid runtime: the instrument command and every Claude Code specific mapping (session join, typed events, cache token tiles, waiting-on-you, span materialization) follow the claude_code runtime entitlement; without it the receiver still accepts batches and keeps only the generic ledger and span rows, and the command reports the plan requirement instead of writing."
     },
     {
+      "id": "AC-OBS-OTG-001.1",
+      "doc": "Exported traces reach Guard, and are scrubbed before they are stored",
+      "doc_id": "ff78b7cc-7a85-4f0f-a155-3fc78c6cd8b6",
+      "text": "When a received trace contains a span describing a tool call in a known session, the system shall record it as a tool call, and a tool result, that the detectors evaluate exactly as they evaluate a machine-observed tool call, and each recorded event shall retain the trace, span and session it came from."
+    },
+    {
+      "id": "AC-OBS-OTG-001.2",
+      "doc": "Exported traces reach Guard, and are scrubbed before they are stored",
+      "doc_id": "ff78b7cc-7a85-4f0f-a155-3fc78c6cd8b6",
+      "text": "The system shall not record a tool call for a span that does not identify itself as a tool execution or that belongs to no session, and where a tool span does not carry its arguments, the system shall not treat that call as identical to any other call."
+    },
+    {
+      "id": "AC-OBS-OTG-001.3",
+      "doc": "Exported traces reach Guard, and are scrubbed before they are stored",
+      "doc_id": "ff78b7cc-7a85-4f0f-a155-3fc78c6cd8b6",
+      "text": "Where the tool calls of one session arrive both as log records and as trace spans, or are also observed on the machine, the system shall record them from one source only, so that no tool call is counted twice."
+    },
+    {
+      "id": "AC-OBS-OTG-001.4",
+      "doc": "Exported traces reach Guard, and are scrubbed before they are stored",
+      "doc_id": "ff78b7cc-7a85-4f0f-a155-3fc78c6cd8b6",
+      "text": "Before a received span is stored, the system shall apply the secret and personal-data redaction it applies to observed events to the span's prompts, responses, tool arguments, attributes (including URLs and paths), span events (including exception events), links, name and status message, and the same redaction shall apply to the attributes kept in the received log-record ledger."
+    },
+    {
+      "id": "AC-OBS-OTG-001.5",
+      "doc": "Exported traces reach Guard, and are scrubbed before they are stored",
+      "doc_id": "ff78b7cc-7a85-4f0f-a155-3fc78c6cd8b6",
+      "text": "Where a span value cannot be scanned, because it is too large or the scanner fails, the system shall withhold that value and mark the span as withheld rather than store it unscanned. Where the operator has turned redaction off, spans shall be stored as received, as events are."
+    },
+    {
+      "id": "AC-OBS-OTG-001.6",
+      "doc": "Exported traces reach Guard, and are scrubbed before they are stored",
+      "doc_id": "ff78b7cc-7a85-4f0f-a155-3fc78c6cd8b6",
+      "text": "An incident raised only from received telemetry shall state that the action was observed after it ran and shall not state or imply that the action was prevented."
+    },
+    {
       "id": "AC-GOV-ATR-001.1",
       "doc": "Guard ATLAS OpenClaw replay: case studies AML.CS0048 to AML.CS0051 scored against Guard",
       "doc_id": "7616fb6b-63d6-49ec-a295-39ec7add4725",
