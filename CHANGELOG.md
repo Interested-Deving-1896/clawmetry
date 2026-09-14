@@ -2,8 +2,8 @@
 
 ### Fixed: Guard offered Pause, Stop and Kill on GitHub Copilot conversations inside VS Code (2026-09-14)
 - **Why:** clawmetry-pro now observes Copilot Chat in VS Code under the same `copilot` runtime as the Copilot CLI. `copilot` is in the blanket signal-supported set, so every VS Code conversation would have shown four working-looking buttons. A VS Code chat has no process of its own: it runs inside the editor. Worse than inert, the resolver's working-directory fallback would have matched a Copilot CLI running in the same folder and signalled that session instead.
-- **What:** `process_control.is_copilot_editor_session()` recognises the `vscode-` native id the pro adapter gives these sessions. `runtime_control_support()` answers `unsupported` for them with a sentence saying why, before the blanket branch, and `resolve_session()` refuses them before any resolver or fallback runs. Copilot CLI sessions keep all four controls.
-- **Verified:** 3 new tests in `tests/test_guard_control_capability.py`, all red on `main` and green with the change; 68 passing across that file and `tests/test_process_control.py`.
+- **What:** `process_control.is_copilot_editor_session()` recognises the `vscode-` native id the pro adapter gives these sessions. `runtime_control_support()` answers `unsupported` for them with a sentence saying why, before the blanket branch, and `resolve_session()` refuses them before any resolver or fallback runs. Copilot CLI sessions keep all four controls. `resume_hints.resume_hint()` answers `app` ("reopen it from the Copilot Chat history in VS Code") for these sessions instead of `copilot --session-id vscode-…`, a command the CLI cannot resume that the Guard tab would have shown with a Copy button in place of the row's reason.
+- **Verified:** 3 new tests in `tests/test_guard_control_capability.py` and 4 in `tests/test_guard_resume_hints.py`, red on `main` and green with the change.
 - **Requirement:** AC-GOV-ERS-011.5.
 
 ### Added: OpenExecutive as the 32nd runtime (2026-09-12)
