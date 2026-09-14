@@ -22,6 +22,14 @@ OTEL_SERVICE_NAME=litellm-gateway \
 litellm --config config.yaml
 ```
 
+The proxy's own environment needs the OpenTelemetry packages, which `litellm[proxy]` does not install:
+
+```bash
+pip install opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp-proto-http
+```
+
+Without them LiteLLM logs `No module named 'opentelemetry'` as a non-blocking error, keeps serving requests, and exports nothing, so ClawMetry shows no gateway usage at all. CI uses 1.44.0 of all three.
+
 LiteLLM's default exporter sends protobuf, so the ClawMetry that receives it needs `pip install clawmetry[otel]`. Keep LiteLLM's default tracer name (do not set `OTEL_TRACER_NAME`): ClawMetry recognises LiteLLM's telemetry by that name together with the `model_id` resource attribute LiteLLM adds.
 
 Spend appears on the **Usage** tab, in the *Cost by Team* card, under **Through your LiteLLM gateway**, and in `GET /api/usage/by-team` as the `gateway` object.
