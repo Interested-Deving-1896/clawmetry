@@ -223,6 +223,12 @@ jobs:
       - name: Published provider pricing and cache accounting
         run: python3 -m pytest tests/test_providers_pricing.py tests/test_pricing_accuracy.py -q
 
+      # #5979: a session with tokens but no priced event must render as
+      # unknown cost on the Usage tab, never a confident $0.00. Named here
+      # because this repo's CI runs FILE LISTS, not `pytest tests/`.
+      - name: Unpriced session cost renders as unknown, not $0.00
+        run: python3 -m pytest tests/test_unpriced_session_cost.py -q
+
       # Named explicitly because this repo's CI runs FILE LISTS, not
       # `pytest tests/`: a guard added without a line here runs in no job at
       # all. Covers the half `gen_module_map.py --check` cannot: every
