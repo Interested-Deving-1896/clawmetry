@@ -1,5 +1,11 @@
 ## Unreleased
 
+### Fixed: hosted Guard said no sessions were running, and hosted Signals said no sessions matched (2026-09-14)
+- **Why:** on app.clawmetry.com the Guard tab read "No sessions running right now" while the same node's local dashboard listed 39 running sessions, and a Signals "Sessions" click read "No sessions matched in this window" beside a rate that counted two. The cloud container has no store: `/api/guard/sessions` ran there against nothing, and the signals session list was never in the snapshot. Both renderers then read an unreadable list as an empty one.
+- **What:** the daemon now builds two more snapshot slices on its own store handle. `guardSessions` is the exact `/api/guard/sessions` body (the route and the daemon share one builder, `routes.guard.build_guard_sessions_body`, so the two tabs cannot list different sessions) plus `generated_at`. `signalSessions` holds the drill-down lists per runtime, window and signal (`behaviour_signals.build_session_slice`), built per runtime so a quiet runtime is not starved, and only for signals that matched. Sessions and match counts only, never the phrases. The Guard and Signals renderers show the response's `reason` when it says `available: false`, instead of claiming nothing is there.
+- **Needs:** the cloud interceptors that read these slices (clawmetry-cloud).
+- **Verified:** `tests/test_cloud_guard_signals_slices.py`; both builders run against a live daemon through its proxy.
+
 ### Release: enterprise readiness, batch 2 (2026-09-14)
 - **Carries:** #5953 (trace spans reach Guard and are redacted, refs #5938), #5959 (price book for negotiated rates and Azure OpenAI deployment aliases, refs #5936), #5970 (signed self-hosted server image, refs #5948). Their entries follow.
 
