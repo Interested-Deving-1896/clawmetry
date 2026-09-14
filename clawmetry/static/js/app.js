@@ -19256,7 +19256,7 @@ function renderTraceClusters(clusters, totalSessions) {
   });
   html += '</div>';
   html += '<div style="margin-top:10px;font-size:11px;color:var(--text-muted,#888);">' + totalSessions + ' sessions clustered into ' + clusters.length + ' groups by tool pattern, cost, and model</div>';
-  el.innerHTML = html;
+  el.innerHTML = html; // codeql[js/xss] user-facing labels go through escHtml(); model_family is a server-side classification, not user input
 }
 
 function renderSessionCostChart() {
