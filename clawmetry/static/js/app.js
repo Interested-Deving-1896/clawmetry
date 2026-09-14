@@ -19133,14 +19133,14 @@ function renderGatewayUsage(gw, hasAgentTable) {
       var who = u.user_email || u.user_id || 'no user on key';
       var key = u.key_alias ? ' \xb7 key ' + u.key_alias : '';
       var safeWho = costCardText(who + key); // AC-OBS-GWY-001.9
-      return _e(who + key) + ': ' + (u.requests || 0) + ' requests, '
+      return _e(who + key) + ': ' + _e(u.requests || 0) + ' requests, '
         + gatewayMoney(gw, 'teams[].users[].cost_usd', u.cost_usd, 'Spend for ' + _e(who + key));
     }).join('<br>');
     return '<tr>'
       + '<td style="' + cell + 'font-weight:500;">' + _e(name) + '</td>'
       + '<td style="' + cell + 'text-align:right;">' + gatewayMoney(gw, 'teams[].cost_usd', team.cost_usd, 'Spend for team ' + _e(name)) + '</td>'
-      + '<td style="' + cell + 'text-align:right;color:var(--text-muted);">' + (team.requests || 0) + '</td>'
-      + '<td style="' + cell + 'text-align:right;color:var(--text-muted);">' + (team.failed || 0) + '</td>'
+      + '<td style="' + cell + 'text-align:right;color:var(--text-muted);">' + _e(team.requests || 0) + '</td>'
+      + '<td style="' + cell + 'text-align:right;color:var(--text-muted);">' + _e(team.failed || 0) + '</td>'
       + '<td style="' + cell + 'font-size:11px;color:var(--text-muted);">' + people + '</td>'
       + '</tr>';
   }).join('');
@@ -19156,7 +19156,7 @@ function renderGatewayUsage(gw, hasAgentTable) {
   if (t.cache_replays > 0) notes.push(_e(t.cache_replays) + ' answered from LiteLLM\'s cache, counted but not charged again.');
   if (t.cost_not_reported > 0) notes.push(_e(t.cost_not_reported) + ' succeeded with no cost reported, so they are counted but not priced.');
   return '<div style="margin-top:' + (hasAgentTable ? '14px' : '0') + ';font-size:12px;font-weight:600;color:var(--text-primary);">Through your LiteLLM gateway</div>'
-    + '<div style="font-size:11px;color:var(--text-muted);margin:2px 0 6px;">Spend as LiteLLM reported it, in ' + _e(gw.currency || 'USD') + ', last ' + (gw.window_days || 7) + ' days</div>'
+    + '<div style="font-size:11px;color:var(--text-muted);margin:2px 0 6px;">Spend as LiteLLM reported it, in ' + _e(gw.currency || 'USD') + ', last ' + _e(gw.window_days || 7) + ' days</div>'
     + '<table style="width:100%;border-collapse:collapse;">'
     + '<thead><tr style="font-size:11px;color:var(--text-muted);">'
     + '<th style="padding:2px 8px;text-align:left;">Team</th>'
