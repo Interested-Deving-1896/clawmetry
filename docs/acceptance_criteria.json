@@ -1547,6 +1547,11 @@
       "doc": "LiteLLM gateway usage: spend by team and user, labelled and never double counted",
       "doc_id": "9511c826-af04-4dcf-978b-90803f27fb04",
       "text": "A real LiteLLM proxy at a pinned version, with two teams and two virtual keys backed by its own database, shall be exercised in continuous integration, and the per-team spend the system reports shall agree with LiteLLM's own spend log for the same requests, with any residual printed."
+    },
+    {
+      "id": "AC-OBS-GWY-001.11",
+      "doc": "LiteLLM gateway spend by team, person and key, kept apart from agent costs",
+      "doc_id": "9511c826-af04-4dcf-978b-90803f27fb04",
       "text": "Per-team spend totals recorded by the receiver shall reconcile with the amounts in LiteLLM's own spend log for the same set of requests: request counts, failure counts and reported cost totals shall agree to floating-point precision."
     },
     {
