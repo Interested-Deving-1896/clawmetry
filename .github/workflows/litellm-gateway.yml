@@ -59,9 +59,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      CLAWMETRY_URL: http://127.0.0.1:8900
+      CLAWMETRY_PORT: 8900
       CLAWMETRY_TOKEN: ci-test-token
-      LITELLM_URL: http://127.0.0.1:4000
+      LITELLM_PORT: 4000
       LITELLM_MASTER_KEY: sk-master-test
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

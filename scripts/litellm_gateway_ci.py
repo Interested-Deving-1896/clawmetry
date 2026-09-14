@@ -34,16 +34,12 @@ import os
 import sys
 import time
 import urllib.error
-import urllib.parse
 import urllib.request
 
-_LOOPBACK = {"localhost", "127.0.0.1", "::1"}
 
-
-def _assert_local_url(url: str) -> None:
-    host = urllib.parse.urlparse(url).hostname or ""
-    if host not in _LOOPBACK:
-        raise SystemExit(f"Refusing to connect to non-loopback host: {host!r}")
+def _local_url(port: int) -> str:
+    """Return a loopback URL from a port number; the host is never caller-supplied."""
+    return "http://127.0.0.1:" + str(port)
 
 
 TEAMS = {
@@ -243,16 +239,16 @@ def after_restart(args):
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("phase", choices=["drive", "after-restart"])
-    p.add_argument("--dashboard", default=os.environ.get("CLAWMETRY_URL", "http://127.0.0.1:8900"))
+    p.add_argument("--dashboard-port", type=int, dest="dashboard_port",
+                   default=int(os.environ.get("CLAWMETRY_PORT", "8900")))
     p.add_argument("--token", default=os.environ.get("CLAWMETRY_TOKEN", "ci-test-token"))
-    p.add_argument("--proxy", default=os.environ.get("LITELLM_URL", "http://127.0.0.1:4000"))
+    p.add_argument("--proxy-port", type=int, dest="proxy_port",
+                   default=int(os.environ.get("LITELLM_PORT", "4000")))
     p.add_argument("--master-key", default=os.environ.get("LITELLM_MASTER_KEY", "sk-master-test"))
     p.add_argument("--snapshot", default="litellm-gateway-block.json")
     args = p.parse_args(argv)
-    args.dashboard = args.dashboard.rstrip("/")
-    args.proxy = args.proxy.rstrip("/")
-    _assert_local_url(args.dashboard)
-    _assert_local_url(args.proxy)
+    args.dashboard = _local_url(args.dashboard_port)
+    args.proxy = _local_url(args.proxy_port)
     (drive if args.phase == "drive" else after_restart)(args)
     return 0
 
