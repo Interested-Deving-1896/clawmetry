@@ -1348,7 +1348,7 @@
       "id": "AC-OBS-OTR-001.4",
       "doc": "Framework recipe: a LangGraph agent instrumented with OpenLLMetry, verified end to end",
       "doc_id": "0130f6a6-3f5b-448f-bd59-d8820a4d5c88",
-      "text": "An explicitly sent conversation or session identifier shall take precedence over a thread identifier, and shall be recorded exactly as sent."
+      "text": "An explicitly sent conversation identifier shall take precedence over a thread identifier, and a thread identifier shall take precedence over a session identifier sent on the span or on the resource, so that a session identifier stamped on the spans beneath a run's top span can never split that run away from the conversation identifier its top span sends; whichever identifier wins shall be recorded exactly as sent."
     },
     {
       "id": "AC-OBS-OTR-001.5",

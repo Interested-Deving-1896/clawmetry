@@ -46,6 +46,8 @@ export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer <gateway token>"
 
 The CI check binds the dashboard to every interface and exports through the runner's non-loopback address. It proves an export without the header is refused with 401 and the recipe's export with it is accepted. Start the dashboard with `--host 0.0.0.0` (it binds loopback by default). `CLAWMETRY_OTLP_ALLOW_UNAUTH=1` turns the check off for a network that already gates access.
 
+The dashboard serves plain HTTP; it does not terminate TLS itself. The `https://` endpoint above assumes a TLS terminator (a reverse proxy or load balancer) in front of it. Without one, use `http://` only on a network you trust, because the Bearer token then travels in cleartext. The CI check exports over plain HTTP inside the runner.
+
 ## What arrives
 
 One LangGraph run produces one trace of ten spans:
@@ -82,13 +84,15 @@ Order of precedence for a span's session:
 3. `session.id` on the span or the resource
 4. Nothing sent: the trace, as `<application>:trace:<trace_id>`
 
+Whichever wins is recorded exactly as sent. The thread outranks `session.id` even when your application stamps `session.id` on every span: the top span resolves through its conversation id, so if `session.id` won on the spans beneath it, one run would split into two sessions again. To name the session yourself, send `gen_ai.conversation.id`.
+
 **No thread, no conversation id.** LangGraph does not need a thread unless you use a checkpointer, and without one nothing identifies a conversation. ClawMetry then records one session per trace, so each run is its own session, named `invoice_agent:trace:<trace_id>` (the `trace:` segment marks it as derived, not sent). Cardinality is one session per run: a chat loop that calls `invoke()` per turn without a thread shows as one session per turn. Pass a thread to group turns.
 
 A trace is not an assistant definition. The application is `service.name`; a session is a conversation or a run; nothing is inferred beyond that.
 
 ## What each tab shows for span-only data
 
-Checked against a dashboard running with no sync daemon, after one run on a thread:
+Checked against a dashboard running with no sync daemon, after one run on a thread, by reading the API endpoints the tabs load their data from (for example `/api/local/traces`, `/api/usage` and `/api/guard/sessions`), not by looking at the rendered tabs:
 
 | Tab | What it shows |
 |---|---|

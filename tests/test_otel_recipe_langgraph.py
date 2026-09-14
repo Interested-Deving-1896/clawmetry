@@ -34,7 +34,7 @@ Acceptance criteria -> tests:
   AC-OBS-OTR-001.3  test_thread_run_is_one_session_with_every_span,
                     test_second_run_on_the_thread_joins_the_same_session
   AC-OBS-OTR-001.4  test_sent_conversation_id_wins_over_thread,
-                    test_thread_wins_over_resource_session_id
+                    test_thread_wins_over_session_id_on_span_or_resource
   AC-OBS-OTR-001.5  test_no_thread_is_one_session_per_trace
   AC-OBS-OTR-001.6  test_streamed_run_matches_invoked_run
   AC-OBS-OTR-001.7  test_ci_job_proves_remote_bearer_auth
@@ -216,15 +216,30 @@ def test_sent_conversation_id_wins_over_thread(app):
     assert list(_sessions(ls)) == ["Conv-ABC"], "a sent conversation id must be recorded as sent"
 
 
-def test_thread_wins_over_resource_session_id(app):
-    """A process-wide resource ``session.id`` must not pull the spans beneath
-    the top span away from the conversation id the top span itself sends."""
+@pytest.mark.parametrize("where", ["resource", "span"])
+def test_thread_wins_over_session_id_on_span_or_resource(app, where):
+    """A ``session.id`` must not pull the spans beneath the top span away from
+    the conversation id the top span itself sends, whether it arrives as a
+    process-wide resource attribute or is stamped on every span by the app.
+
+    The span case is the one that matters: ``_pick`` checks span attributes
+    before resource attributes per key, so if ``session.id`` were listed
+    before the thread key, the children would resolve to ``session.id`` while
+    the top span resolved to its conversation id, and the run would split."""
     a, ls = app
     payload = copy.deepcopy(_fixture("thread"))
-    payload["resourceSpans"][0]["resource"]["attributes"].append(
-        {"key": "session.id", "value": {"stringValue": "whole-process"}})
+    sid = {"key": "session.id", "value": {"stringValue": "app-session-7"}}
+    if where == "resource":
+        payload["resourceSpans"][0]["resource"]["attributes"].append(sid)
+    else:
+        for s in _spans_of(payload):
+            s["attributes"].append(copy.deepcopy(sid))
     _post(a, payload)
-    assert list(_sessions(ls)) == [THREAD]
+    sessions = _sessions(ls)
+    assert list(sessions) == [THREAD], (
+        f"session.id on the {where} split or re-keyed the run: {sorted(sessions)}")
+    assert sessions[THREAD]["total_tokens"] == RUN_TOKENS
+    assert {r[1] for r in _span_rows(ls)} == {THREAD}
 
 
 # ── AC-OBS-OTR-001.1 / .2 / .7 / .8: the recipe, its CI job, its page ───────

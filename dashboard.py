@@ -4615,8 +4615,16 @@ def _otel_to_row(span, resource_attrs):
     # span under ``t-1`` with 0 tokens, and everything else under the per-trace
     # fallback ``<app>:trace:<id>`` below. The thread association is the same
     # identifier the top span sends, so it is read right after the
-    # conversation id (and before a process-wide resource ``session.id``) and
-    # recorded as sent, which makes the top span and its children agree.
+    # conversation id and recorded as sent, which makes the top span and its
+    # children agree.
+    #
+    # AC-OBS-OTR-001.4: the thread outranks ``session.id`` wherever it is
+    # sent, on the span as well as on the resource. ``_pick`` walks KEYS in
+    # order and checks span-then-resource per key, so every key listed here
+    # beats every later key at both levels. That is deliberate: if a
+    # ``session.id`` on a child span beat the thread, an app that stamps
+    # ``session.id`` on every span would split the run again (top span via
+    # the conversation id, children via ``session.id``).
     session_id = _pick("gen_ai.conversation.id",
                        "traceloop.association.properties.thread_id",
                        "session.id", "openclaw.session_id", "session_id")
