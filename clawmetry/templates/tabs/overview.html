@@ -671,8 +671,8 @@
         if (typeof document !== 'undefined' && document.hidden) return;
         // #5935: share the page's in-flight /api/overview instead of sending
         // a third copy of it during startup.
-        (typeof fetchJsonWithTimeout === 'function'
-          ? fetchJsonWithTimeout('/api/overview', 15000)
+        (typeof _cmFetchOverviewShared === 'function'
+          ? _cmFetchOverviewShared()
           : fetch('/api/overview', {credentials: 'same-origin'})
               .then(function(r){ return r.ok ? r.json() : null; }))
           .then(function(d){

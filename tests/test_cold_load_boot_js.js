@@ -165,6 +165,44 @@ function starter(fnName, loaderName, loadedKey, currentTab, justLoaded) {
   return c[loaderName] || 0;
 }
 
+// ── 4. consumers of /api/overview share ONE request (AC 3) ───────────────
+async function sharedOverview() {
+  let fetches = 0;
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const sandbox = {
+    console,
+    Promise,
+    AbortController,
+    setTimeout,
+    clearTimeout,
+    fetch: (url) => {
+      fetches++;
+      return gate.then(() => ({ ok: true, json: () => Promise.resolve({ url: url, n: fetches }) }));
+    },
+  };
+  vm.createContext(sandbox);
+  let helper;
+  try { helper = extract('_cmFetchOverviewShared', false); } catch (e) { return { missing: true }; }
+  const budget = src.match(/^var _CM_OVERVIEW_BUDGET_MS = \d+;/m);
+  vm.runInContext(
+    'var _inflightJsonFetches = {};\n'
+    + (budget ? budget[0] : '') + '\n'
+    + extract('fetchJsonWithTimeout', true) + '\n'
+    + helper + '\nthis._shared = _cmFetchOverviewShared;',
+    sandbox,
+  );
+  // Five consumers ask while the first request is still in flight.
+  const pending = [1, 2, 3, 4, 5].map(() => sandbox._shared());
+  release();
+  const answers = await Promise.all(pending);
+  const duringFlight = fetches;
+  const same = answers.every((a) => a === answers[0]);
+  // After it settles, a later refresh must fetch again, not reuse a stale answer.
+  await sandbox._shared();
+  return { missing: false, duringFlight, same, afterSettle: fetches };
+}
+
 (async function main() {
   console.log('bootDashboard: startup loads only the screen the page lands on');
   const onSessions = await bootWith('transcripts');
@@ -196,6 +234,15 @@ function starter(fnName, loaderName, loadedKey, currentTab, justLoaded) {
     'tasks starter does not repeat the load startup just finished');
   eq(starter('startOverviewTasksRefresh', 'loadOverviewTasks', 'overviewTasks', 'overview', false), 1,
     'tasks starter loads Overview tasks when they have not loaded yet');
+
+  console.log('shared overview request: concurrent consumers send one request');
+  const so = await sharedOverview();
+  eq(so.missing, false, 'app.js defines the shared overview request helper');
+  if (!so.missing) {
+    eq(so.duringFlight, 1, 'five concurrent consumers send exactly one /api/overview request');
+    eq(so.same, true, 'every consumer receives the same answer');
+    eq(so.afterSettle, 2, 'a refresh after the request settled fetches fresh data');
+  }
 
   console.log('');
   console.log(passed + ' passed, ' + failed + ' failed');

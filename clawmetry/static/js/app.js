@@ -3761,6 +3761,19 @@ async function fetchJsonWithTimeout(url, timeoutMs) {
   return p;
 }
 
+// #5935: the ONE /api/overview request every Overview consumer shares
+// (loadAll, the runtime switcher, the Flow diagram and its stats, the
+// heartbeat card in tabs/overview.html). Concurrent callers get the same
+// in-flight promise from fetchJsonWithTimeout, so one page load sends one
+// request. One budget for all of them, because whichever caller starts the
+// request owns the timer that can abort it for everyone: with the daemon busy
+// writing, a 3 s budget aborted Overview's request twice while it was still
+// being answered.
+var _CM_OVERVIEW_BUDGET_MS = 15000;
+function _cmFetchOverviewShared() {
+  return fetchJsonWithTimeout('/api/overview', _CM_OVERVIEW_BUDGET_MS);
+}
+
 // Same root cause as above — when the browser tab is hidden the 5 SSE are
 // useless yet still hold connection slots. Close them on hidden; the tab-
 // change handlers re-open the one needed when the user returns (each guards
@@ -4941,7 +4954,7 @@ async function loadAll() {
     // 3 s budget aborted a request that was about to answer, twice in a row,
     // and left the tiles on "Load failed - retrying...". While it waits, the
     // tiles already show their loading placeholders.
-    var overview = await fetchJsonWithTimeout('/api/overview', 15000);
+    var overview = await _cmFetchOverviewShared();
     window._cmOverview = overview;
     try { renderOauthBanner(overview); } catch(e) {}
     try { _renderOverviewHero(); } catch(e) {}
@@ -12637,7 +12650,7 @@ async function _cmLoadDetectedRuntimes() {
     } else {
       // #5935: share the page's in-flight /api/overview rather than sending
       // another copy of it during startup.
-      var ov = await fetchJsonWithTimeout('/api/overview', 15000)
+      var ov = await _cmFetchOverviewShared()
         .catch(function() { return null; });
       det = ov && (ov.detectedRuntimes || ov.detected_runtimes);
     }
@@ -24048,7 +24061,7 @@ function initFlow() {
   // in-flight request, so its timer is the one that aborts it. 5 s aborted a
   // request the server was still answering while it waited in the browser's
   // connection queue.
-  fetchJsonWithTimeout('/api/overview', 15000).then(async function(d) {
+  _cmFetchOverviewShared().then(async function(d) {
     if (!d.model || d.model === 'unknown') {
       var fm = await resolvePrimaryModelFallback();
       if (fm && fm !== 'unknown') d.model = fm;
@@ -24571,7 +24584,7 @@ function updateFlowStats() {
   if (flowStats.events % 15 === 0) {
     // #5935: 15 s like every other /api/overview caller -- whichever caller
     // starts the shared request sets the timer that can abort it for all.
-    fetchJsonWithTimeout('/api/overview', 15000).then(function(d) {
+    _cmFetchOverviewShared().then(function(d) {
       var tok = document.getElementById('flow-tokens');
       if (tok) tok.textContent = _fmtFlowTokens(d.mainTokens);
     }).catch(function(){});

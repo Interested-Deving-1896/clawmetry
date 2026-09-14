@@ -85,13 +85,22 @@ def test_flow_tool_prefetch_waits_for_a_screen_that_uses_it() -> None:
 
 
 def test_duplicate_overview_callers_share_one_request() -> None:
-    body = _function("_cmLoadDetectedRuntimes", is_async=True)
-    assert "fetchJsonWithTimeout('/api/overview'" in body, (
-        "_cmLoadDetectedRuntimes sends its own /api/overview beside loadAll's"
+    """AC 3: every consumer goes through the one shared overview request.
+    Behaviour (concurrent callers -> one fetch) is pinned in the Node suite."""
+    src = _src()
+    # The only direct /api/overview fetch in app.js is the shared helper.
+    direct = re.findall(r"fetch(?:JsonWithTimeout)?\(\s*'/api/overview'", src)
+    assert len(direct) == 1, (
+        f"{len(direct)} direct /api/overview fetches in app.js; consumers must use _cmFetchOverviewShared()"
     )
+    for name, is_async in (("loadAll", True), ("_cmLoadDetectedRuntimes", True),
+                           ("initFlow", False), ("updateFlowStats", False)):
+        assert "_cmFetchOverviewShared()" in _function(name, is_async=is_async), (
+            f"{name} does not use the shared overview request"
+        )
     with open(_OVERVIEW_HTML, encoding="utf-8") as fh:
         html = fh.read()
-    assert "fetchJsonWithTimeout('/api/overview'" in html, (
+    assert "_cmFetchOverviewShared()" in html, (
         "the Overview heartbeat card sends its own /api/overview beside loadAll's"
     )
 
@@ -102,11 +111,13 @@ def test_overview_budget_outlasts_a_busy_server() -> None:
     opening Overview took longer than 3 s on the server; loadAll's 3 s budget
     aborted it twice and left the tiles on 'Load failed - retrying...'."""
     src = _src()
-    budgets = [int(ms) for ms in re.findall(r"fetchJsonWithTimeout\('/api/overview',\s*(\d+)\)", src)]
-    assert budgets, "no /api/overview caller found"
-    assert min(budgets) >= 10000, (
-        f"an /api/overview caller aborts the shared request after {min(budgets)} ms"
+    m = re.search(r"^var _CM_OVERVIEW_BUDGET_MS = (\d+);", src, re.M)
+    assert m, "no single budget for the shared /api/overview request"
+    assert int(m.group(1)) >= 10000, (
+        f"the shared /api/overview request is aborted after {m.group(1)} ms"
     )
+    literal = [int(ms) for ms in re.findall(r"fetchJsonWithTimeout\('/api/overview',\s*(\d+)\)", src)]
+    assert not literal, f"an /api/overview caller sets its own budget: {literal} ms"
 
 
 def test_slow_usage_never_draws_measured_looking_zeros() -> None:
