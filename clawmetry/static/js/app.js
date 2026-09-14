@@ -19090,12 +19090,9 @@ async function loadUsageByTeam() {
 // team, key and user names come from the proxy's configuration.
 function gatewayMoney(v) {
   if (v === null || v === undefined) return 'not reported';
-  var n = Number(v) || 0;
-  if (n > 0 && n < 0.01) {
-    // Three significant figures, so a fraction of a cent is not rounded away.
-    return '$' + n.toFixed(Math.min(10, 2 - Math.floor(Math.log10(n))));
-  }
-  return '$' + n.toFixed(4);
+  var entry = {basis: 'measured', label: 'LiteLLM-reported',
+               hint: 'Reported by the LiteLLM proxy server'};
+  return cmFigure(Number(v) || 0, entry);
 }
 function renderGatewayUsage(gw, hasAgentTable) {
   var t = gw.totals || {};
@@ -19105,11 +19102,11 @@ function renderGatewayUsage(gw, hasAgentTable) {
     var people = (team.users || []).map(function(u) {
       var who = u.user_email || u.user_id || 'no user on key';
       var key = u.key_alias ? ' · key ' + u.key_alias : '';
-      return costCardText(who + key) + ': ' + (u.requests || 0) + ' requests, ' + costCardText(gatewayMoney(u.cost_usd));
+      return costCardText(who + key) + ': ' + (u.requests || 0) + ' requests, ' + gatewayMoney(u.cost_usd);
     }).join('<br>');
     return '<tr>'
       + '<td style="' + cell + 'font-weight:500;">' + costCardText(name) + '</td>'
-      + '<td style="' + cell + 'text-align:right;">' + costCardText(gatewayMoney(team.cost_usd)) + '</td>'
+      + '<td style="' + cell + 'text-align:right;">' + gatewayMoney(team.cost_usd) + '</td>'
       + '<td style="' + cell + 'text-align:right;color:var(--text-muted);">' + (team.requests || 0) + '</td>'
       + '<td style="' + cell + 'text-align:right;color:var(--text-muted);">' + (team.failed || 0) + '</td>'
       + '<td style="' + cell + 'font-size:11px;color:var(--text-muted);">' + people + '</td>'
