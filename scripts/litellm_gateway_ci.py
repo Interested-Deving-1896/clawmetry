@@ -186,8 +186,12 @@ def drive(args):
               f"{(ours.get('cost_usd') or 0.0):>18.10f} {theirs.get('spend', 0.0):>16.10f} {residual:>12.2e}")
     print()
 
-    _check(gw["cost_basis"] == "gateway_reported" and gw["currency"] == "USD",
+    _check(gw["cost_source"] == "gateway_reported" and gw["currency"] == "USD",
            "spend is labelled gateway-reported, in USD")
+    spend_label = (gw.get("provenance") or {}).get("teams[].cost_usd") or {}
+    _check(spend_label.get("cost_basis") == "published_rate" and spend_label.get("basis") == "measured"
+           and "LiteLLM" in (spend_label.get("rate_source") or ""),
+           "spend carries the shared cost label: usage value at the rates LiteLLM applied, not an invoice")
     _check(set(teams) == set(TEAMS), f"exactly the two teams appear: {sorted(map(str, teams))}")
     for team_id, t in TEAMS.items():
         _check(abs((teams[team_id]["cost_usd"] or 0.0) - spend[team_id]["spend"]) < 1e-9,

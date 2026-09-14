@@ -47,6 +47,9 @@ import ast
 import json
 from typing import Any
 
+from clawmetry import cost_basis as _cost_basis
+from clawmetry import provenance as _prov
+
 # Stored on the ledger row (``otlp_records.source``) and used as the span row's
 # ``agent_type``, so every reader that must keep gateway figures out of agent
 # figures can do it with one equality test. The colon is deliberate: an
@@ -403,12 +406,59 @@ def gateway_usage(fetch, *, window_days: int = 7, now: float | None = None) -> d
     for t in ordered:
         t["users"].sort(key=lambda u: (-(u["cost_usd"] or 0.0), -u["requests"]))
     totals["uncorrelated"] = totals["requests"] - totals["correlated"]
-    return {
+    return _prov.stamp({
         "available": True,
         "gateway": "litellm",
-        "cost_basis": COST_SOURCE_REPORTED,
+        # WHERE the spend came from: LiteLLM priced every request, ClawMetry
+        # did not. WHAT KIND of money it is rides in ``provenance``, in the one
+        # cost vocabulary every other cost surface uses.
+        "cost_source": COST_SOURCE_REPORTED,
         "currency": GATEWAY_CURRENCY,
         "window_days": days,
         "totals": totals,
         "teams": ordered,
+    }, gateway_provenance(days))
+
+
+#: Where the rate behind gateway spend comes from, for the cost badge tooltip.
+GATEWAY_RATE_SOURCE = (
+    "the cost LiteLLM reported for each request (gen_ai.cost.total_cost), "
+    "priced by LiteLLM from its model cost map or custom prices configured on "
+    "the proxy. ClawMetry does not re-price it"
+)
+
+
+def gateway_provenance(window_days: int) -> dict[str, dict[str, Any]]:
+    """Provenance entries for :func:`gateway_usage` (REQ-OBS-CEA-025 labels).
+
+    Gateway spend is labelled like every other cost ClawMetry shows
+    (``clawmetry/cost_basis.py``): the arithmetic basis is ``measured`` (a sum
+    of what the gateway recorded, with no re-pricing), and the financial basis
+    is ``published_rate``, because a cost a gateway computed from a price map
+    is usage value, not an invoice. ``contract`` would need a recorded rate
+    version, which the telemetry does not carry, so it is never claimed. The
+    ``rate_source`` names LiteLLM, so the badge says whose price it is.
+
+    A team or user whose requests carried no reported cost has
+    ``cost_usd: None``; ``not_reported`` is the entry a renderer shows for
+    that null, so it reads "not reported" and never "$0.00".
+    """
+    window = "the last %d days" % int(window_days)
+    source = "duckdb:otlp_records.cost_usd (source %s, cost_source %s)" % (
+        GATEWAY_SOURCE, COST_SOURCE_REPORTED)
+    spend = _cost_basis.published_rate(
+        "sum of the cost LiteLLM reported on each proxied request; a request "
+        "LiteLLM answered from its own cache is counted but not charged again",
+        source, basis=_prov.MEASURED, rate_source=GATEWAY_RATE_SOURCE,
+        window=window,
+        note="if the proxy is configured with custom prices, LiteLLM applied "
+             "those, and the telemetry does not say which")
+    not_reported = _cost_basis.unavailable(
+        "LiteLLM reported no cost for these requests, so no amount is shown "
+        "and they are not counted as free", source=source, window=window)
+    return {
+        "totals.cost_usd": spend,
+        "teams[].cost_usd": spend,
+        "teams[].users[].cost_usd": spend,
+        "not_reported": not_reported,
     }

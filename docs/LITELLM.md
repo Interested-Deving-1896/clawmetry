@@ -51,7 +51,7 @@ Per team, the Usage card shows requests, failed requests, spend, and each person
 
 ## How the numbers are counted
 
-* **Spend is LiteLLM's figure, labelled as such.** It is what LiteLLM priced from its model cost map or your custom pricing, in US dollars. ClawMetry does not re-price it, and it is not your provider's invoice.
+* **Spend is LiteLLM's figure, labelled as such.** It is what LiteLLM priced from its model cost map or your custom pricing, in US dollars. ClawMetry does not re-price it, and it is not your provider's invoice. On the card it carries the same cost label as every other cost in ClawMetry, *published rates* (usage value, not a bill), and its tooltip names LiteLLM as the source of the rate. In `GET /api/usage/by-team` the `gateway` object says `cost_source: "gateway_reported"`, and its `provenance` map holds the full label for each spend figure.
 * **No reported cost is not zero.** A request that succeeded without a cost is counted and listed as *not priced*; a team with no priced request shows *not reported*, not `$0.00`.
 * **Failed requests** are counted per team, apart from successful ones.
 * **Cached answers are not charged twice.** When LiteLLM answers from its own response cache, its telemetry still carries the full model cost, but LiteLLM's spend log charges nothing. ClawMetry recognises the repeat by its provider response id and counts it as a request without charging it, whichever of the two arrives first.
