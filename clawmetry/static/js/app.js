@@ -3839,7 +3839,7 @@ function renderBillingCoverageBanner(cov, usageData) {
   function fig(value, key, label) {
     var entry = window.cmProv ? window.cmProv.of(usageData || {}, key) : null;
     if (window.cmProv) return window.cmProv.figure(value, entry, { label: label, noBadge: true });
-    return escHtml(Number(value || 0).toFixed(2)) + ' USD';
+    return _e(Number(value || 0).toFixed(2)) + ' USD';
   }
   var plan = _planLabel(cov) || 'your subscription';
   var monthCost  = Number((usageData && usageData.monthCost) || 0);
@@ -3853,9 +3853,9 @@ function renderBillingCoverageBanner(cov, usageData) {
     icon = '✅';
     title = t('usage.cov_included_title', { plan: plan }, 'Usage included in ' + plan);
     body = 'The figures below are <strong>usage value at published rates</strong>: what these tokens would cost at the provider\'s list price. '
-         + escHtml(plan) + ' includes this usage, so this value is <strong>not an extra bill</strong>. '
+         + _e(plan) + ' includes this usage, so this value is <strong>not an extra bill</strong>. '
          + 'This month: ' + fig(monthCost, 'monthCost', 'Usage value this month') + ' of usage value included in your plan. '
-         + escHtml(unseen);
+         + _e(unseen);
   } else if (cov.any_subscription && monthCovered > 0.005) {
     // Part of the usage is included in the plan. The rest is metered only
     // when a metered runtime was actually detected; otherwise its route is
@@ -3866,9 +3866,9 @@ function renderBillingCoverageBanner(cov, usageData) {
     color = { bg: 'rgba(59,130,246,0.10)', bd: 'rgba(59,130,246,0.45)', fg: '#2563eb' };
     icon = '🧾';
     title = t('usage.cov_partly_title', { plan: plan }, 'Part of this usage is included in ' + plan);
-    body = escHtml(restLabel) + ': about <strong>' + fig(monthRest, 'out_of_pocket_usd', restLabel) + '</strong> this month at published rates. '
-         + 'Included in ' + escHtml(plan) + ': about <strong>' + fig(monthCovered, 'covered_usd', 'Included in your plan') + '</strong> of usage value this month, not an extra bill. '
-         + escHtml(unseen);
+    body = _e(restLabel) + ': about <strong>' + fig(monthRest, 'out_of_pocket_usd', restLabel) + '</strong> this month at published rates. '
+         + 'Included in ' + _e(plan) + ': about <strong>' + fig(monthCovered, 'covered_usd', 'Included in your plan') + '</strong> of usage value this month, not an extra bill. '
+         + _e(unseen);
     if (cov.any_metered && cov.metered_labels && cov.metered_labels.length) {
       body += ' <span style="opacity:0.7;">Metered: ' + cov.metered_labels.map(escHtml).join(', ') + '.</span>';
     }
@@ -3886,7 +3886,7 @@ function renderBillingCoverageBanner(cov, usageData) {
       '<div style="display:flex;gap:10px;align-items:flex-start;">'
     + '<div style="font-size:18px;line-height:1.2;">' + icon + '</div>'
     + '<div style="flex:1;min-width:0;">'
-    +   '<div style="font-weight:600;color:' + color.fg + ';margin-bottom:3px;">' + escHtml(title) + '</div>'
+    +   '<div style="font-weight:600;color:' + color.fg + ';margin-bottom:3px;">' + _e(title) + '</div>'
     +   '<div style="color:var(--text-secondary,#475569);">' + body + '</div>'
     + '</div></div>';
 }
@@ -12965,7 +12965,7 @@ function _invRosterRow(a, rtFilter) {
   var covChip = '';
   if (a.billingMode === 'subscription') {
     covChip = ' <span class="inv-cov-chip inv-cov-sub" title="'
-      + escHtml((a.billingLabel || 'Subscription'))
+      + _e((a.billingLabel || 'Subscription'))
       + ' includes this agent\'s usage. The cost columns show usage value at published rates, not an extra bill.">'
       + t('inventory.covered_chip', null, 'covered') + '</span>';
   } else if (a.billingMode === 'metered') {
@@ -18357,7 +18357,7 @@ async function loadUsage() {
         if (window.cmProv && costEntry) {
           v.innerHTML = (window.cmProv.isUnknown(costEntry) || cost == null)
             ? window.cmProv.figure(null, costEntry, { label: 'Usage value' })
-            : escHtml(t('usage.cost_about', { cost: costStr }, 'about ' + costStr))
+            : _e(t('usage.cost_about', { cost: costStr }, 'about ' + costStr))
               + window.cmProv.badge(costEntry, { label: 'Usage value' });
         } else {
           v.textContent = t('usage.cost_about', { cost: costStr }, 'about ' + costStr);
@@ -18686,7 +18686,7 @@ function renderTopSessionsByCost(rows, usageData) {
         + (window.cmProv
             ? window.cmProv.figure(r.total_cost_usd, costEntry,
                                    { label: 'Session cost', noBadge: true })
-            : escHtml(String(r.total_cost_usd == null ? 'not available' : r.total_cost_usd)))
+            : _e(String(r.total_cost_usd == null ? 'not available' : r.total_cost_usd)))
         + '</td>'
       + '<td style="text-align:right;">' + (r.message_count || 0) + '</td>'
       + '<td style="color:var(--text-muted);font-size:12px;">' + escHtml(fmtDate(r.started_at)) + '</td>'
@@ -19348,7 +19348,7 @@ function renderSessionCostChart() {
       var over = threshold > 0 && (r.cost_usd||0) >= threshold;
       var rowStyle = over ? 'background:rgba(239,68,68,0.1);' : '';
       tableHtml += '<tr style="border-top:1px solid var(--border-secondary);' + rowStyle + '">';
-      tableHtml += '<td style="padding:4px 8px;font-family:monospace;font-size:11px;color:var(--text-muted);">' + escHtml((r.session_id||'').slice(-16)) + (over ? ' <span style="color:#ef4444;">⚠</span>' : '') + '</td>';
+      tableHtml += '<td style="padding:4px 8px;font-family:monospace;font-size:11px;color:var(--text-muted);">' + _e((r.session_id||'').slice(-16)) + (over ? ' <span style="color:#ef4444;">⚠</span>' : '') + '</td>';
       tableHtml += '<td style="text-align:right;padding:4px 8px;font-size:12px;">' + ((r.tokens||0) >= 1000 ? ((r.tokens||0)/1000).toFixed(0)+'K' : (r.tokens||0)) + '</td>';
       // Four decimals, as this table always showed; the column heading
       // carries the basis, and an unknown cost reads "not available".
