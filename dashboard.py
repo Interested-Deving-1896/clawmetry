@@ -7746,6 +7746,17 @@ def _check_auth():
         # else fall through to the standard token check below
     if request.path.startswith("/api/nodes"):
         return  # Fleet API uses its own X-Fleet-Key authentication
+    # Self-hosted server routes authenticate the caller themselves (node token
+    # or admin Basic auth). Behind a container port every caller is
+    # non-loopback, so the gateway-token rule below refused them even with
+    # valid admin credentials. The allowlist lives in clawmetry/selfhosted.py.
+    try:
+        from clawmetry.selfhosted import route_carries_own_auth as _sh_own_auth
+
+        if _sh_own_auth(request.endpoint):
+            return
+    except Exception:
+        pass  # fall through to the standard gate: never fail open on an import error
     # OTLP ingestion (/v1/metrics|traces|logs) accepts UNTRUSTED data that lands
     # in cost/usage analytics, so it must not be open to the network. Gate it
     # like /api/*: loopback is trusted (zero-config local exporters keep working),

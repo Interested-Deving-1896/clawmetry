@@ -1361,6 +1361,66 @@
       "doc": "PR provenance report: agent sessions on changed files, as SARIF and an opt-in CI gate",
       "doc_id": "4e224b46-71a6-4d32-933d-7fb6bfde30d0",
       "text": "When any read limit truncates the evidence (sessions listed, sessions read, events or Guard findings per session, or commits in the range), the system shall report the evidence as partial with the reason, both in the report and in an exported bundle, so that an enabled gate applies the operator's missing-evidence behaviour rather than passing silently."
+    },
+    {
+      "id": "AC-OBS-SHI-001.1",
+      "doc": "Self-Hosted Server Image: Signed, Pullable, Verified After Release",
+      "doc_id": "49529742-f381-4957-9abf-c92efe7b7d65",
+      "text": "When an open-source release is published, the system shall publish a self-hosted server image for linux/amd64 and linux/arm64 to a public registry, built from the exact wheel published for that release after verifying that wheel's build provenance."
+    },
+    {
+      "id": "AC-OBS-SHI-001.2",
+      "doc": "Self-Hosted Server Image: Signed, Pullable, Verified After Release",
+      "doc_id": "49529742-f381-4957-9abf-c92efe7b7d65",
+      "text": "The published image shall carry a keyless signature, an SBOM attestation bound to its digest, and a build provenance attestation, each verifiable by anyone without ClawMetry credentials."
+    },
+    {
+      "id": "AC-OBS-SHI-001.3",
+      "doc": "Self-Hosted Server Image: Signed, Pullable, Verified After Release",
+      "doc_id": "49529742-f381-4957-9abf-c92efe7b7d65",
+      "text": "The image shall contain only the open-source package and its public dependencies, and shall not contain the proprietary Pro plugin."
+    },
+    {
+      "id": "AC-OBS-SHI-002.1",
+      "doc": "Self-Hosted Server Image: Signed, Pullable, Verified After Release",
+      "doc_id": "49529742-f381-4957-9abf-c92efe7b7d65",
+      "text": "After publishing, the release pipeline shall pull the image by digest with no registry credentials on each published architecture, verify its signature and SBOM attestation, and fail naming the reason when the image cannot be pulled anonymously."
+    },
+    {
+      "id": "AC-OBS-SHI-002.2",
+      "doc": "Self-Hosted Server Image: Signed, Pullable, Verified After Release",
+      "doc_id": "49529742-f381-4957-9abf-c92efe7b7d65",
+      "text": "The verification shall start the pulled image with persistent storage, send a non-sensitive event through the node ingest API from outside the container, restart the container, and confirm the event is still returned by the audit export and the node still appears on the fleet page."
+    },
+    {
+      "id": "AC-OBS-SHI-002.3",
+      "doc": "Self-Hosted Server Image: Signed, Pullable, Verified After Release",
+      "doc_id": "49529742-f381-4957-9abf-c92efe7b7d65",
+      "text": "The same image build and persistence check shall run on every pull request that changes the image definition or its verification, against an image built from that branch, so a broken image is caught before a release."
+    },
+    {
+      "id": "AC-OBS-SHI-003.1",
+      "doc": "Self-Hosted Server Image: Signed, Pullable, Verified After Release",
+      "doc_id": "49529742-f381-4957-9abf-c92efe7b7d65",
+      "text": "Only after verification passes, the system shall propose a change pinning the Compose deployment to the verified image by version and digest in place of the source build, and the Compose file shall never reference the published image by a tag alone."
+    },
+    {
+      "id": "AC-OBS-SHI-003.2",
+      "doc": "Self-Hosted Server Image: Signed, Pullable, Verified After Release",
+      "doc_id": "49529742-f381-4957-9abf-c92efe7b7d65",
+      "text": "The self-hosting documentation shall state how to verify the signature and SBOM, how to update and roll back by digest, how to back up and restore, and the actual authentication and transport defaults, and shall mark deployment targets and identity integrations that have not been verified as not available."
+    },
+    {
+      "id": "AC-OBS-SHI-004.1",
+      "doc": "Self-Hosted Server Image: Signed, Pullable, Verified After Release",
+      "doc_id": "49529742-f381-4957-9abf-c92efe7b7d65",
+      "text": "When the server runs in self-hosted mode, requests to the self-hosted server's own API routes shall be authorised by that server's node token or admin credentials regardless of the caller's network address, and shall not be refused for lacking a local gateway token."
+    },
+    {
+      "id": "AC-OBS-SHI-004.2",
+      "doc": "Self-Hosted Server Image: Signed, Pullable, Verified After Release",
+      "doc_id": "49529742-f381-4957-9abf-c92efe7b7d65",
+      "text": "Every other API route shall keep the existing rule for non-loopback callers, and a self-hosted route called without its own credentials shall still be refused."
     }
   ]
 }

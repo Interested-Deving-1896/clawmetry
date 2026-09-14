@@ -233,6 +233,14 @@ jobs:
       - name: Architecture docs name modules that exist
         run: python3 -m pytest tests/test_module_map_drift.py -q
 
+      # The self-hosted server image (#5948) is published only on a release,
+      # so its wiring is what a PR can break silently: the release dispatch,
+      # the anonymous verify job, the digest pin, the Pro-free Dockerfile and
+      # the operator guide. The image itself is built and verified per PR by
+      # container-image.yml. Named explicitly because this job runs FILE LISTS.
+      - name: Self-hosted image publishing stays wired
+        run: python3 -m pytest tests/test_selfhosted_image_publish.py -q
+
       # docs/INGEST.md is GENERATED from clawmetry/ingest_contract.py, the same
       # way MODULE_MAP.md is generated from the tree. A generated doc with no
       # drift check is a hand-maintained doc that nobody knows is stale, which
@@ -1152,6 +1160,35 @@ jobs:
           # NOT listed: tests/test_e2e_otlp_ingest.py -- it drives a LIVE
           # dashboard over HTTP (BASE_URL), which this job does not boot. It
           # runs in the api-tests job, which does.
+
+  # Self-hosted server mode (SELF_HOSTED=true). Until #5948 the self-hosted
+  # tests ran in no job at all, and the admin/export APIs answered 401 to
+  # valid credentials from any non-loopback caller, i.e. every request through
+  # a container port. test_selfhosted_container_auth.py drives the real
+  # dashboard gate from a bridge address and runs the image verifier's HTTP
+  # checks against a live server restarted on the same store. Named
+  # explicitly because this workflow runs FILE LISTS.
+  selfhosted-server:
+    name: Self-hosted server (container auth + persistence)
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: pip install --require-hashes -r .github/requirements/ci-tests.txt
+      - name: Run the self-hosted server suite
+        run: |
+          python3 -m pytest \
+            tests/test_selfhosted_container_auth.py \
+            tests/test_selfhosted_mode.py \
+            -q
 
   # ── MOAT keystone (DuckDB-first invariant, 13-endpoint bar) ────────────────────────────────────
   # Implements `docs/MOAT_BAR.md` Section 5 acceptance criterion #1:
