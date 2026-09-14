@@ -315,6 +315,11 @@ def test_gateway_is_a_separate_subtotal_not_an_agent(store):
     assert kinds == [(gw.GATEWAY_SOURCE, 11, 0)]
     assert store.query_otlp_app_rollup() == []
     assert store.query_otlp_rollup(dimension="team") == []
+    # The Agents tab (and the cloud relay of the same shape) never draws the
+    # proxy as an agent node, whatever runtime filter is selected.
+    for rt in (None, "all", gw.GATEWAY_SOURCE):
+        graph = store.query_agent_graph(runtime=rt)
+        assert graph["nodes"] == [] and graph["edges"] == [], (rt, graph)
 
     out, _ = _usage(store)
     assert (out["totals"]["correlated"], out["totals"]["uncorrelated"]) == (0, 5)
@@ -338,6 +343,7 @@ def test_gateway_is_a_separate_subtotal_not_an_agent(store):
         "SELECT COUNT(*) FROM sessions WHERE session_id = ?", ["ci_agent:trace:" + SHARED_TRACE]
     )[0][0] == 1
     assert [r["agent_type"] for r in store.query_otlp_app_rollup()] == ["ci_agent"]
+    assert [n["agent_type"] for n in store.query_agent_graph()["nodes"]] == ["ci_agent"]
 
 
 def test_usage_by_team_route_serves_the_gateway_block_separately(store, monkeypatch):

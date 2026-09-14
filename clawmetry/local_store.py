@@ -10557,6 +10557,13 @@ class LocalStore(TrailStoreMixin):
         if rt is not None:
             ts_clauses.append("COALESCE(agent_type,'openclaw') = ?")
             ts_params.append(rt)
+        # A LiteLLM proxy is a gateway, not an agent: its spans keep their own
+        # ``agent_type`` and must never be drawn as an agent node or a spawn
+        # edge (REQ-OBS-GWY-001, AC-OBS-GWY-001.7) -- the same exclusion
+        # query_otlp_app_rollup applies.
+        from clawmetry.gateway_litellm import GATEWAY_SOURCE as _GW
+        ts_clauses.append("LOWER(COALESCE(agent_type,'openclaw')) <> ?")
+        ts_params.append(_GW)
         ts_where = ("WHERE " + " AND ".join(ts_clauses)) if ts_clauses else ""
 
         nodes: list[dict] = []
@@ -10587,8 +10594,12 @@ class LocalStore(TrailStoreMixin):
 
         edges: list[dict] = []
         try:
-            spawn_parts = ["cs.name = 'agent.spawn'"]
-            spawn_params: list[Any] = []
+            spawn_parts = [
+                "cs.name = 'agent.spawn'",
+                "LOWER(COALESCE(cs.agent_type,'openclaw')) <> ?",
+                "LOWER(COALESCE(ps.agent_type,'openclaw')) <> ?",
+            ]
+            spawn_params: list[Any] = [_GW, _GW]
             if since is not None:
                 spawn_parts.append("cs.start_ts >= ?")
                 spawn_params.append(float(since))
