@@ -19034,6 +19034,15 @@ function renderSpendOptimization(data) {
 
 // ===== Cost Forecast (issue #1413) =====
 // ── Per-agent / per-team cost attribution (issue #3000) ──────────────────────
+// Every label on this card (team names, runtimes, emails, key names) is
+// written as TEXT, never markup (AC-OBS-GWY-001.9): the gateway labels come
+// from a proxy's configuration. Kept next to the card so the guarantee is
+// visible where it is used.
+function costCardText(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
 async function loadUsageByTeam() {
   var title = document.getElementById('usage-by-team-title');
   var card = document.getElementById('usage-by-team-card');
@@ -19052,11 +19061,11 @@ async function loadUsageByTeam() {
         var pct = totalCost > 0 ? Math.round((t.cost_usd / totalCost) * 100) : 0;
         var rts = (t.runtimes || []).join(', ');
         return '<tr>'
-          + '<td style="padding:4px 8px;font-weight:500;">' + escapeHtml(t.label || '—') + '</td>'
+          + '<td style="padding:4px 8px;font-weight:500;">' + costCardText(t.label || '—') + '</td>'
           + '<td style="padding:4px 8px;text-align:right;">$' + (t.cost_usd || 0).toFixed(4) + '</td>'
           + '<td style="padding:4px 8px;text-align:right;color:var(--text-muted);">' + pct + '%</td>'
           + '<td style="padding:4px 8px;text-align:right;color:var(--text-muted);">' + (t.sessions || 0) + ' sessions</td>'
-          + '<td style="padding:4px 8px;font-size:11px;color:var(--text-muted);">' + escapeHtml(rts) + '</td>'
+          + '<td style="padding:4px 8px;font-size:11px;color:var(--text-muted);">' + costCardText(rts) + '</td>'
           + '</tr>';
       }).join('');
       html += '<table style="width:100%;border-collapse:collapse;">'
@@ -19096,11 +19105,11 @@ function renderGatewayUsage(gw, hasAgentTable) {
     var people = (team.users || []).map(function(u) {
       var who = u.user_email || u.user_id || 'no user on key';
       var key = u.key_alias ? ' · key ' + u.key_alias : '';
-      return escapeHtml(who + key) + ': ' + (u.requests || 0) + ' requests, ' + escapeHtml(gatewayMoney(u.cost_usd));
+      return costCardText(who + key) + ': ' + (u.requests || 0) + ' requests, ' + costCardText(gatewayMoney(u.cost_usd));
     }).join('<br>');
     return '<tr>'
-      + '<td style="' + cell + 'font-weight:500;">' + escapeHtml(name) + '</td>'
-      + '<td style="' + cell + 'text-align:right;">' + escapeHtml(gatewayMoney(team.cost_usd)) + '</td>'
+      + '<td style="' + cell + 'font-weight:500;">' + costCardText(name) + '</td>'
+      + '<td style="' + cell + 'text-align:right;">' + costCardText(gatewayMoney(team.cost_usd)) + '</td>'
       + '<td style="' + cell + 'text-align:right;color:var(--text-muted);">' + (team.requests || 0) + '</td>'
       + '<td style="' + cell + 'text-align:right;color:var(--text-muted);">' + (team.failed || 0) + '</td>'
       + '<td style="' + cell + 'font-size:11px;color:var(--text-muted);">' + people + '</td>'
@@ -19118,7 +19127,7 @@ function renderGatewayUsage(gw, hasAgentTable) {
   if (t.cache_replays > 0) notes.push(t.cache_replays + ' answered from LiteLLM\'s cache, counted but not charged again.');
   if (t.cost_not_reported > 0) notes.push(t.cost_not_reported + ' succeeded with no cost reported, so they are counted but not priced.');
   return '<div style="margin-top:' + (hasAgentTable ? '14px' : '0') + ';font-size:12px;font-weight:600;color:var(--text-primary);">Through your LiteLLM gateway</div>'
-    + '<div style="font-size:11px;color:var(--text-muted);margin:2px 0 6px;">Spend as LiteLLM reported it, in ' + escapeHtml(gw.currency || 'USD') + ', last ' + (gw.window_days || 7) + ' days</div>'
+    + '<div style="font-size:11px;color:var(--text-muted);margin:2px 0 6px;">Spend as LiteLLM reported it, in ' + costCardText(gw.currency || 'USD') + ', last ' + (gw.window_days || 7) + ' days</div>'
     + '<table style="width:100%;border-collapse:collapse;">'
     + '<thead><tr style="font-size:11px;color:var(--text-muted);">'
     + '<th style="padding:2px 8px;text-align:left;">Team</th>'
@@ -19127,7 +19136,7 @@ function renderGatewayUsage(gw, hasAgentTable) {
     + '<th style="padding:2px 8px;text-align:right;">Failed</th>'
     + '<th style="padding:2px 8px;text-align:left;">People and keys</th>'
     + '</tr></thead><tbody>' + rows + '</tbody></table>'
-    + '<div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5;">' + notes.map(escapeHtml).join('<br>') + '</div>';
+    + '<div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5;">' + notes.map(costCardText).join('<br>') + '</div>';
 }
 
 async function loadCostForecast() {
