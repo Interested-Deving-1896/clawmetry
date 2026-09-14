@@ -5,6 +5,9 @@
   <div class="refresh-bar">
     <button class="refresh-btn" onclick="loadUsage()">↻ <span data-i18n="common.refresh">Refresh</span></button>
     <button class="refresh-btn" onclick="exportUsageData()" style="margin-left: 8px;">📥 <span data-i18n="usage.export_csv">Export CSV</span></button>
+    <!-- Cost Optimizer entry point, above the fold (REQ-OBS-CEA-023, #5934).
+         Opens the same modal as the Flow tab's Cost Optimizer node. -->
+    <button class="refresh-btn" id="usage-open-cost-optimizer" onclick="openCompModal('node-cost-optimizer')" style="margin-left: 8px;">💰 <span data-i18n="usage.open_cost_optimizer">Cost Optimizer</span></button>
   </div>
 
   <!-- Cost Warnings -->

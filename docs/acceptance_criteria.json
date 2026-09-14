@@ -529,6 +529,54 @@
       "text": "Reading a repository shall be bounded in how much history it examines and in how long it may take, and shall be capable of being switched off entirely on a node."
     },
     {
+      "id": "AC-OBS-CEA-023.1",
+      "doc": "Cost Optimizer: honest, fast and provider-aware",
+      "doc_id": "cb48b819-fa4a-4e7a-8a96-10ecdf86007e",
+      "text": "When the operator opens the Cost Optimizer, the system shall show a loading state, and if no answer arrives within a bounded time the system shall replace it with a plain-language sentence and a way to retry, never a raw error code and never an unending spinner."
+    },
+    {
+      "id": "AC-OBS-CEA-023.2",
+      "doc": "Cost Optimizer: honest, fast and provider-aware",
+      "doc_id": "cb48b819-fa4a-4e7a-8a96-10ecdf86007e",
+      "text": "When the operator is not entitled to the Cost Optimizer, the system shall show an upgrade prompt rather than presenting the refusal as missing data."
+    },
+    {
+      "id": "AC-OBS-CEA-023.3",
+      "doc": "Cost Optimizer: honest, fast and provider-aware",
+      "doc_id": "cb48b819-fa4a-4e7a-8a96-10ecdf86007e",
+      "text": "Every cost figure the optimizer shows shall carry its basis (measured, derived, estimated, or unavailable), and a figure the system could not determine shall be shown as unavailable rather than as zero."
+    },
+    {
+      "id": "AC-OBS-CEA-023.4",
+      "doc": "Cost Optimizer: honest, fast and provider-aware",
+      "doc_id": "cb48b819-fa4a-4e7a-8a96-10ecdf86007e",
+      "text": "The optimizer shall not present a savings amount or percentage that was not computed from this operator's observed usage, and shall present each recommendation as an experiment to try, citing the observed usage it is based on."
+    },
+    {
+      "id": "AC-OBS-CEA-023.5",
+      "doc": "Cost Optimizer: honest, fast and provider-aware",
+      "doc_id": "cb48b819-fa4a-4e7a-8a96-10ecdf86007e",
+      "text": "When observed traffic runs through a managed or hosted model provider and none runs through a local model, the system shall not recommend running models locally, and shall say why that advice is hidden."
+    },
+    {
+      "id": "AC-OBS-CEA-023.6",
+      "doc": "Cost Optimizer: honest, fast and provider-aware",
+      "doc_id": "cb48b819-fa4a-4e7a-8a96-10ecdf86007e",
+      "text": "The optimizer shall be reachable from the Usage tab without scrolling at a typical laptop viewport."
+    },
+    {
+      "id": "AC-OBS-CEA-023.7",
+      "doc": "Cost Optimizer: honest, fast and provider-aware",
+      "doc_id": "cb48b819-fa4a-4e7a-8a96-10ecdf86007e",
+      "text": "When the operator views a past moment in time-travel mode, the system shall state that the optimizer analyses current spend and where historical spend can be reviewed, rather than showing a placeholder."
+    },
+    {
+      "id": "AC-OBS-CEA-023.8",
+      "doc": "Cost Optimizer: honest, fast and provider-aware",
+      "doc_id": "cb48b819-fa4a-4e7a-8a96-10ecdf86007e",
+      "text": "When the token count behind a cost row was not recorded, the system shall say the token count was not recorded rather than label the row \"unknown tokens\"."
+    },
+    {
       "id": "AC-OBS-GHA-001.1",
       "doc": "Governance and Human Approval",
       "doc_id": "68619c5c-6a92-4bd2-a155-228e53aa1c59",

@@ -26836,11 +26836,57 @@ function loadBrainData(isRefresh) {
   });
 }
 
+// Cost Optimizer modal (REQ-OBS-CEA-023, vivekchand/clawmetry#5934).
+// On a cold dashboard the startup requests pile up in the browser and this
+// fetch used to wait behind them for ~33s with nothing but a spinner. It now
+// gives up after a bounded time with a sentence a person can act on, renders
+// a 402 as the upgrade prompt it is, and never paints a figure without its
+// basis. Recommendations are experiments citing recorded usage; local-model
+// advice appears only when the server saw local traffic (localAdvice.show).
+var _COST_OPT_TIMEOUT_MS = 12000;
+
+function _costOptFailureHtml(kind) {
+  var msg = kind === 'timeout'
+    ? t('app.cost_opt_timeout', null, 'The cost analysis did not answer within 12 seconds. The dashboard may still be starting up, so try again in a moment.')
+    : t('app.cost_opt_failed', null, 'The cost analysis could not be loaded right now. Try again in a moment.');
+  return '<div class="cost-opt-failure" role="status" style="text-align:center;padding:24px;color:var(--text-secondary);line-height:1.5;">'
+    + escapeHtml(msg)
+    + '<div style="margin-top:12px;"><button class="co-action-btn secondary" style="width:auto;padding:6px 14px;" onclick="loadCostOptimizerData(false)">'
+    + escapeHtml(t('common.retry', null, 'Retry')) + '</button></div></div>';
+}
+
+function _costOptLockedHtml() {
+  return '<div class="cost-opt-locked" style="padding:32px 20px;text-align:center;color:var(--text-muted);font-size:13px;line-height:1.55;max-width:520px;margin:0 auto;">'
+    + '<div style="font-size:28px;margin-bottom:8px;">🔒</div>'
+    + '<div style="font-weight:700;color:var(--text-primary);margin-bottom:6px;font-size:15px;">'
+    + escapeHtml(t('app.cost_opt_locked_title', null, 'Cost Optimizer is a paid feature')) + '</div>'
+    + escapeHtml(t('app.cost_opt_locked_body', null, 'Upgrade your ClawMetry plan to see where your agents could spend less, based on the usage recorded on this machine.'))
+    + '<div style="margin-top:16px;"><a href="https://clawmetry.com/pricing" target="_blank" rel="noopener" style="display:inline-block;background:#6366f1;color:#fff;text-decoration:none;padding:8px 16px;border-radius:8px;font-weight:600;font-size:13px;">'
+    + escapeHtml(t('paywall.see_pricing', null, 'See pricing')) + '</a></div></div>';
+}
+
 function loadCostOptimizerData(isRefresh) {
   var expectedNodeId = 'node-cost-optimizer';
-  fetch('/api/cost-optimizer').then(function(r) { return r.json(); }).then(function(data) {
+  var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
+  var timedOut = false;
+  var timer = setTimeout(function() { timedOut = true; if (ctrl) ctrl.abort(); }, _COST_OPT_TIMEOUT_MS);
+  fetch('/api/cost-optimizer', ctrl ? { signal: ctrl.signal } : undefined).then(function(r) {
+    // 402 is the entitlement answer, not data: never parse it as figures.
+    if (r.status === 402) return { error: 'upgrade_required' };
+    if (!r.ok) throw new Error('unavailable');
+    return r.json();
+  }).then(function(data) {
+    clearTimeout(timer);
+    if (timedOut) throw new Error('timeout');
     if (!isCompModalActive(expectedNodeId)) return;
     var body = document.getElementById('comp-modal-body');
+    if (data && data.error === 'upgrade_required') {
+      if (_costOptimizerRefreshTimer) { clearInterval(_costOptimizerRefreshTimer); _costOptimizerRefreshTimer = null; }
+      body.innerHTML = _costOptLockedHtml();
+      document.getElementById('comp-modal-footer').textContent = '';
+      return;
+    }
+    data = data || {};
     var html = '';
 
     // ══ SECTION 1: Cost Overview ══════════════════════════════════
@@ -26860,143 +26906,135 @@ function loadCostOptimizerData(isRefresh) {
       var v = data[key];
       return v == null ? 'not available' : '$' + Number(v).toFixed(dp);
     }
+    function _fig(value, key, label) {
+      var entry = window.cmProv ? window.cmProv.of(data, key) : null;
+      if (window.cmFigure) return window.cmFigure(value, entry, { compact: true, label: label });
+      return value == null ? 'not available' : '$' + Number(value).toFixed(2);
+    }
+    var scope = data.scope || t('app.cost_opt_scope', null, 'all runtimes on this machine');
     html += '<div class="cost-overview">';
-    html += '<div class="cost-overview-header">💰 Cost Overview</div>';
+    html += '<div class="cost-overview-header">💰 Cost Overview <span style="font-size:11px;font-weight:400;color:var(--text-muted);">' + escapeHtml(scope) + '</span></div>';
     html += '<div class="cost-overview-row">';
     html += '<div class="cost-overview-item"><span class="cost-overview-label">Today</span><span class="cost-overview-value">' + _costCell('todayCost', 'Cost today', 3) + '</span></div>';
     html += '<div class="cost-overview-item"><span class="cost-overview-label">Month Projected</span><span class="cost-overview-value">' + _costCell('projectedMonthlyCost', 'Projected month', 2) + '</span></div>';
     html += '</div>';
-    if (data.potentialSavings) {
-      html += '<div class="savings-highlight">[prod] ' + data.potentialSavings + '</div>';
-    }
     html += '</div>';
 
-    // Recent expensive ops
+    // Recent expensive ops: each cost carries the basis it was priced on,
+    // and a token count nobody recorded says so.
     if (data.expensiveOps && data.expensiveOps.length > 0) {
       html += '<div style="margin-bottom:14px;">';
       data.expensiveOps.slice(0, 3).forEach(function(op) {
-        html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--bg-hover);border-radius:6px;margin-bottom:4px;border-left:3px solid var(--text-error);">';
-        html += '<span style="font-size:12px;color:var(--text-secondary);">' + op.model + ' <span style="color:var(--text-muted);">- ' + op.tokens + ' tokens - ' + op.timeAgo + '</span></span>';
-        html += '<span style="font-size:12px;color:var(--text-error);font-weight:700;">$' + op.cost.toFixed(4) + '</span>';
+        var tok = (op.tokens == null || op.tokens === '' || op.tokens === 'unknown')
+          ? t('app.cost_opt_tokens_not_recorded', null, 'tokens not recorded')
+          : op.tokens + ' tokens';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 10px;background:var(--bg-hover);border-radius:6px;margin-bottom:4px;border-left:3px solid var(--text-error);">';
+        html += '<span style="font-size:12px;color:var(--text-secondary);">' + escapeHtml(op.model || '') + ' <span style="color:var(--text-muted);">- ' + escapeHtml(tok) + (op.timeAgo ? ' - ' + escapeHtml(op.timeAgo) : '') + '</span></span>';
+        html += '<span style="font-size:12px;color:var(--text-error);font-weight:700;white-space:nowrap;">' + _fig(op.cost, 'expensiveOps', 'Cost of this call') + '</span>';
         html += '</div>';
       });
       html += '</div>';
     }
 
-    // ══ SECTION 2: Hardware ═══════════════════════════════════════
-    var sys = (data.system) || {};
-    // Detect hardware family so we don't paint Apple-only copy (Metal,
-    // brew install) on Linux/CUDA users.
-    var _bk = String(sys.backend || '').toLowerCase();
-    var _isApple = _bk.indexOf('metal') >= 0 || /apple|m[1-4]\b/i.test(sys.cpu || '');
-    var _isCuda = _bk.indexOf('cuda') >= 0 || /nvidia|cuda|geforce|rtx|gtx/i.test(sys.gpu || '');
-    var _isAmdGpu = _bk.indexOf('rocm') >= 0 || /(amd|radeon)/i.test(sys.gpu || '');
-    var _hasGpu = _isApple || _isCuda || _isAmdGpu;
-    var _accelLabel = _isApple ? 'Metal' : _isCuda ? 'CUDA' : _isAmdGpu ? 'ROCm' : 'CPU';
-    var _ollamaInstall = _isApple ? 'brew install ollama' : 'curl -fsSL https://ollama.com/install.sh | sh';
-
-    html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:6px;">🖥️ Your Hardware</div>';
-    html += '<div class="hw-card">';
-    if (sys.cpu) html += '<span class="hw-card-chip">' + escapeHtml(sys.cpu) + '</span>';
-    if (sys.ram_gb) html += '<span class="hw-card-chip">' + sys.ram_gb + 'GB RAM</span>';
-    if (sys.cores) html += '<span class="hw-card-chip">' + sys.cores + ' cores</span>';
-    if (sys.backend) html += '<span class="hw-card-chip green">' + escapeHtml(sys.backend) + '</span>';
-    html += '</div>';
-    // Hardware-aware notice — only show Metal warning to Apple users.
-    if (_isApple && !data.llmfitMetalDetected) {
-      html += '<div class="hw-metal-notice">⚠️ llmfit doesn\'t detect Apple Metal -- actual performance will be <strong>3-5x faster</strong> with Ollama\'s Metal backend</div>';
-    } else if (_isCuda) {
-      html += '<div class="hw-metal-notice">ℹ️ Ollama with CUDA on ' + escapeHtml(sys.gpu || 'your GPU') + ' will run these models near-instantly.</div>';
-    } else if (!_hasGpu) {
-      html += '<div class="hw-metal-notice">ℹ️ No GPU detected — local models will run on CPU. Pick smaller (1B–7B) models for best results.</div>';
-    }
-
-    // ══ SECTION 3: Recommended Local Models ══════════════════════
+    // ══ SECTION 2: Experiments grounded in recorded usage ════════
+    // Only recommendations that cite evidence render. A payload without it
+    // (an older daemon, a hosted snapshot that predates this) shows the
+    // honest note instead of generic advice with invented savings.
+    var recs = (data.taskRecommendations || []).filter(function(rec) { return rec && rec.evidence; });
     html += '<div class="co-section">';
-    html += '<h3>🤖 Recommended Local Models <span style="font-size:11px;color:var(--text-muted);font-weight:400;">via llmfit - ' + _accelLabel + '-accelerated</span></h3>';
-
-    if (!data.ollamaInstalled) {
-      html += '<div class="co-ollama-prompt">';
-      html += '<div style="font-size:13px;color:#a78bfa;font-weight:600;">⚠️ Ollama not installed -- install to run models locally (free!)</div>';
-      html += '<div class="co-ollama-cmd">' + escapeHtml(_ollamaInstall) + '</div>';
-      // JSON.stringify(_ollamaInstall) produces "..." with literal " which
-      // collides with the onclick="..." double-quoted attribute and breaks
-      // out of the attribute scope (rendering raw JS inside the button).
-      // Encode " as &quot; so the HTML parser treats it as a literal quote
-      // inside the attribute, then the JS still sees a proper string.
-      var _esc1 = JSON.stringify(_ollamaInstall).replace(/"/g, '&quot;');
-      html += '<button class="co-action-btn" onclick="navigator.clipboard.writeText(' + _esc1 + ');this.textContent=\'✅ Copied!\';setTimeout(()=>this.textContent=\'📋 Copy Install Command\',2000);">📋 Copy Install Command</button>';
-      html += '</div>';
-    }
-
-    var models = data.localModels || [];
-    if (models.length > 0) {
-      models.slice(0, 5).forEach(function(m) {
-        var badgeType = (m.useCase || '').toLowerCase().indexOf('cod') !== -1 ? 'coding' : 'chat';
-        var _accelMult = _isApple ? 3.5 : _isCuda ? 3.0 : _isAmdGpu ? 2.0 : 1.0;
-        var metalTps = m.estimatedTps ? Math.round(m.estimatedTps * _accelMult) + ' tok/s*' : '--';
-        var ollamaCmd = 'ollama pull ' + (m.ollamaName || m.name.toLowerCase().replace(/-instruct.*/i,'').replace(/[^a-z0-9.-]/g,'-'));
-        html += '<div class="model-card">';
-        html += '<div class="model-card-header">';
-        html += '<div class="model-card-name">' + m.name + '</div>';
-        html += '<span class="model-badge ' + badgeType + '">' + (m.useCase || (badgeType === 'coding' ? 'Coding' : 'Chat')) + '</span>';
-        html += '</div>';
-        html += '<div class="model-card-stats">';
-        html += '<div class="model-card-stat"><span class="model-card-stat-label">Score</span><span class="model-card-stat-value">' + (m.score || '--') + '</span></div>';
-        html += '<div class="model-card-stat"><span class="model-card-stat-label">Speed (' + _accelLabel + ')</span><span class="model-card-stat-value">' + metalTps + '</span></div>';
-        html += '<div class="model-card-stat"><span class="model-card-stat-label">RAM</span><span class="model-card-stat-value">' + (m.ramRequired || (m.memoryRequiredGb ? m.memoryRequiredGb + 'GB' : '--')) + '</span></div>';
-        if (m.savingsEstimate) html += '<div class="model-card-stat"><span class="model-card-stat-label">Savings est.</span><span class="model-card-stat-value" style="color:#4ade80;">' + m.savingsEstimate + '</span></div>';
-        html += '</div>';
-        html += '<div class="model-install-cmd" onclick="navigator.clipboard.writeText(\'' + ollamaCmd + '\');this.querySelector(\'span.cmd-text\').textContent=\'✅ Copied!\';setTimeout(()=>this.querySelector(\'span.cmd-text\').textContent=\'' + ollamaCmd + '\',2000);">';
-        html += '<span class="cmd-text">' + ollamaCmd + '</span>';
-        html += '<span style="color:#4ade80;font-size:10px;flex-shrink:0;">📥 Copy</span>';
-        html += '</div>';
-        if (m.fullName) html += '<a style="display:block;margin-top:5px;font-size:10px;color:#60a5fa;text-decoration:none;" href="https://huggingface.co/' + m.fullName + '" target="_blank">🔗 View on HuggingFace</a>';
-        html += '</div>';
-      });
-      html += '<div style="font-size:10px;color:var(--text-muted);margin-top:4px;">* Speed estimated with Ollama ' + _accelLabel + ' backend</div>';
-    } else {
-      html += '<div style="color:var(--text-muted);font-size:13px;padding:10px 0;">llmfit not available -- install with: <code>pip install llmfit</code></div>';
-    }
-    html += '</div>';
-
-    // ══ SECTION 4: Task Recommendations ══════════════════════════
-    var taskRecs = data.taskRecommendations || [];
-    if (taskRecs.length > 0) {
-      html += '<div class="co-section">';
-      html += '<h3>📋 Task Recommendations</h3>';
-      taskRecs.forEach(function(rec) {
+    html += '<h3>🧪 ' + escapeHtml(t('app.cost_opt_experiments', null, 'Experiments worth trying')) + '</h3>';
+    if (recs.length > 0) {
+      recs.forEach(function(rec) {
+        var ev = rec.evidence || {};
+        var seen = escapeHtml(String(ev.events || 0)) + ' ' + escapeHtml(t('app.cost_opt_recorded_events', null, 'recorded model events'));
+        if (ev.costUsd != null) seen += ', ' + _fig(ev.costUsd, 'modelUsage', 'Recorded cost');
+        if (ev.window) seen += ' <span style="color:var(--text-muted);">(' + escapeHtml(ev.window) + ')</span>';
         html += '<div class="task-rec">';
-        html += '<div class="task-rec-title">' + rec.task + '</div>';
-        if (rec.estimatedSavings) html += '<div class="task-rec-savings">' + rec.estimatedSavings + '</div>';
-        html += '<div class="task-rec-arrow">';
-        if (rec.currentModel) html += '<span style="color:var(--text-muted);">' + rec.currentModel + '</span>';
-        if (rec.suggestedLocal) html += ' -> <span style="color:#4ade80;font-weight:600;">' + rec.suggestedLocal + '</span>';
-        else html += ' -> <span style="color:#4ade80;font-weight:600;">keep frontier ✓</span>';
-        html += '</div>';
-        if (rec.reason) html += '<div class="task-rec-reason">' + rec.reason + '</div>';
+        html += '<div class="task-rec-title">' + escapeHtml(rec.task || rec.model || '') + '</div>';
+        html += '<div class="task-rec-arrow">' + escapeHtml(t('app.cost_opt_observed', null, 'Observed:')) + ' ' + seen + '</div>';
+        if (rec.experiment) html += '<div class="task-rec-reason">' + escapeHtml(rec.experiment) + '</div>';
         html += '</div>';
       });
+    } else {
+      html += '<div style="color:var(--text-muted);font-size:13px;padding:6px 0;">'
+        + escapeHtml(data.recommendationsNote || t('app.cost_opt_no_recs', null, 'No experiments could be suggested from the usage recorded for this view yet.'))
+        + '</div>';
+    }
+    html += '</div>';
+
+    // ══ SECTION 3: Local models, only for local traffic ══════════
+    var la = data.localAdvice || null;
+    var _accelLabel = '';
+    if (la && la.show) {
+      var sys = (data.system) || {};
+      // Detect hardware family so we don't paint Apple-only copy (Metal,
+      // brew install) on Linux/CUDA users.
+      var _bk = String(sys.backend || '').toLowerCase();
+      var _isApple = _bk.indexOf('metal') >= 0 || /apple|m[1-4]\b/i.test(sys.cpu || '');
+      var _isCuda = _bk.indexOf('cuda') >= 0 || /nvidia|cuda|geforce|rtx|gtx/i.test(sys.gpu || '');
+      var _isAmdGpu = _bk.indexOf('rocm') >= 0 || /(amd|radeon)/i.test(sys.gpu || '');
+      _accelLabel = _isApple ? 'Metal' : _isCuda ? 'CUDA' : _isAmdGpu ? 'ROCm' : 'CPU';
+      var _ollamaInstall = _isApple ? 'brew install ollama' : 'curl -fsSL https://ollama.com/install.sh | sh';
+
+      html += '<div class="co-section">';
+      html += '<h3>🖥️ ' + escapeHtml(t('app.cost_opt_local_models', null, 'Local models')) + ' <span style="font-size:11px;color:var(--text-muted);font-weight:400;">' + escapeHtml(la.reason || '') + '</span></h3>';
+      html += '<div class="hw-card">';
+      if (sys.cpu) html += '<span class="hw-card-chip">' + escapeHtml(sys.cpu) + '</span>';
+      if (sys.ram_gb) html += '<span class="hw-card-chip">' + escapeHtml(String(sys.ram_gb)) + 'GB RAM</span>';
+      if (sys.cores) html += '<span class="hw-card-chip">' + escapeHtml(String(sys.cores)) + ' cores</span>';
+      if (sys.backend) html += '<span class="hw-card-chip green">' + escapeHtml(sys.backend) + '</span>';
+      html += '</div>';
+
+      if (!data.ollamaInstalled) {
+        html += '<div class="co-ollama-prompt">';
+        html += '<div style="font-size:13px;color:#a78bfa;font-weight:600;">Ollama is not installed on this machine</div>';
+        html += '<div class="co-ollama-cmd">' + escapeHtml(_ollamaInstall) + '</div>';
+        // Encode " as &quot; so the onclick="..." attribute is not broken
+        // out of by JSON.stringify's quotes.
+        var _esc1 = JSON.stringify(_ollamaInstall).replace(/"/g, '&quot;');
+        html += '<button class="co-action-btn" onclick="navigator.clipboard.writeText(' + _esc1 + ');this.textContent=\'✅ Copied!\';setTimeout(()=>this.textContent=\'📋 Copy Install Command\',2000);">📋 Copy Install Command</button>';
+        html += '</div>';
+      }
+
+      var models = data.localModels || [];
+      if (models.length > 0) {
+        models.slice(0, 5).forEach(function(m) {
+          var badgeType = (m.useCase || '').toLowerCase().indexOf('cod') !== -1 ? 'coding' : 'chat';
+          var ollamaName = String(m.ollamaName || m.name || '').toLowerCase().replace(/[^a-z0-9.:-]/g, '-');
+          html += '<div class="model-card">';
+          html += '<div class="model-card-header">';
+          html += '<div class="model-card-name">' + escapeHtml(m.name || '') + '</div>';
+          html += '<span class="model-badge ' + badgeType + '">' + escapeHtml(m.useCase || (badgeType === 'coding' ? 'Coding' : 'Chat')) + '</span>';
+          html += '</div>';
+          html += '<div class="model-card-stats">';
+          html += '<div class="model-card-stat"><span class="model-card-stat-label">Score</span><span class="model-card-stat-value">' + escapeHtml(String(m.score || '--')) + '</span></div>';
+          html += '<div class="model-card-stat"><span class="model-card-stat-label">RAM</span><span class="model-card-stat-value">' + escapeHtml(String(m.ramRequired || (m.memoryRequiredGb ? m.memoryRequiredGb + 'GB' : '--'))) + '</span></div>';
+          html += '</div>';
+          html += '<div class="model-install-cmd" onclick="navigator.clipboard.writeText(\'ollama pull ' + ollamaName + '\');">';
+          html += '<span class="cmd-text">ollama pull ' + escapeHtml(ollamaName) + '</span>';
+          html += '<span style="color:#4ade80;font-size:10px;flex-shrink:0;">📥 Copy</span>';
+          html += '</div>';
+          html += '</div>';
+        });
+      } else {
+        html += '<div style="color:var(--text-muted);font-size:13px;padding:10px 0;">llmfit is not available, so no model fit could be computed. Install it with: <code>pip install llmfit</code></div>';
+      }
+      html += '</div>';
+    } else if (la && la.reason) {
+      html += '<div class="co-section">';
+      html += '<h3>🖥️ ' + escapeHtml(t('app.cost_opt_local_models', null, 'Local models')) + '</h3>';
+      html += '<div class="cost-opt-local-hidden" style="color:var(--text-muted);font-size:13px;line-height:1.5;">' + escapeHtml(la.reason) + '</div>';
       html += '</div>';
     }
-
-    // ══ SECTION 5: Quick Actions ══════════════════════════════════
-    html += '<div class="co-section">';
-    html += '<h3>⚙️ Quick Actions</h3>';
-    html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
-    var _esc2 = JSON.stringify(_ollamaInstall).replace(/"/g, '&quot;');
-    html += '<button class="co-action-btn" style="width:auto;padding:6px 14px;" onclick="navigator.clipboard.writeText(' + _esc2 + ');this.textContent=\'✅ Copied!\';setTimeout(()=>this.textContent=\'📋 Install Ollama\',2000);">📋 Install Ollama</button>';
-    html += '<button class="co-action-btn secondary" style="width:auto;padding:6px 14px;" onclick="navigator.clipboard.writeText(\'ollama serve\');this.textContent=\'✅ Copied!\';setTimeout(()=>this.textContent=\'📋 ollama serve\',2000);">📋 ollama serve</button>';
-    html += '<a class="co-action-btn secondary" style="width:auto;padding:6px 14px;text-decoration:none;display:inline-block;" href="https://ollama.com/search" target="_blank">🔍 Browse Models</a>';
-    html += '</div>';
-    html += '</div>';
 
     body.innerHTML = html;
-    document.getElementById('comp-modal-footer').textContent = t("app.auto_refreshing_last_updated", null, "Auto-refreshing - Last updated: ") + new Date().toLocaleTimeString() + ' - ' + (data.llmfitAvailable ? 'llmfit ✓' : 'no llmfit') + ' - ' + _accelLabel + ' backend';
+    document.getElementById('comp-modal-footer').textContent = t("app.auto_refreshing_last_updated", null, "Auto-refreshing - Last updated: ") + new Date().toLocaleTimeString()
+      + (_accelLabel ? ' - ' + (data.llmfitAvailable ? 'llmfit ✓' : 'no llmfit') + ' - ' + _accelLabel + ' backend' : '');
   }).catch(function(e) {
+    clearTimeout(timer);
     if (!isCompModalActive(expectedNodeId)) return;
     if (!isRefresh) {
-      document.getElementById('comp-modal-body').innerHTML = _compModalError('loadCostOptimizerData', 'cost optimizer', e);
+      document.getElementById('comp-modal-body').innerHTML = _costOptFailureHtml(timedOut ? 'timeout' : 'failed');
     }
   });
 }
@@ -27124,9 +27162,25 @@ function reloadCurrentComponent() {
 
 function loadCostOptimizerDataWithTime() {
   var body = document.getElementById('comp-modal-body');
-  var timeContext = _currentTimeContext ? ' (' + _currentTimeContext.date + ')' : '';
-  body.innerHTML = '<div style="text-align:center;padding:20px;"><div style="font-size:48px;margin-bottom:16px;">💰</div><div style="font-size:16px;font-weight:600;margin-bottom:8px;">Cost Optimizer' + timeContext + '</div><div style="color:var(--text-muted);">Historical cost analysis coming soon</div><div style="margin-top:8px;font-size:12px;color:var(--text-muted);text-transform:uppercase;">optimizer</div></div>';
-  document.getElementById('comp-modal-footer').textContent = t("app.time_travel", null, "Time travel: ") + (_currentTimeContext ? _currentTimeContext.date : 'Live');
+  if (!_currentTimeContext) {
+    // Back to live: the real analysis, not a placeholder.
+    body.innerHTML = '<div style="text-align:center;padding:40px;"><div class="pulse"></div> Analyzing costs...</div>';
+    loadCostOptimizerData(false);
+    _costOptimizerRefreshTimer = visibilitySetInterval(function() { loadCostOptimizerData(true); }, 15000);
+    return;
+  }
+  // The optimizer reasons about current spend. Say so, and point at where a
+  // past day's spend actually is, instead of promising a feature.
+  var day = escapeHtml(_currentTimeContext.date);
+  body.innerHTML = '<div style="text-align:center;padding:20px;line-height:1.55;"><div style="font-size:48px;margin-bottom:16px;">💰</div>'
+    + '<div style="font-size:16px;font-weight:600;margin-bottom:8px;">Cost Optimizer (' + day + ')</div>'
+    + '<div class="cost-opt-historical" style="color:var(--text-muted);max-width:460px;margin:0 auto;">'
+    + escapeHtml(t('app.cost_opt_historical', null, 'The Cost Optimizer analyses current spend, so it does not suggest changes for a single past day. The Usage tab shows what was spent on that day.'))
+    + '</div><div style="margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">'
+    + '<button class="co-action-btn secondary" style="width:auto;padding:6px 14px;" onclick="timeTravel(\'now\')">' + escapeHtml(t('app.cost_opt_back_to_live', null, 'Back to live')) + '</button>'
+    + '<button class="co-action-btn secondary" style="width:auto;padding:6px 14px;" onclick="closeCompModal();switchTab(\'usage\')">' + escapeHtml(t('app.cost_opt_open_usage', null, 'Open Usage')) + '</button>'
+    + '</div></div>';
+  document.getElementById('comp-modal-footer').textContent = t("app.time_travel", null, "Time travel: ") + _currentTimeContext.date;
 }
 
 function loadAutomationAdvisorDataWithTime() {
