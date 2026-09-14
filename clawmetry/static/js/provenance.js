@@ -47,6 +47,23 @@
   HINT[ESTIMATED] = 'Estimated: modelled, with an assumption that can be wrong.';
   HINT[UNKNOWN] = 'No basis: this number is not available, so nothing is shown.';
 
+  // What kind of money a cost figure is (REQ-OBS-CEA-025). Orthogonal to
+  // the basis above: "derived" says how a number was computed, this says
+  // whether it is an invoice. Mirrors clawmetry/cost_basis.py; the server
+  // sends its own words, these are the fallback for an older daemon.
+  var COST_LABEL = {
+    published_rate: 'published rates',
+    contract: 'contract rate',
+    allocated_actual: 'actual spend',
+    unknown: 'not available'
+  };
+  var COST_HINT = {
+    published_rate: 'Usage value at published rates: what this usage costs at the provider\'s list price. It is not an invoice.',
+    contract: 'Expected contract spend: this usage priced at your negotiated rate. It is not an invoice.',
+    allocated_actual: 'Allocated actual spend: drawn from an invoice or billing ledger.',
+    unknown: 'No financial basis: it is not known what kind of money this is, so no amount is shown.'
+  };
+
   // One letter for dense tables, where the full word would crowd out the
   // number it is describing.
   var INITIAL = {};
@@ -98,6 +115,9 @@
     if (!entry) return UNLABELLED.hint;
     var lines = [];
     if (label) lines.push(label);
+    if (entry.cost_basis) {
+      lines.push(entry.cost_basis_hint || COST_HINT[entry.cost_basis] || '');
+    }
     lines.push(entry.hint || HINT[entry.basis] || '');
     if (entry.reason) lines.push('Why: ' + entry.reason);
     if (entry.formula) lines.push('How: ' + entry.formula + '.');
@@ -111,6 +131,8 @@
       }
       if (bits.length) lines.push('From: ' + bits.join(', ') + '.');
     }
+    if (entry.rate_source) lines.push('Rate: ' + entry.rate_source + '.');
+    if (entry.billing_route_label) lines.push('Billing route: ' + entry.billing_route_label + '.');
     if (entry.source) lines.push('Source: ' + entry.source + '.');
     if (entry.note) lines.push('Note: ' + entry.note + '.');
     return lines.filter(Boolean).join('\n');
@@ -119,17 +141,28 @@
   // ── The badge ───────────────────────────────────────────────────────────
   // opts.compact  one letter instead of the word (dense tables)
   // opts.label    a name for the figure, shown as the tooltip's first line
+  // A cost figure's badge names its financial basis ("published rates")
+  // rather than the arithmetic word, because that is the question a reader
+  // of a dollar amount is asking. The explanation is reachable without a
+  // mouse: the badge takes keyboard focus, shows the same text on focus
+  // (data-tip, styled in dashboard.css) and carries it as a description.
   function badge(entry, opts) {
     opts = opts || {};
     var e = entry || UNLABELLED;
     var basis = e.basis || UNKNOWN;
+    var cost = e.cost_basis || '';
     var text = opts.compact
       ? (INITIAL[basis] || '?')
-      : (e.label || LABEL[basis] || basis);
+      : (cost ? (e.cost_basis_label || COST_LABEL[cost] || cost)
+              : (e.label || LABEL[basis] || basis));
+    var t = tip(e, opts.label);
     return '<span class="cm-prov cm-prov-' + esc(basis)
+      + (cost ? ' cm-cost-' + esc(cost) : '')
       + (opts.compact ? ' cm-prov-compact' : '')
-      + '" title="' + esc(tip(e, opts.label)) + '"'
-      + ' aria-label="' + esc((opts.label ? opts.label + ': ' : '') + text)
+      + '" tabindex="0" role="note" title="' + esc(t) + '"'
+      + ' data-tip="' + esc(t) + '"'
+      + ' aria-label="' + esc((opts.label ? opts.label + ': ' : '') + text
+                              + '. ' + t.replace(/\n/g, ' '))
       + '">' + esc(text) + '</span>';
   }
 
@@ -209,7 +242,7 @@
   window.cmProv = {
     MEASURED: MEASURED, DERIVED: DERIVED,
     ESTIMATED: ESTIMATED, UNKNOWN: UNKNOWN,
-    LABEL: LABEL, HINT: HINT,
+    LABEL: LABEL, HINT: HINT, COST_LABEL: COST_LABEL, COST_HINT: COST_HINT,
     of: of, isUnknown: isUnknown, tip: tip, badge: badge,
     figure: figure, money: money, score: score, text: text,
     fmtMoney: fmtMoney, fmtScore: fmtScore
