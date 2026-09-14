@@ -19229,7 +19229,7 @@ function renderTraceClusters(clusters, totalSessions) {
   var el = document.getElementById('trace-clusters-content');
   if (!el) return;
   if (!clusters || clusters.length === 0) {
-    el.innerHTML = '<span style="color:var(--text-muted)">' + t("app.no_sessions_to_cluster_yet", null, "No sessions to cluster yet") + '</span>';
+    el.innerHTML = '<span style="color:var(--text-muted)">' + t("app.no_sessions_to_cluster_yet", null, "No sessions to cluster yet") + '</span>'; // codeql[js/xss] t() returns a translated UI label from the static locale bundle, not user-provided content
     return;
   }
   var categoryIcons = {
