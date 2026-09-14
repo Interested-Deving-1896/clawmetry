@@ -19068,9 +19068,9 @@ async function loadUsageByTeam() {
         var _l = costCardText(t.label || '—'), _r = costCardText(rts); // AC-OBS-GWY-001.9
         return '<tr>'
           + '<td style="padding:4px 8px;font-weight:500;">' + _e(t.label || '—') + '</td>'
-          + '<td style="padding:4px 8px;text-align:right;">$' + (t.cost_usd || 0).toFixed(4) + '</td>'
-          + '<td style="padding:4px 8px;text-align:right;color:var(--text-muted);">' + pct + '%</td>'
-          + '<td style="padding:4px 8px;text-align:right;color:var(--text-muted);">' + (t.sessions || 0) + ' sessions</td>'
+          + '<td style="padding:4px 8px;text-align:right;">$' + _e((t.cost_usd || 0).toFixed(4)) + '</td>'
+          + '<td style="padding:4px 8px;text-align:right;color:var(--text-muted);">' + _e(pct) + '%</td>'
+          + '<td style="padding:4px 8px;text-align:right;color:var(--text-muted);">' + _e(t.sessions || 0) + ' sessions</td>'
           + '<td style="padding:4px 8px;font-size:11px;color:var(--text-muted);">' + _e(rts) + '</td>'
           + '</tr>';
       }).join('');
