@@ -240,10 +240,21 @@ def test_cost_is_labelled_gateway_reported_and_unreported_cost_is_not_zero(store
     rec = _record(store, BETA_STREAM_SPAN)
     assert rec["cost_usd"] is None and rec["cost_source"] == "not_reported"
     out, teams = _usage(store)
-    assert out["cost_basis"] == "gateway_reported" and out["currency"] == "USD"
+    assert out["cost_source"] == "gateway_reported" and out["currency"] == "USD"
     assert teams["team-beta"]["cost_usd"] is None
     assert teams["team-beta"]["cost_not_reported"] == 1
     assert out["totals"]["cost_usd"] is None
+    # The label is the one cost vocabulary every other surface uses
+    # (clawmetry/cost_basis.py): measured from what LiteLLM reported, usage
+    # value at the rates LiteLLM applied, never an invoice or a contract rate.
+    from clawmetry import provenance
+    provenance.assert_labelled(out, "gateway usage")
+    for path in ("totals.cost_usd", "teams[].cost_usd", "teams[].users[].cost_usd"):
+        spend = out["provenance"][path]
+        assert (spend["basis"], spend["cost_basis"]) == ("measured", "published_rate"), path
+        assert "LiteLLM" in spend["rate_source"] and "does not re-price" in spend["rate_source"]
+    # A null reads "not reported", not a free request.
+    assert out["provenance"]["not_reported"]["cost_basis"] == "unknown"
 
     _post(_only(_payload(), {ALPHA_ORIGINAL_SPAN}))
     rec = _record(store, ALPHA_ORIGINAL_SPAN)
@@ -344,7 +355,6 @@ def test_gateway_is_a_separate_subtotal_not_an_agent(store):
     )[0][0] == 1
     assert [r["agent_type"] for r in store.query_otlp_app_rollup()] == ["ci_agent"]
     assert [n["agent_type"] for n in store.query_agent_graph()["nodes"]] == ["ci_agent"]
-
 
 def test_usage_by_team_route_serves_the_gateway_block_separately(store, monkeypatch):
     from flask import Flask

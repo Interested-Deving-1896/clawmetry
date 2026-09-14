@@ -19088,11 +19088,33 @@ async function loadUsageByTeam() {
 // A separate subtotal: what the proxy reported, by the team, person and key it
 // authenticated. Never added to the agent costs above. Every label is escaped:
 // team, key and user names come from the proxy's configuration.
-function gatewayMoney(v) {
-  if (v === null || v === undefined) return 'not reported';
-  var entry = {basis: 'measured', label: 'LiteLLM-reported',
-               hint: 'Reported by the LiteLLM proxy server'};
-  return cmFigure(Number(v) || 0, entry);
+// Spend renders through the shared provenance component (static/js/provenance.js),
+// with the label the server put on it (gateway_litellm.gateway_provenance): usage
+// value at the rates LiteLLM applied, measured from what it reported, not an
+// invoice. A null is "not reported", never a zero. The exact reported amount is
+// kept in the tooltip, so a fraction of a cent is not rounded away.
+function gatewaySpendEntry(gw, path, v) {
+  var prov = (gw && gw.provenance) || {};
+  if (v === null || v === undefined) {
+    return prov.not_reported || { basis: 'unknown', cost_basis: 'unknown',
+      reason: 'LiteLLM reported no cost for these requests' };
+  }
+  return prov[path] || null;
+}
+function gatewayMoney(gw, path, v, label) {
+  var unreported = v === null || v === undefined;
+  var n = Number(v) || 0;
+  var exact = unreported ? '' : ', ' + (n >= 0.01 || n <= 0 ? n.toFixed(4) : n.toPrecision(3))
+    + ' ' + ((gw && gw.currency) || 'USD') + ' as reported';
+  if (window.cmProv) {
+    return window.cmProv.figure(unreported ? null : n, gatewaySpendEntry(gw, path, v),
+      { label: label + exact, noBadge: true, emptyText: 'not reported' });
+  }
+  return costCardText(unreported ? 'not reported' : n.toFixed(4) + ' ' + ((gw && gw.currency) || 'USD'));
+}
+function gatewaySpendBadge(gw) {
+  var entry = ((gw && gw.provenance) || {})['teams[].cost_usd'];
+  return (window.cmProv && entry) ? ' ' + window.cmProv.badge(entry, { label: 'Spend through LiteLLM' }) : '';
 }
 function renderGatewayUsage(gw, hasAgentTable) {
   var t = gw.totals || {};
@@ -19102,11 +19124,12 @@ function renderGatewayUsage(gw, hasAgentTable) {
     var people = (team.users || []).map(function(u) {
       var who = u.user_email || u.user_id || 'no user on key';
       var key = u.key_alias ? ' · key ' + u.key_alias : '';
-      return costCardText(who + key) + ': ' + (u.requests || 0) + ' requests, ' + gatewayMoney(u.cost_usd);
+      return costCardText(who + key) + ': ' + (u.requests || 0) + ' requests, '
+        + gatewayMoney(gw, 'teams[].users[].cost_usd', u.cost_usd, 'Spend for ' + who + key);
     }).join('<br>');
     return '<tr>'
       + '<td style="' + cell + 'font-weight:500;">' + costCardText(name) + '</td>'
-      + '<td style="' + cell + 'text-align:right;">' + gatewayMoney(team.cost_usd) + '</td>'
+      + '<td style="' + cell + 'text-align:right;">' + gatewayMoney(gw, 'teams[].cost_usd', team.cost_usd, 'Spend for team ' + name) + '</td>'
       + '<td style="' + cell + 'text-align:right;color:var(--text-muted);">' + (team.requests || 0) + '</td>'
       + '<td style="' + cell + 'text-align:right;color:var(--text-muted);">' + (team.failed || 0) + '</td>'
       + '<td style="' + cell + 'font-size:11px;color:var(--text-muted);">' + people + '</td>'
@@ -19128,7 +19151,7 @@ function renderGatewayUsage(gw, hasAgentTable) {
     + '<table style="width:100%;border-collapse:collapse;">'
     + '<thead><tr style="font-size:11px;color:var(--text-muted);">'
     + '<th style="padding:2px 8px;text-align:left;">Team</th>'
-    + '<th style="padding:2px 8px;text-align:right;">Spend (LiteLLM)</th>'
+    + '<th style="padding:2px 8px;text-align:right;">Spend (LiteLLM)' + gatewaySpendBadge(gw) + '</th>'
     + '<th style="padding:2px 8px;text-align:right;">Requests</th>'
     + '<th style="padding:2px 8px;text-align:right;">Failed</th>'
     + '<th style="padding:2px 8px;text-align:left;">People and keys</th>'
