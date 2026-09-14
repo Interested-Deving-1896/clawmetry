@@ -226,14 +226,14 @@ def ledger_record(
         "span_id": span_id,
         "parent_span_id": parent_span_id or None,
         "request_id": _str_or_none(attrs.get("gen_ai.request.id")),
-        "key_hash": _str_or_none(attrs.get("metadata.user_api_key_hash")),
-        "project_id": _str_or_none(attrs.get("metadata.user_api_key_project_id")),
-        "org_alias": _str_or_none(attrs.get("metadata.user_api_key_org_alias")),
+        # Nothing derived from the virtual key rides in this blob: no key hash
+        # and no other ``metadata.user_api_key_*`` value. The key is already
+        # identified by its alias column; everything here is stored as
+        # plaintext and passed through the ingest redaction scrubber, which is
+        # no place for key material.
         # Supplied by the CALLER (the request's ``user`` field). Kept for the
         # record, never used to attribute spend to a team or user.
-        "end_user_client_supplied": _str_or_none(
-            attrs.get("metadata.user_api_key_end_user_id")
-        ) or _str_or_none(attrs.get("llm.user")),
+        "end_user_client_supplied": _str_or_none(attrs.get("llm.user")),
         "cache_read_tokens": cache_read,
         "cache_write_tokens": cache_write,
         "error_type": error_type,

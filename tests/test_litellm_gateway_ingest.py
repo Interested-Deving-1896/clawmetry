@@ -226,6 +226,18 @@ def test_record_keeps_models_tokens_streaming_status_and_ids(store):
     alpha = _record(store, ALPHA_ORIGINAL_SPAN)
     assert alpha["attributes"]["end_user_client_supplied"] == "end-user-7"
     assert alpha["user_id"] == "alice"
+    # No key material in the stored blob: not the key hash, and no other
+    # ``metadata.user_api_key_*`` value, on any request. The key is
+    # identified by its alias column only.
+    for span_id in (ALPHA_ORIGINAL_SPAN, ALPHA_REPLAY_SPAN, BETA_STREAM_SPAN,
+                    BETA_FAILED_SPAN, BETA_SPOOF_SPAN):
+        stored = _record(store, span_id)["attributes"]
+        assert not {"key_hash", "project_id", "org_alias"} & set(stored), (span_id, stored)
+        span = _span(_payload(), span_id)
+        key_values = {str(_attr(span, k)) for k in (
+            "metadata.user_api_key_hash", "metadata.user_api_key_project_id",
+            "metadata.user_api_key_org_alias") if _attr(span, k)}
+        assert not key_values & {str(v) for v in stored.values()}, (span_id, key_values)
 
 
 # ── AC-OBS-GWY-001.4 ─────────────────────────────────────────────────────────
