@@ -19042,30 +19042,92 @@ async function loadUsageByTeam() {
   try {
     var d = await fetch('/api/usage/by-team?window=7').then(function(r){return r.json();});
     var teams = (d && d.teams) || [];
-    if (!teams.length) return;
-    var totalCost = teams.reduce(function(s, t) { return s + (t.cost_usd || 0); }, 0);
-    var rows = teams.map(function(t) {
-      var pct = totalCost > 0 ? Math.round((t.cost_usd / totalCost) * 100) : 0;
-      var rts = (t.runtimes || []).join(', ');
-      return '<tr>'
-        + '<td style="padding:4px 8px;font-weight:500;">' + (t.label || '—') + '</td>'
-        + '<td style="padding:4px 8px;text-align:right;">$' + (t.cost_usd || 0).toFixed(4) + '</td>'
-        + '<td style="padding:4px 8px;text-align:right;color:var(--text-muted);">' + pct + '%</td>'
-        + '<td style="padding:4px 8px;text-align:right;color:var(--text-muted);">' + (t.sessions || 0) + ' sessions</td>'
-        + '<td style="padding:4px 8px;font-size:11px;color:var(--text-muted);">' + rts + '</td>'
-        + '</tr>';
-    }).join('');
-    el.innerHTML = '<table style="width:100%;border-collapse:collapse;">'
-      + '<thead><tr style="font-size:11px;color:var(--text-muted);">'
-      + '<th style="padding:2px 8px;text-align:left;">Team / Agent</th>'
-      + '<th style="padding:2px 8px;text-align:right;">Cost (7d)</th>'
-      + '<th style="padding:2px 8px;text-align:right;">Share</th>'
-      + '<th style="padding:2px 8px;text-align:right;">Sessions</th>'
-      + '<th style="padding:2px 8px;text-align:left;">Runtimes</th>'
-      + '</tr></thead><tbody>' + rows + '</tbody></table>';
+    var gw = d && d.gateway;
+    var hasGateway = !!(gw && gw.available && gw.totals && gw.totals.requests > 0);
+    if (!teams.length && !hasGateway) return;
+    var html = '';
+    if (teams.length) {
+      var totalCost = teams.reduce(function(s, t) { return s + (t.cost_usd || 0); }, 0);
+      var rows = teams.map(function(t) {
+        var pct = totalCost > 0 ? Math.round((t.cost_usd / totalCost) * 100) : 0;
+        var rts = (t.runtimes || []).join(', ');
+        return '<tr>'
+          + '<td style="padding:4px 8px;font-weight:500;">' + escapeHtml(t.label || '—') + '</td>'
+          + '<td style="padding:4px 8px;text-align:right;">$' + (t.cost_usd || 0).toFixed(4) + '</td>'
+          + '<td style="padding:4px 8px;text-align:right;color:var(--text-muted);">' + pct + '%</td>'
+          + '<td style="padding:4px 8px;text-align:right;color:var(--text-muted);">' + (t.sessions || 0) + ' sessions</td>'
+          + '<td style="padding:4px 8px;font-size:11px;color:var(--text-muted);">' + escapeHtml(rts) + '</td>'
+          + '</tr>';
+      }).join('');
+      html += '<table style="width:100%;border-collapse:collapse;">'
+        + '<thead><tr style="font-size:11px;color:var(--text-muted);">'
+        + '<th style="padding:2px 8px;text-align:left;">Team / Agent</th>'
+        + '<th style="padding:2px 8px;text-align:right;">Cost (7d)</th>'
+        + '<th style="padding:2px 8px;text-align:right;">Share</th>'
+        + '<th style="padding:2px 8px;text-align:right;">Sessions</th>'
+        + '<th style="padding:2px 8px;text-align:left;">Runtimes</th>'
+        + '</tr></thead><tbody>' + rows + '</tbody></table>';
+    }
+    if (hasGateway) html += renderGatewayUsage(gw, teams.length > 0);
+    el.innerHTML = html;
     title.style.display = '';
     card.style.display = '';
   } catch(e) { /* non-fatal */ }
+}
+
+// ── LiteLLM gateway usage (REQ-OBS-GWY-001) ─────────────────────────────────
+// A separate subtotal: what the proxy reported, by the team, person and key it
+// authenticated. Never added to the agent costs above. Every label is escaped:
+// team, key and user names come from the proxy's configuration.
+function gatewayMoney(v) {
+  if (v === null || v === undefined) return 'not reported';
+  var n = Number(v) || 0;
+  if (n > 0 && n < 0.01) {
+    // Three significant figures, so a fraction of a cent is not rounded away.
+    return '$' + n.toFixed(Math.min(10, 2 - Math.floor(Math.log10(n))));
+  }
+  return '$' + n.toFixed(4);
+}
+function renderGatewayUsage(gw, hasAgentTable) {
+  var t = gw.totals || {};
+  var cell = 'padding:4px 8px;';
+  var rows = (gw.teams || []).map(function(team) {
+    var name = team.team_alias || team.team || 'No team on key';
+    var people = (team.users || []).map(function(u) {
+      var who = u.user_email || u.user_id || 'no user on key';
+      var key = u.key_alias ? ' · key ' + u.key_alias : '';
+      return escapeHtml(who + key) + ': ' + (u.requests || 0) + ' requests, ' + escapeHtml(gatewayMoney(u.cost_usd));
+    }).join('<br>');
+    return '<tr>'
+      + '<td style="' + cell + 'font-weight:500;">' + escapeHtml(name) + '</td>'
+      + '<td style="' + cell + 'text-align:right;">' + escapeHtml(gatewayMoney(team.cost_usd)) + '</td>'
+      + '<td style="' + cell + 'text-align:right;color:var(--text-muted);">' + (team.requests || 0) + '</td>'
+      + '<td style="' + cell + 'text-align:right;color:var(--text-muted);">' + (team.failed || 0) + '</td>'
+      + '<td style="' + cell + 'font-size:11px;color:var(--text-muted);">' + people + '</td>'
+      + '</tr>';
+  }).join('');
+  var notes = [];
+  notes.push(hasAgentTable
+    ? 'Not added to the agent costs above: a call an agent made through LiteLLM is already in that agent\'s cost.'
+    : 'Kept separate from agent costs: a call an agent made through LiteLLM is already in that agent\'s cost.');
+  if (t.correlated > 0) {
+    notes.push(t.correlated + ' of ' + t.requests + ' requests share a trace with another source here. The other ' + (t.uncorrelated || 0) + ' could not be matched to an agent.');
+  } else {
+    notes.push('None of these ' + t.requests + ' requests could be matched to an agent\'s trace.');
+  }
+  if (t.cache_replays > 0) notes.push(t.cache_replays + ' answered from LiteLLM\'s cache, counted but not charged again.');
+  if (t.cost_not_reported > 0) notes.push(t.cost_not_reported + ' succeeded with no cost reported, so they are counted but not priced.');
+  return '<div style="margin-top:' + (hasAgentTable ? '14px' : '0') + ';font-size:12px;font-weight:600;color:var(--text-primary);">Through your LiteLLM gateway</div>'
+    + '<div style="font-size:11px;color:var(--text-muted);margin:2px 0 6px;">Spend as LiteLLM reported it, in ' + escapeHtml(gw.currency || 'USD') + ', last ' + (gw.window_days || 7) + ' days</div>'
+    + '<table style="width:100%;border-collapse:collapse;">'
+    + '<thead><tr style="font-size:11px;color:var(--text-muted);">'
+    + '<th style="padding:2px 8px;text-align:left;">Team</th>'
+    + '<th style="padding:2px 8px;text-align:right;">Spend (LiteLLM)</th>'
+    + '<th style="padding:2px 8px;text-align:right;">Requests</th>'
+    + '<th style="padding:2px 8px;text-align:right;">Failed</th>'
+    + '<th style="padding:2px 8px;text-align:left;">People and keys</th>'
+    + '</tr></thead><tbody>' + rows + '</tbody></table>'
+    + '<div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5;">' + notes.map(escapeHtml).join('<br>') + '</div>';
 }
 
 async function loadCostForecast() {

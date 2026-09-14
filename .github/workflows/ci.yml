@@ -1146,6 +1146,7 @@ jobs:
             tests/test_otlp_rollup_cpu_budget.py \
             tests/test_spans_otlp_edge_cases.py \
             tests/test_otlp_session_materialization.py \
+            tests/test_litellm_gateway_ingest.py \
             -q
           # NOT listed: tests/test_e2e_otlp_ingest.py -- it drives a LIVE
           # dashboard over HTTP (BASE_URL), which this job does not boot. It
