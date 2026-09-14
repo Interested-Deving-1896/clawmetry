@@ -19269,9 +19269,10 @@ function renderSessionCostChart() {
   var costEntry = window._sessionCostEntry || null;
   var basisEl = document.getElementById('usage-session-cost-basis');
   if (basisEl) {
-    basisEl.innerHTML = (costEntry && window.cmProv && rows.length)
-      ? 'Bar values and the Cost column: ' + window.cmProv.badge(costEntry, { label: 'Session cost' })
-      : '';
+    basisEl.innerHTML = // codeql[js/xss] window.cmProv.badge runs all values through provenance esc() which sanitises them
+      (costEntry && window.cmProv && rows.length)
+        ? 'Bar values and the Cost column: ' + window.cmProv.badge(costEntry, { label: 'Session cost' })
+        : '';
   }
   var threshold = parseFloat((document.getElementById('session-cost-threshold') || {}).value || '0.5') || 0;
   if (!canvas) return;
