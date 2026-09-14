@@ -19362,7 +19362,7 @@ function renderSessionCostChart() {
     if (aboveThreshold.length > 0) {
       tableHtml = '<div style="margin-bottom:8px;padding:6px 10px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:6px;font-size:12px;color:#fca5a5;">⚠ ' + aboveThreshold.length + ' session' + (aboveThreshold.length > 1 ? 's' : '') + ' exceeded the $' + threshold.toFixed(2) + ' threshold</div>' + tableHtml;
     }
-    tableEl.innerHTML = tableHtml;
+    tableEl.innerHTML = tableHtml; // codeql[js/xss] all dynamic fields go through escHtml() or Number().toFixed(); cmProv.figure/badge uses provenance esc()
   }
 }
 
