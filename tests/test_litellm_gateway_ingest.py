@@ -377,11 +377,17 @@ def test_failed_requests_are_counted_per_team(store):
 
 def test_usage_tab_escapes_gateway_and_team_labels():
     js = (pathlib.Path(__file__).resolve().parent.parent / "clawmetry" / "static" / "js" / "app.js").read_text()
-    start = js.index("async function loadUsageByTeam()")
+    start = js.index("function costCardText(s)")
     end = js.index("async function loadCostForecast()")
     block = js[start:end]
-    for needle in ("escapeHtml(name)", "escapeHtml(who + key)", "escapeHtml(t.label || '—')",
-                   "escapeHtml(rts)", "notes.map(escapeHtml)"):
+    # The escaper replaces all five characters that can open markup or break
+    # out of an attribute.
+    helper = block[:block.index("\n}\n")]
+    for ch in ("&amp;", "&lt;", "&gt;", "&quot;", "&#39;"):
+        assert ch in helper, ch
+    assert block.index("function costCardText(s)") < block.index("async function loadUsageByTeam()")
+    for needle in ("costCardText(name)", "costCardText(who + key)", "costCardText(t.label || '—')",
+                   "costCardText(rts)", "notes.map(costCardText)"):
         assert needle in block, needle
     # No label, alias, email or key name is concatenated straight after a
     # piece of markup. The pre-fix card did exactly this with ``t.label``.
