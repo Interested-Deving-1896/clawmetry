@@ -413,12 +413,21 @@ def gateway_usage(fetch, *, window_days: int = 7, now: float | None = None) -> d
         # did not. WHAT KIND of money it is rides in ``provenance``, in the one
         # cost vocabulary every other cost surface uses.
         "cost_source": COST_SOURCE_REPORTED,
+        # The same fact in the price book's vocabulary
+        # (``clawmetry/price_book.py::PRICED_FROM``): the vendor in front of
+        # the model priced it, ClawMetry did not.
+        "priced_from": GATEWAY_PRICED_FROM,
         "currency": GATEWAY_CURRENCY,
         "window_days": days,
         "totals": totals,
         "teams": ordered,
     }, gateway_provenance(days))
 
+
+#: Gateway spend in the price book's ``priced_from`` vocabulary (#5959): a cost
+#: the gateway computed and reported, which the price book maps onto the
+#: ``published_rate`` financial basis through ``financial_basis``.
+GATEWAY_PRICED_FROM = "vendor_reported"
 
 #: Where the rate behind gateway spend comes from, for the cost badge tooltip.
 GATEWAY_RATE_SOURCE = (
@@ -428,6 +437,19 @@ GATEWAY_RATE_SOURCE = (
 )
 
 
+def gateway_financial_basis() -> str:
+    """The financial basis of gateway spend, taken from the price book's own
+    mapping (``price_book.financial_basis``) so a gateway figure and a price
+    book valuation of the same kind can never disagree. Pure: it reads no
+    price book file. Never raises; ``published_rate`` if the mapping is
+    unavailable, since that is what a vendor-reported cost is."""
+    try:
+        from clawmetry import price_book as _pb
+        return _pb.financial_basis(GATEWAY_PRICED_FROM, 0.0)["cost_basis"]
+    except Exception:
+        return _cost_basis.PUBLISHED_RATE
+
+
 def gateway_provenance(window_days: int) -> dict[str, dict[str, Any]]:
     """Provenance entries for :func:`gateway_usage` (REQ-OBS-CEA-025 labels).
 
@@ -435,9 +457,11 @@ def gateway_provenance(window_days: int) -> dict[str, dict[str, Any]]:
     (``clawmetry/cost_basis.py``): the arithmetic basis is ``measured`` (a sum
     of what the gateway recorded, with no re-pricing), and the financial basis
     is ``published_rate``, because a cost a gateway computed from a price map
-    is usage value, not an invoice. ``contract`` would need a recorded rate
-    version, which the telemetry does not carry, so it is never claimed. The
-    ``rate_source`` names LiteLLM, so the badge says whose price it is.
+    is usage value, not an invoice. That basis is the price book's mapping
+    for ``vendor_reported`` (:func:`gateway_financial_basis`), not a second
+    copy of it. ``contract`` would need a recorded rate version, which the
+    telemetry does not carry, so it is never claimed. The ``rate_source``
+    names LiteLLM, so the badge says whose price it is.
 
     A team or user whose requests carried no reported cost has
     ``cost_usd: None``; ``not_reported`` is the entry a renderer shows for
@@ -446,13 +470,15 @@ def gateway_provenance(window_days: int) -> dict[str, dict[str, Any]]:
     window = "the last %d days" % int(window_days)
     source = "duckdb:otlp_records.cost_usd (source %s, cost_source %s)" % (
         GATEWAY_SOURCE, COST_SOURCE_REPORTED)
-    spend = _cost_basis.published_rate(
-        "sum of the cost LiteLLM reported on each proxied request; a request "
-        "LiteLLM answered from its own cache is counted but not charged again",
-        source, basis=_prov.MEASURED, rate_source=GATEWAY_RATE_SOURCE,
-        window=window,
-        note="if the proxy is configured with custom prices, LiteLLM applied "
-             "those, and the telemetry does not say which")
+    spend = _cost_basis.label(
+        _prov.figure(
+            _prov.MEASURED,
+            "sum of the cost LiteLLM reported on each proxied request; a request "
+            "LiteLLM answered from its own cache is counted but not charged again",
+            source, window=window,
+            note="if the proxy is configured with custom prices, LiteLLM applied "
+                 "those, and the telemetry does not say which"),
+        gateway_financial_basis(), rate_source=GATEWAY_RATE_SOURCE)
     not_reported = _cost_basis.unavailable(
         "LiteLLM reported no cost for these requests, so no amount is shown "
         "and they are not counted as free", source=source, window=window)

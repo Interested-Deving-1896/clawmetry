@@ -26,7 +26,7 @@ AC-OBS-GWY-001.3 -- models, tokens, streaming, status, timestamps and ids retain
 AC-OBS-GWY-001.4 -- gateway-reported label; unreported cost is not zero: ``test_cost_is_labelled_gateway_reported_and_unreported_cost_is_not_zero``.
 AC-OBS-GWY-001.5 -- redelivery changes nothing, a separate request counts: ``test_redelivery_and_restart_change_nothing_and_a_separate_request_counts``.
 AC-OBS-GWY-001.6 -- a cache replay is not charged, in either arrival order: ``test_a_cache_replay_is_not_charged_in_either_arrival_order``.
-AC-OBS-GWY-001.7 -- a separate subtotal, no sessions, correlation reported: ``test_gateway_is_a_separate_subtotal_not_an_agent`` and ``test_usage_by_team_route_serves_the_gateway_block_separately``.
+AC-OBS-GWY-001.7 -- a separate subtotal, no sessions, correlation reported: ``test_gateway_is_a_separate_subtotal_not_an_agent``, ``test_usage_by_team_route_serves_the_gateway_block_separately`` and ``test_an_azure_call_the_proxy_makes_is_not_priced_again_by_the_interceptor``.
 AC-OBS-GWY-001.8 -- failed requests counted per team: ``test_failed_requests_are_counted_per_team``.
 AC-OBS-GWY-001.9 -- labels are text, never markup: ``test_usage_tab_escapes_gateway_and_team_labels``.
 AC-OBS-GWY-001.10 -- per-team spend agrees with LiteLLM's spend log: ``test_per_team_totals_reconcile_with_litellm_spend_log``.
@@ -255,6 +255,13 @@ def test_cost_is_labelled_gateway_reported_and_unreported_cost_is_not_zero(store
         assert "LiteLLM" in spend["rate_source"] and "does not re-price" in spend["rate_source"]
     # A null reads "not reported", not a free request.
     assert out["provenance"]["not_reported"]["cost_basis"] == "unknown"
+    # The price book (#5959) speaks the same language: a gateway figure is
+    # ``vendor_reported``, and the price book's own mapping of that is the
+    # basis on the badge, so the two surfaces cannot drift apart.
+    from clawmetry import price_book
+    assert out["priced_from"] == "vendor_reported" and out["priced_from"] in price_book.PRICED_FROM
+    assert out["provenance"]["totals.cost_usd"]["cost_basis"] == \
+        price_book.financial_basis(out["priced_from"], 1.0)["cost_basis"]
 
     _post(_only(_payload(), {ALPHA_ORIGINAL_SPAN}))
     rec = _record(store, ALPHA_ORIGINAL_SPAN)
@@ -355,6 +362,51 @@ def test_gateway_is_a_separate_subtotal_not_an_agent(store):
     )[0][0] == 1
     assert [r["agent_type"] for r in store.query_otlp_app_rollup()] == ["ci_agent"]
     assert [n["agent_type"] for n in store.query_agent_graph()["nodes"]] == ["ci_agent"]
+
+
+AZURE_URL = (
+    "https://contoso-east.openai.azure.com/openai/deployments/prod-chat/"
+    "chat/completions?api-version=2024-10-21"
+)
+
+
+def test_an_azure_call_the_proxy_makes_is_not_priced_again_by_the_interceptor(store, monkeypatch):
+    """#5959 taught the interceptor to capture Azure OpenAI. A LiteLLM proxy
+    routing to an Azure deployment makes exactly that call, so with the
+    interceptor loaded in the proxy the same request would be priced three
+    times: the agent's own cost, the gateway record, and the interceptor row."""
+    import sys
+    import types
+    from clawmetry import interceptor as ci
+
+    args = ("azure-openai", AZURE_URL, "gpt-4o-mini", 1000, 50, 12.0, 200, "httpx")
+    # An ordinary app calling Azure directly: priced, as #5959 ships it.
+    monkeypatch.delitem(sys.modules, ci._LITELLM_PROXY_MODULE, raising=False)
+    direct = ci._build_event(*args)
+    assert direct["cost_usd"] > 0 and "via_gateway" not in direct
+
+    # The same call from inside a LiteLLM proxy: recorded, not priced, and
+    # pointing at the gateway that holds the figure.
+    monkeypatch.setitem(sys.modules, ci._LITELLM_PROXY_MODULE,
+                        types.ModuleType(ci._LITELLM_PROXY_MODULE))
+    proxied = ci._build_event(*args)
+    assert "cost_usd" not in proxied
+    assert proxied["via_gateway"] == gw.GATEWAY_SOURCE
+    assert (proxied["deployment"], proxied["input_tokens"]) == ("prod-chat", 1000)
+
+    # End to end: the gateway record and the interceptor row for one request.
+    _post(_only(_payload(), {ALPHA_ORIGINAL_SPAN}))
+    before, _ = _usage(store)
+    assert before["totals"]["cost_usd"] == pytest.approx(1.35e-05)
+    store.ingest_external_call(dict(proxied, host=proxied["provider"]), "node-1")
+    after, _ = _usage(store)
+    assert after["totals"] == before["totals"]
+    assert store._fetch("SELECT COUNT(*), COALESCE(SUM(cost_usd), 0) FROM external_api_calls", []) \
+        == [(1, 0.0)]
+    # And neither leg reaches an agent total.
+    assert store.query_otlp_app_rollup() == []
+    assert store._fetch("SELECT COUNT(*) FROM sessions", [])[0][0] == 0
+
 
 def test_usage_by_team_route_serves_the_gateway_block_separately(store, monkeypatch):
     from flask import Flask
