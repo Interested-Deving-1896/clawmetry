@@ -19120,16 +19120,16 @@ function renderGatewayUsage(gw, hasAgentTable) {
   var t = gw.totals || {};
   var cell = 'padding:4px 8px;';
   var rows = (gw.teams || []).map(function(team) {
-    var name = team.team_alias || team.team || 'No team on key';
+    var safeName = costCardText(team.team_alias || team.team || 'No team on key');
     var people = (team.users || []).map(function(u) {
-      var who = u.user_email || u.user_id || 'no user on key';
-      var key = u.key_alias ? ' · key ' + u.key_alias : '';
-      return costCardText(who + key) + ': ' + (u.requests || 0) + ' requests, '
-        + gatewayMoney(gw, 'teams[].users[].cost_usd', u.cost_usd, 'Spend for ' + who + key);
+      var safeWhoKey = costCardText((u.user_email || u.user_id || 'no user on key')
+        + (u.key_alias ? ' \xb7 key ' + u.key_alias : ''));
+      return safeWhoKey + ': ' + (u.requests || 0) + ' requests, '
+        + gatewayMoney(gw, 'teams[].users[].cost_usd', u.cost_usd, 'Spend for ' + safeWhoKey);
     }).join('<br>');
     return '<tr>'
-      + '<td style="' + cell + 'font-weight:500;">' + costCardText(name) + '</td>'
-      + '<td style="' + cell + 'text-align:right;">' + gatewayMoney(gw, 'teams[].cost_usd', team.cost_usd, 'Spend for team ' + name) + '</td>'
+      + '<td style="' + cell + 'font-weight:500;">' + safeName + '</td>'
+      + '<td style="' + cell + 'text-align:right;">' + gatewayMoney(gw, 'teams[].cost_usd', team.cost_usd, 'Spend for team ' + safeName) + '</td>'
       + '<td style="' + cell + 'text-align:right;color:var(--text-muted);">' + (team.requests || 0) + '</td>'
       + '<td style="' + cell + 'text-align:right;color:var(--text-muted);">' + (team.failed || 0) + '</td>'
       + '<td style="' + cell + 'font-size:11px;color:var(--text-muted);">' + people + '</td>'
