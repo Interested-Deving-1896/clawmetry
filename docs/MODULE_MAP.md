@@ -253,7 +253,7 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/secure.py` | medium | clawmetry secure — one-command numbat (Perplexity agent-EDR) setup. |
 | `clawmetry/security_posture.py` | large | Runtime-aware security posture registry. |
 | `clawmetry/self_diagnostics.py` | medium | Agent self-diagnostics: reports an agent files about its own trouble, and the independent check on whether the tool stream agrees (WO-59, REQ-SELF). |
-| `clawmetry/selfhosted.py` | small | clawmetry.selfhosted — ClawMetry Enterprise single-tenant server mode. |
+| `clawmetry/selfhosted.py` | medium | clawmetry.selfhosted — ClawMetry Enterprise single-tenant server mode. |
 | `clawmetry/session_context.py` | medium | Inputs & context: what the agent was actually given, per session. |
 | `clawmetry/session_titles.py` | medium | ChatGPT-style session titles from the first real user prompt. |
 | `clawmetry/siem.py` | small | OSS delegating shim after the impl moved to clawmetry-pro. |
