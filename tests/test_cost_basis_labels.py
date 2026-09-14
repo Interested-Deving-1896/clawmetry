@@ -18,7 +18,7 @@ The renderer tests run the SHIPPED functions out of ``app.js`` and
 Criteria declared here:
 
 * AC-OBS-CEA-025.1 -- every cost figure on the Usage payload, the snapshot
-  cost slice, the Sessions cost breakdown and the Flow brain panel carries a
+  cost slice, the per-session cost breakdown and the Flow brain panel carries a
   financial basis: ``test_every_usage_cost_entry_names_its_financial_basis``,
   ``test_the_snapshot_cost_slice_names_its_financial_basis``,
   ``test_the_sessions_cost_breakdown_is_labelled``,
@@ -380,7 +380,16 @@ def test_the_badge_is_focusable_and_carries_rate_source_and_route():
 
 
 def test_the_focus_explanation_is_styled():
+    """The explanation lives in ONE element on <body>, not a ::after on the
+    badge: inside the Overview tile a ::after was clipped to its first line
+    by the card's overflow:hidden and covered the figure."""
     css = open(CSS, encoding="utf-8").read()
-    assert re.search(r"\.cm-prov\[data-tip\]:focus-visible::after\s*\{[^}]*"
-                     r"content:\s*attr\(data-tip\)", css), (
-        "keyboard focus no longer shows the explanation")
+    js = open(PROV_JS, encoding="utf-8").read()
+    assert re.search(r"#cm-prov-focus-tip\s*\{[^}]*position:\s*fixed", css), (
+        "the keyboard focus explanation has no styling")
+    assert re.search(r"#cm-prov-focus-tip\s*\{[^}]*white-space:\s*pre-line", css)
+    assert "data-tip]:focus-visible::after" not in css, (
+        "a ::after tip on the badge is clipped by overflow:hidden cards")
+    assert "addEventListener('focusin'" in js and "':focus-visible'" in js
+    assert "document.body.appendChild" in js, (
+        "the tip must live on <body> or a card will clip it")

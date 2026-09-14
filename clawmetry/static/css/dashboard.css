@@ -3260,19 +3260,18 @@ body.has-profile-menu #logout-btn { display: none !important; }
 }
 
 /* The explanation, reachable without a mouse: a keyboard user who focuses a
-   badge sees what a mouse user sees in the title tooltip. Absolute, not
-   fixed: fixed dies inside #zoom-wrapper's transform. */
-.cm-prov[data-tip] { position: relative; }
+   badge sees what a mouse user sees in the title tooltip. provenance.js puts
+   it in one element on <body>, so no card's overflow:hidden can clip it (a
+   ::after on the badge was clipped to one line on the Overview tile).
+   Fixed is safe here only because the tip is a child of <body>, outside
+   #zoom-wrapper, whose transform would otherwise capture it. */
 .cm-prov[data-tip]:focus-visible {
   outline: 2px solid var(--text-accent);
   outline-offset: 1px;
 }
-.cm-prov[data-tip]:focus-visible::after {
-  content: attr(data-tip);
-  position: absolute;
-  z-index: 50;
-  left: 0;
-  top: calc(100% + 4px);
+#cm-prov-focus-tip {
+  position: fixed;
+  z-index: 10000;
   width: max-content;
   max-width: min(320px, 80vw);
   padding: 6px 8px;

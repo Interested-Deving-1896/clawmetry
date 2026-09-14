@@ -580,7 +580,7 @@
       "id": "AC-OBS-CEA-025.1",
       "doc": "Cost basis labels: usage value at published rates, contract spend and actual spend are never confused",
       "doc_id": "950d4687-45cc-45a8-9d58-0c0d82fd5d9b",
-      "text": "Every cost figure on the Overview spend tile, the Usage tab, the Sessions tab cost chips, the Flow brain panel and the hosted snapshot's cost slice shall carry a financial basis of exactly one of: usage value at published rates, expected contract spend, allocated actual spend, or unavailable, shown as visible text beside the figure."
+      "text": "Every cost figure on the Overview spend tile, the Usage tab, the per-session cost breakdown, the Flow brain panel and the hosted snapshot's cost slice shall carry a financial basis of exactly one of: usage value at published rates, expected contract spend, allocated actual spend, or unavailable, shown as visible text beside the figure."
     },
     {
       "id": "AC-OBS-CEA-025.2",

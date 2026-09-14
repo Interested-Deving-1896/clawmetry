@@ -13951,25 +13951,13 @@ async function loadSessions() {
     // this every desktop session reads as someone typing in a terminal.
     // Absent for runtimes that only have one surface — no badge, no noise.
     html += _cmSurfaceBadge(s.surface);
-    // Basis on the chip (REQ-OBS-CEA-025). A cached cost payload from a
-    // daemon too old to label it keeps the plain figure, with no pill.
-    var _sessCostEntry = window.cmProv ? window.cmProv.of(costData, 'sessions[].cost_usd') : null;
     if (sessCost && sessCost.cost_usd > 0) {
-      html += '<span style="font-size:11px;color:var(--text-success);font-weight:600;">💰 '
-        + (window.cmProv
-            ? window.cmProv.figure(sessCost.cost_usd, _sessCostEntry, { label: 'Session cost', noBadge: !_sessCostEntry })
-            : escHtml(Number(sessCost.cost_usd||0).toFixed(4)))
-        + ' total</span>';
+      html += '<span style="font-size:11px;color:var(--text-success);font-weight:600;">💰 $' + Number(sessCost.cost_usd||0).toFixed(4) + ' total</span>';
     }
     // Cost-intelligence chips (foundation): reasoning-tax $ + cache-hit %, shown
     // only for runtimes whose adapter reports the field (others omit it).
     if (sessCost && sessCost.reasoning_cost_usd != null && Number(sessCost.reasoning_cost_usd) > 0) {
-      var _reasonEntry = window.cmProv ? window.cmProv.of(costData, 'sessions[].reasoning_cost_usd') : null;
-      html += '<span title="Reasoning tokens priced at the output rate: usage that produces no visible deliverable" style="font-size:11px;color:#a78bfa;font-weight:600;">🧠 '
-        + (window.cmProv
-            ? window.cmProv.figure(sessCost.reasoning_cost_usd, _reasonEntry, { label: 'Reasoning cost', noBadge: true })
-            : escHtml(Number(sessCost.reasoning_cost_usd).toFixed(4)))
-        + ' reasoning</span>';
+      html += '<span title="Reasoning tokens billed at the output rate — spend that produces no visible deliverable" style="font-size:11px;color:#a78bfa;font-weight:600;">🧠 $' + Number(sessCost.reasoning_cost_usd).toFixed(4) + ' reasoning</span>';
     }
     if (sessCost && sessCost.cache_hit_pct != null) {
       var _chp = Number(sessCost.cache_hit_pct);
@@ -14015,11 +14003,7 @@ async function loadSessions() {
     html += '<span style="font-size:12px;color:var(--text-secondary);">Burn: <strong style="color:var(--text-primary);">' + Number(s.tokensPerMin || 0).toFixed(1) + ' tok/min</strong></span>';
     html += '<span style="font-size:12px;color:var(--text-secondary);">Projected (1h): <strong style="color:var(--text-primary);">$' + Number(s.projectedCostUsd || 0).toFixed(4) + '</strong></span>';
     if (sessCost && sessCost.tokens > 0) {
-      html += '<span style="font-size:12px;color:var(--text-muted);">Total: <strong style="color:var(--text-secondary);">' + (sessCost.tokens >= 1000 ? (sessCost.tokens/1000).toFixed(0)+'K' : sessCost.tokens) + ' tok / '
-        + (window.cmProv
-            ? window.cmProv.figure(sessCost.cost_usd, _sessCostEntry, { label: 'Session cost', noBadge: true })
-            : escHtml(Number(sessCost.cost_usd||0).toFixed(4)))
-        + '</strong></span>';
+      html += '<span style="font-size:12px;color:var(--text-muted);">Total: <strong style="color:var(--text-secondary);">' + (sessCost.tokens >= 1000 ? (sessCost.tokens/1000).toFixed(0)+'K' : sessCost.tokens) + ' tok / $' + Number(sessCost.cost_usd||0).toFixed(4) + '</strong></span>';
     }
     html += '</div>';
     html += '<canvas id="' + sparkId + '" width="220" height="28" style="margin-top:6px;width:100%;height:28px;"></canvas>';

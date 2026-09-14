@@ -239,6 +239,60 @@
     return fmtMoney(value);
   }
 
+  // ── The explanation for a keyboard user ─────────────────────────────────
+  // A mouse user gets the title tooltip. A keyboard user who focuses a badge
+  // gets the same text in ONE floating element on <body>. A CSS ::after on
+  // the badge itself was tried first and was clipped to a single line by the
+  // Overview tile's overflow:hidden, covering the figure it explains. Shown
+  // only on :focus-visible, so a mouse click does not pop it.
+  var TIP_ID = 'cm-prov-focus-tip';
+  function hideFocusTip() {
+    var el = document.getElementById(TIP_ID);
+    if (el) el.hidden = true;
+  }
+  function showFocusTip(badgeEl) {
+    var text = badgeEl.getAttribute('data-tip');
+    if (!text) return;
+    var el = document.getElementById(TIP_ID);
+    if (!el) {
+      el = document.createElement('div');
+      el.id = TIP_ID;
+      el.setAttribute('role', 'tooltip');
+      document.body.appendChild(el);
+    }
+    el.textContent = text;
+    el.hidden = false;
+    // Viewport coordinates: the tip is position:fixed on <body>, outside
+    // #zoom-wrapper, so the badge's own rectangle is exactly where it goes.
+    var r = badgeEl.getBoundingClientRect();
+    var maxLeft = Math.max(8, (window.innerWidth || 0) - el.offsetWidth - 8);
+    var below = r.bottom + 6;
+    var top = (below + el.offsetHeight > (window.innerHeight || 0) - 8)
+      ? Math.max(8, r.top - el.offsetHeight - 6) : below;
+    el.style.left = Math.min(Math.max(8, r.left), maxLeft) + 'px';
+    el.style.top = top + 'px';
+  }
+  if (typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('focusin', function (ev) {
+      var t = ev.target;
+      var b = (t && t.closest) ? t.closest('.cm-prov[data-tip]') : null;
+      var visible = false;
+      try { visible = !!(b && b.matches(':focus-visible')); } catch (_e) { visible = !!b; }
+      if (visible) showFocusTip(b); else hideFocusTip();
+    });
+    document.addEventListener('focusout', hideFocusTip);
+    // Tab navigation scrolls the focused badge into view, and that scroll
+    // arrives AFTER focusin. Hiding on scroll hid the tip the moment a
+    // keyboard user reached it, so follow the badge while it keeps focus.
+    document.addEventListener('scroll', function () {
+      var tipEl = document.getElementById(TIP_ID);
+      if (!tipEl || tipEl.hidden) return;
+      var a = document.activeElement;
+      if (a && a.matches && a.matches('.cm-prov[data-tip]')) showFocusTip(a);
+      else hideFocusTip();
+    }, true);
+  }
+
   window.cmProv = {
     MEASURED: MEASURED, DERIVED: DERIVED,
     ESTIMATED: ESTIMATED, UNKNOWN: UNKNOWN,
