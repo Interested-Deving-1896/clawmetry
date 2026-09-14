@@ -4159,10 +4159,10 @@ def _extract_cost_tokens_model(obj: dict) -> tuple:
                         pass
             return 0
 
-        _in = _utok("input_tokens", "inputTokens", "prompt_tokens", "promptTokens")
-        _out = _utok("output_tokens", "outputTokens", "completion_tokens", "completionTokens")
-        _cr = _utok("cache_read_input_tokens", "cacheReadInputTokens", "cache_read_tokens")
-        _cw = _utok("cache_creation_input_tokens", "cacheCreationInputTokens", "cache_write_tokens")
+        _in = _utok("input_tokens", "inputTokens", "prompt_tokens", "promptTokens", "input")
+        _out = _utok("output_tokens", "outputTokens", "completion_tokens", "completionTokens", "output")
+        _cr = _utok("cache_read_input_tokens", "cacheReadInputTokens", "cache_read_tokens", "cacheRead")
+        _cw = _utok("cache_creation_input_tokens", "cacheCreationInputTokens", "cache_write_tokens", "cacheWrite")
         if _in or _out or _cr or _cw:
             try:
                 from clawmetry.providers_pricing import estimate_event_cost_usd
