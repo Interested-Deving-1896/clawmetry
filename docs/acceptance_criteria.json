@@ -1487,6 +1487,66 @@
       "doc": "Self-Hosted Server Image: Signed, Pullable, Verified After Release",
       "doc_id": "49529742-f381-4957-9abf-c92efe7b7d65",
       "text": "Every other API route shall keep the existing rule for non-loopback callers, and a self-hosted route called without its own credentials shall still be refused."
+    },
+    {
+      "id": "AC-OBS-GWY-001.1",
+      "doc": "LiteLLM gateway usage: spend by team and user, labelled and never double counted",
+      "doc_id": "9511c826-af04-4dcf-978b-90803f27fb04",
+      "text": "When a LiteLLM proxy exports request telemetry to the receiver, the system shall record one usage record per proxied request, attributed to the team, user and virtual key that LiteLLM authenticated for that request."
+    },
+    {
+      "id": "AC-OBS-GWY-001.2",
+      "doc": "LiteLLM gateway usage: spend by team and user, labelled and never double counted",
+      "doc_id": "9511c826-af04-4dcf-978b-90803f27fb04",
+      "text": "Team, user and organisation attribution shall come only from the identity LiteLLM derived from the authenticated key. Labels a caller supplies in the request body shall not change which team or user a request is attributed to."
+    },
+    {
+      "id": "AC-OBS-GWY-001.3",
+      "doc": "LiteLLM gateway usage: spend by team and user, labelled and never double counted",
+      "doc_id": "9511c826-af04-4dcf-978b-90803f27fb04",
+      "text": "Each record shall retain the actual provider and model alongside the alias the caller requested, input and output token counts, whether the call streamed, whether it succeeded, its timestamps, and its trace, parent-span and provider response identifiers."
+    },
+    {
+      "id": "AC-OBS-GWY-001.4",
+      "doc": "LiteLLM gateway usage: spend by team and user, labelled and never double counted",
+      "doc_id": "9511c826-af04-4dcf-978b-90803f27fb04",
+      "text": "Gateway spend shall be labelled as reported by the gateway, in the gateway's currency, and shall not be re-priced by ClawMetry or presented as a vendor invoice. When the gateway reports no cost for a request, that request shall be counted as having no reported cost, never as costing zero."
+    },
+    {
+      "id": "AC-OBS-GWY-001.5",
+      "doc": "LiteLLM gateway usage: spend by team and user, labelled and never double counted",
+      "doc_id": "9511c826-af04-4dcf-978b-90803f27fb04",
+      "text": "Receiving the same exported request again shall not change any total. A request the gateway recorded as a separate request shall be counted separately."
+    },
+    {
+      "id": "AC-OBS-GWY-001.6",
+      "doc": "LiteLLM gateway usage: spend by team and user, labelled and never double counted",
+      "doc_id": "9511c826-af04-4dcf-978b-90803f27fb04",
+      "text": "A response the gateway served from its own response cache, identified by carrying the same provider response identifier as an earlier request, shall be counted as a request but not charged a second time, whichever of the two arrives first."
+    },
+    {
+      "id": "AC-OBS-GWY-001.7",
+      "doc": "LiteLLM gateway usage: spend by team and user, labelled and never double counted",
+      "doc_id": "9511c826-af04-4dcf-978b-90803f27fb04",
+      "text": "Gateway spend shall be presented as its own subtotal, shall not be added to agent runtime totals, and gateway requests shall not create agent sessions. The surface shall state how many gateway requests share a trace with telemetry from another source and how many could not be correlated."
+    },
+    {
+      "id": "AC-OBS-GWY-001.8",
+      "doc": "LiteLLM gateway usage: spend by team and user, labelled and never double counted",
+      "doc_id": "9511c826-af04-4dcf-978b-90803f27fb04",
+      "text": "Failed gateway requests shall be counted per team and shown separately from successful ones."
+    },
+    {
+      "id": "AC-OBS-GWY-001.9",
+      "doc": "LiteLLM gateway usage: spend by team and user, labelled and never double counted",
+      "doc_id": "9511c826-af04-4dcf-978b-90803f27fb04",
+      "text": "Team, user and key labels shall be displayed as text and never interpreted as markup."
+    },
+    {
+      "id": "AC-OBS-GWY-001.10",
+      "doc": "LiteLLM gateway usage: spend by team and user, labelled and never double counted",
+      "doc_id": "9511c826-af04-4dcf-978b-90803f27fb04",
+      "text": "A real LiteLLM proxy at a pinned version, with two teams and two virtual keys backed by its own database, shall be exercised in continuous integration, and the per-team spend the system reports shall agree with LiteLLM's own spend log for the same requests, with any residual printed."
     }
   ]
 }
