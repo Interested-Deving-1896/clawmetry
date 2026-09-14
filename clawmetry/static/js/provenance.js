@@ -87,7 +87,7 @@
     s = String(s == null ? '' : s);
     // DOM path: CodeQL-recognised sanitizer in browsers. Fallback for Node.js
     // test environments that load this file without a real document.
-    if (typeof document !== 'undefined') {
+    if (typeof document !== 'undefined' && typeof document.createElement === 'function') {
       var n = document.createElement('span');
       n.textContent = s;
       return n.innerHTML.replace(/"/g, '&quot;');

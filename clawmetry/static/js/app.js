@@ -3853,9 +3853,9 @@ function renderBillingCoverageBanner(cov, usageData) {
     icon = '✅';
     title = t('usage.cov_included_title', { plan: plan }, 'Usage included in ' + plan);
     body = 'The figures below are <strong>usage value at published rates</strong>: what these tokens would cost at the provider\'s list price. '
-         + _e(plan) + ' includes this usage, so this value is <strong>not an extra bill</strong>. '
+         + escHtml(plan) + ' includes this usage, so this value is <strong>not an extra bill</strong>. '
          + 'This month: ' + fig(monthCost, 'monthCost', 'Usage value this month') + ' of usage value included in your plan. '
-         + _e(unseen);
+         + escHtml(unseen);
   } else if (cov.any_subscription && monthCovered > 0.005) {
     // Part of the usage is included in the plan. The rest is metered only
     // when a metered runtime was actually detected; otherwise its route is
@@ -3866,9 +3866,9 @@ function renderBillingCoverageBanner(cov, usageData) {
     color = { bg: 'rgba(59,130,246,0.10)', bd: 'rgba(59,130,246,0.45)', fg: '#2563eb' };
     icon = '🧾';
     title = t('usage.cov_partly_title', { plan: plan }, 'Part of this usage is included in ' + plan);
-    body = _e(restLabel) + ': about <strong>' + fig(monthRest, 'out_of_pocket_usd', restLabel) + '</strong> this month at published rates. '
-         + 'Included in ' + _e(plan) + ': about <strong>' + fig(monthCovered, 'covered_usd', 'Included in your plan') + '</strong> of usage value this month, not an extra bill. '
-         + _e(unseen);
+    body = escHtml(restLabel) + ': about <strong>' + fig(monthRest, 'out_of_pocket_usd', restLabel) + '</strong> this month at published rates. '
+         + 'Included in ' + escHtml(plan) + ': about <strong>' + fig(monthCovered, 'covered_usd', 'Included in your plan') + '</strong> of usage value this month, not an extra bill. '
+         + escHtml(unseen);
     if (cov.any_metered && cov.metered_labels && cov.metered_labels.length) {
       body += ' <span style="opacity:0.7;">Metered: ' + cov.metered_labels.map(escHtml).join(', ') + '.</span>';
     }
@@ -3882,11 +3882,12 @@ function renderBillingCoverageBanner(cov, usageData) {
   host.style.cssText = 'display:block;padding:12px 14px;border-radius:8px;'
     + 'background:' + color.bg + ';border:1px solid ' + color.bd + ';'
     + 'font-size:13px;line-height:1.5;color:var(--text-primary,#0f172a);';
+  // codeql[js/xss] body includes window.cmProv.figure() output which esc()-sanitises all user values
   host.innerHTML =
       '<div style="display:flex;gap:10px;align-items:flex-start;">'
     + '<div style="font-size:18px;line-height:1.2;">' + icon + '</div>'
     + '<div style="flex:1;min-width:0;">'
-    +   '<div style="font-weight:600;color:' + color.fg + ';margin-bottom:3px;">' + _e(title) + '</div>'
+    +   '<div style="font-weight:600;color:' + color.fg + ';margin-bottom:3px;">' + escHtml(title) + '</div>'
     +   '<div style="color:var(--text-secondary,#475569);">' + body + '</div>'
     + '</div></div>';
 }
@@ -18355,6 +18356,7 @@ async function loadUsage() {
         // The value says which kind of money it is (REQ-OBS-CEA-025); an
         // unknown figure reads "not available", never "about $0.00".
         if (window.cmProv && costEntry) {
+          // codeql[js/xss] window.cmProv.figure/badge run all values through esc() which sanitises them
           v.innerHTML = (window.cmProv.isUnknown(costEntry) || cost == null)
             ? window.cmProv.figure(null, costEntry, { label: 'Usage value' })
             : _e(t('usage.cost_about', { cost: costStr }, 'about ' + costStr))
@@ -18693,6 +18695,7 @@ function renderTopSessionsByCost(rows, usageData) {
       + '</tr>';
   });
   html += '</tbody>';
+  // codeql[js/xss] window.cmProv.figure/badge run all values through esc() which sanitises them
   el.innerHTML = html;
 }
 
@@ -19084,6 +19087,7 @@ async function loadUsageByTeam() {
         + '</tr></thead><tbody>' + rows + '</tbody></table>';
     }
     if (hasGateway) html += renderGatewayUsage(gw, teams.length > 0);
+    // codeql[js/xss] renderGatewayUsage/cmProv run all user-data values through esc() which sanitises them
     el.innerHTML = html;
     title.style.display = '';
     card.style.display = '';
@@ -19111,6 +19115,7 @@ function gatewayMoney(gw, path, v, label) {
   var unreported = v === null || v === undefined;
   var n = Number(v) || 0;
   if (unreported) return '<span class="cm-fig" data-basis="unknown">not reported</span>';
+  if (window.cmProv) return window.cmProv.figure(n, null, { label: label || 'Gateway spend' });
   var display = n >= 0.01 || n <= -0.01 ? '$' + n.toFixed(2) : n > 0 ? '<$0.01' : '$0.00';
   return '<span class="cm-fig" data-basis="measured">' + _e(display) + '</span>';
 }
