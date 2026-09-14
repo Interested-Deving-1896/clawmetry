@@ -208,8 +208,11 @@ def _read_json(path: str) -> Optional[Any]:
 
 # ── records ──────────────────────────────────────────────────────────────────
 def component_id(kind: str, scope: str, workspace: str, source: str, name: str) -> str:
-    return hashlib.sha1("|".join((kind, scope, workspace, source, name))
-                        .encode("utf-8")).hexdigest()[:32]
+    # An identity, not a security digest: nonsecret_hash so a host with a
+    # restricted crypto provider does not raise here.
+    from clawmetry import nonsecret_hash as _nsh
+    return _nsh.sha1("|".join((kind, scope, workspace, source, name))
+                     .encode("utf-8")).hexdigest()[:32]
 
 
 def _component(kind: str, name: str, scope: str, workspace: str, source: str,
