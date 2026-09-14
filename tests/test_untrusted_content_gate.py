@@ -167,6 +167,11 @@ def test_only_the_tail_is_read(tmp_path):
 def gate(fresh_store, approvals_mod, monkeypatch):
     _pin_entitlement(monkeypatch)
     _no_daemon_proxy(monkeypatch)
+    # This process is the single-process writer. A CLAWMETRY_ROLE=dashboard
+    # left behind by an earlier test (cli.main() sets it) turns get_store()
+    # into a read-only proxy, the approval row is never written and the gate
+    # answers "approval store unavailable — fail-open" instead of asking.
+    monkeypatch.delenv("CLAWMETRY_ROLE", raising=False)
     import clawmetry.claude_code_gate as ccg
     import routes.hooks as rh
     app = Flask(__name__)
