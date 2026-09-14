@@ -284,9 +284,22 @@ def test_pin_replaces_the_source_build_with_version_and_digest() -> None:
 def test_check_rejects_a_tag_only_or_build_shadowed_image() -> None:
     current = _read("deploy", "self-hosted", "docker-compose.yml")
     assert pin_mod.check(current) == [], "the shipped Compose file must pass its own check"
-    tag_only = current.replace(
-        "image: clawmetry-selfhosted:latest", "image: ghcr.io/vivekchand/clawmetry:latest"
+    # Build the negative case from whatever the shipped file holds, not from a
+    # literal image line: once a release pins Compose by digest, the source-build
+    # line is gone and a plain replace() would silently test the pinned file.
+    service_image = re.compile(r"(?m)^(?P<indent>[ \t]*)image:[ \t]*\S+[ \t]*$")
+    match = service_image.search(current)
+    assert match, "the shipped Compose file must name the service image"
+    indent = match.group("indent")
+    without_build = re.sub(
+        r"(?m)^[ \t]*build:[ \t]*\n(?:[ \t]+\S.*\n)*?(?=[ \t]*image:)", "", current, count=1
     )
+    tag_only = service_image.sub(
+        f"{indent}build:\n{indent}  context: ../..\n{indent}image: ghcr.io/vivekchand/clawmetry:latest",
+        without_build,
+        count=1,
+    )
+    assert tag_only != current, "the negative case must differ from the shipped file"
     problems = pin_mod.check(tag_only)
     assert any("digest" in p for p in problems)
     assert any("build" in p for p in problems), (
