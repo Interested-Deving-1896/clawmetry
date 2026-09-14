@@ -84,9 +84,9 @@
   };
 
   function esc(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+    var n = document.createElement('span');
+    n.textContent = String(s == null ? '' : s);
+    return n.innerHTML.replace(/"/g, '&quot;');
   }
 
   function isNum(v) {
