@@ -85,6 +85,19 @@ jobs:
           cd "$proxy_dir"
           PATH="$RUNNER_TEMP/litellm/bin:$PATH" prisma generate --schema schema.prisma
 
+      - name: Assert LiteLLM's otel callback can actually export
+        # LiteLLM treats a missing OpenTelemetry install as a non-blocking
+        # error: the proxy starts, serves requests and exports nothing, so the
+        # job would only fail two minutes later on "0 requests". Fail here, and
+        # say why.
+        run: |
+          "$RUNNER_TEMP/litellm/bin/python" -c "
+          from opentelemetry.sdk.trace import TracerProvider
+          from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+          from litellm.integrations.opentelemetry import OpenTelemetry
+          print('LiteLLM otel callback importable')
+          "
+
       - name: Start Postgres for LiteLLM's teams and keys
         run: |
           sudo systemctl start postgresql.service

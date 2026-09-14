@@ -1,9 +1,14 @@
 # Hash-pinned install set for the LiteLLM proxy in .github/workflows/litellm-gateway.yml.
 #
 # Direct requirements: litellm[proxy]==1.83.7 prisma==0.11.0
-#   (prisma is LiteLLM's own pin for its proxy database client; the [proxy]
-#   extra does not pull it in, and the proxy will not start with virtual keys
-#   and teams without it.)
+#   opentelemetry-api==1.44.0 opentelemetry-sdk==1.44.0
+#   opentelemetry-exporter-otlp-proto-http==1.44.0
+#   (prisma is LiteLLM's own pin for its proxy database client, and the
+#   OpenTelemetry packages are what its "otel" callback imports. The [proxy]
+#   extra pulls in neither: without prisma the proxy will not start with
+#   virtual keys and teams, and without OpenTelemetry the callback logs a
+#   non-blocking import error and exports nothing. The OpenTelemetry versions
+#   are the ones the local end-to-end run used.)
 #
 # Installed into its OWN virtualenv in that job, never next to clawmetry:
 # LiteLLM pins its own fastapi / pydantic / openai stack, and the job is about
@@ -14,8 +19,7 @@
 # `prisma generate` in the job downloads Prisma's engine binaries, which this
 # file cannot pin.
 #
-# Regenerate:
-#   printf 'litellm[proxy]==1.83.7\nprisma==0.11.0\n' > ll.in
+# Regenerate: put the direct requirements above in ll.in, then
 #   uv pip compile ll.in --generate-hashes --python-version 3.11 \
 #     --python-platform x86_64-unknown-linux-gnu -o ci-litellm-proxy.txt
 aiohappyeyeballs==2.7.1 \
@@ -787,6 +791,10 @@ fsspec==2026.7.0 \
     --hash=sha256:b57ddbafedfaef7018c1ecab32aa200a9d7ca26b77965f64e48b70061249d279 \
     --hash=sha256:c803c40f4cf860b49dea58ee3e1c33cb9c790520e233537e1340049f89b82a88
     # via huggingface-hub
+googleapis-common-protos==1.75.3 \
+    --hash=sha256:57c435ac2c68b108999b6db075d9053e4d7a936ba57b4a3d45667b1346f1738a \
+    --hash=sha256:a018d2bf098ca9fb6faa08d5bb780e2a2c2f73c566f069761331386c9596d3f2
+    # via opentelemetry-exporter-otlp-proto-http
 gunicorn==23.0.0 \
     --hash=sha256:ec400d38950de4dfd418cff8328b2c8faed0edb0d517d3394e457c317908ca4d \
     --hash=sha256:f014447a0101dc57e294f6c18ca6b40227a4c90e9bdb586042628030cba004ec
@@ -1001,7 +1009,7 @@ jsonschema-specifications==2025.9.1 \
 litellm==1.83.7 \
     --hash=sha256:5784a1d9a9a4a8acd6ca1e347003a5e2e1b3c749b4d41e7da4904577adade111 \
     --hash=sha256:e2f2cb99df2e2b2eab63f1354faa45c88dd7c8d40c18eb648afb1b349c689633
-    # via -r ll-req.in
+    # via -r ll.in
 litellm-enterprise==0.1.37 \
     --hash=sha256:c1c231d21df6ab0fe77e2c1e10c14764a726a8eea9c328803ca872e5256afc10 \
     --hash=sha256:f1616f36fe66c3ddb0cd9d4a70aba2c777feb6d822475ddab1022a9ae8284122
@@ -1310,6 +1318,38 @@ openai==2.30.0 \
     --hash=sha256:92f7661c990bda4b22a941806c83eabe4896c3094465030dd882a71abe80c885 \
     --hash=sha256:9a5ae616888eb2748ec5e0c5b955a51592e0b201a11f4262db920f2a78c5231d
     # via litellm
+opentelemetry-api==1.44.0 \
+    --hash=sha256:67647e5e9566edcf421166fdf022b3537f818635daa852b289e34604dc6fb33a \
+    --hash=sha256:94b98c893a91b88657eaac1e3ba89618cdb85be6918196705354f34728b2cdef
+    # via
+    #   -r ll.in
+    #   opentelemetry-exporter-otlp-proto-http
+    #   opentelemetry-sdk
+    #   opentelemetry-semantic-conventions
+opentelemetry-exporter-otlp-proto-common==1.44.0 \
+    --hash=sha256:9a9fe61bba73d802904bc989f1d6b4a7b1ee40f06c40e98d6f85af65aaebb694 \
+    --hash=sha256:dc87a5a5bc58f149a56d1547e4691588fa12994cdc3bc039a694ccb3375862ac
+    # via opentelemetry-exporter-otlp-proto-http
+opentelemetry-exporter-otlp-proto-http==1.44.0 \
+    --hash=sha256:838592fce774c1c8bb7b9a0a7facbfa82e17be5a8a4e94cef10cb84ae026bae3 \
+    --hash=sha256:c633d7270ad6b57cd4cfbe8b0007a9e2e7c0cb50bd6c50fe2a7b245f721a09d8
+    # via -r ll.in
+opentelemetry-proto==1.44.0 \
+    --hash=sha256:898b155a0e1557afd867478fb6158e8122a46329ca0bb8dc53cc55e98f017f56 \
+    --hash=sha256:c547a79c2f8c0c515d31509154682e5921c7cfd5ca67b70e1f9266e2c3e103f3
+    # via
+    #   opentelemetry-exporter-otlp-proto-common
+    #   opentelemetry-exporter-otlp-proto-http
+opentelemetry-sdk==1.44.0 \
+    --hash=sha256:cebe7f65dc12f26ead75c6064de12fd2a9052e5060c0272d402cfa203aae123b \
+    --hash=sha256:df081c4c6bcfdb1211e3e86140376792643128a25f8d72d1d27675936e7e96ad
+    # via
+    #   -r ll.in
+    #   opentelemetry-exporter-otlp-proto-http
+opentelemetry-semantic-conventions==0.65b0 \
+    --hash=sha256:1cacde7b0ad306f84c5ef08c3dbe1bbaf20165bba6f8bff43b670e555a086bcb \
+    --hash=sha256:f9b2b81e9d5b64f11bc952075e7e9c7fb0aab075c7fd1c46d597f1b919852d60
+    # via opentelemetry-sdk
 orjson==3.10.15 \
     --hash=sha256:035fb83585e0f15e076759b6fedaf0abb460d1765b6a36f48018a52858443514 \
     --hash=sha256:05ca7fe452a2e9d8d9d706a2984c95b9c2ebc5db417ce0b7a49b91d50642a23e \
@@ -1415,7 +1455,7 @@ polars-runtime-32==1.39.3 \
 prisma==0.11.0 \
     --hash=sha256:22bb869e59a2968b99f3483bb417717273ffbc569fd1e9ceed95e5614cbaf53a \
     --hash=sha256:3f2f2fd2361e1ec5ff655f2a04c7860c2f2a5bc4c91f78ca9c5c6349735bf693
-    # via -r ll-req.in
+    # via -r ll.in
 propcache==0.5.2 \
     --hash=sha256:01c4fc7480cd0598bb4b57022df55b9ca296da7fc5a8760bd8451a7e63a7d427 \
     --hash=sha256:04dc2390d9edbbaef7461f33322555976ffddf0b650a038649d026358714e6c5 \
@@ -1541,6 +1581,18 @@ propcache==0.5.2 \
     # via
     #   aiohttp
     #   yarl
+protobuf==7.36.1 \
+    --hash=sha256:0b53ce95272aad50ad25d7ff03373743209822e8ba42ea7fad27d2bee1547d00 \
+    --hash=sha256:39c518c05586c016d7874ff6079ee115bcec1ea5fbb1d177fbf7867ef4c67e44 \
+    --hash=sha256:3cf2ee25d006cee57294a1196ea43b37feb78e0dcd1e8af5c1aeddb777655aca \
+    --hash=sha256:43d3d37b1eb24c113b9b7d02008cac44e423f00b611b7781ae998d7623972969 \
+    --hash=sha256:51139351435d9b43d88a55eaa49fb6f737fbb478fb0cbf2cf694d1a04a9d3363 \
+    --hash=sha256:7d951e46b3f963d6c264c367c437921de9d5aedd9c3f9612b9077736b4e3ad5c \
+    --hash=sha256:97198b77e369a0abd8e262b8f6c7266c55ddb796a3a12c76d7b8881188ed83aa \
+    --hash=sha256:d0f6470f0ce2b84e3feaea2d4b816378b37ba4d4aa08a274305373de93e2d524
+    # via
+    #   googleapis-common-protos
+    #   opentelemetry-proto
 pycparser==3.0 \
     --hash=sha256:600f49d217304a5902ac3c37e1281c9fe94e4d0489de643a9504c5cdfdfc6b29 \
     --hash=sha256:b727414169a36b7d524c1c3e31839a521725078d7b2ff038656844266160a992
@@ -1971,6 +2023,7 @@ requests==2.34.2 \
     # via
     #   azure-core
     #   msal
+    #   opentelemetry-exporter-otlp-proto-http
     #   tiktoken
 rich==13.9.4 \
     --hash=sha256:439594978a49a09530cff7ebc4b5c7103ef57baf48d5ea3184f21d9a2befa098 \
@@ -2251,6 +2304,10 @@ typing-extensions==4.16.0 \
     #   huggingface-hub
     #   mcp
     #   openai
+    #   opentelemetry-api
+    #   opentelemetry-exporter-otlp-proto-http
+    #   opentelemetry-sdk
+    #   opentelemetry-semantic-conventions
     #   prisma
     #   pydantic
     #   pydantic-core
