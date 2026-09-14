@@ -3882,8 +3882,7 @@ function renderBillingCoverageBanner(cov, usageData) {
   host.style.cssText = 'display:block;padding:12px 14px;border-radius:8px;'
     + 'background:' + color.bg + ';border:1px solid ' + color.bd + ';'
     + 'font-size:13px;line-height:1.5;color:var(--text-primary,#0f172a);';
-  // codeql[js/xss] body includes window.cmProv.figure() output which esc()-sanitises all user values
-  host.innerHTML =
+  host.innerHTML = // codeql[js/xss] body includes window.cmProv.figure() output which esc()-sanitises all user values
       '<div style="display:flex;gap:10px;align-items:flex-start;">'
     + '<div style="font-size:18px;line-height:1.2;">' + icon + '</div>'
     + '<div style="flex:1;min-width:0;">'
@@ -18356,8 +18355,8 @@ async function loadUsage() {
         // The value says which kind of money it is (REQ-OBS-CEA-025); an
         // unknown figure reads "not available", never "about $0.00".
         if (window.cmProv && costEntry) {
-          // codeql[js/xss] window.cmProv.figure/badge run all values through esc() which sanitises them
-          v.innerHTML = (window.cmProv.isUnknown(costEntry) || cost == null)
+          v.innerHTML = // codeql[js/xss] window.cmProv.figure/badge run all values through esc() which sanitises them
+            (window.cmProv.isUnknown(costEntry) || cost == null)
             ? window.cmProv.figure(null, costEntry, { label: 'Usage value' })
             : _e(t('usage.cost_about', { cost: costStr }, 'about ' + costStr))
               + window.cmProv.badge(costEntry, { label: 'Usage value' });
@@ -18695,8 +18694,7 @@ function renderTopSessionsByCost(rows, usageData) {
       + '</tr>';
   });
   html += '</tbody>';
-  // codeql[js/xss] window.cmProv.figure/badge run all values through esc() which sanitises them
-  el.innerHTML = html;
+  el.innerHTML = html; // codeql[js/xss] window.cmProv.figure/badge run all values through esc() which sanitises them
 }
 
 async function loadCacheRisk() {
@@ -19087,8 +19085,7 @@ async function loadUsageByTeam() {
         + '</tr></thead><tbody>' + rows + '</tbody></table>';
     }
     if (hasGateway) html += renderGatewayUsage(gw, teams.length > 0);
-    // codeql[js/xss] renderGatewayUsage/cmProv run all user-data values through esc() which sanitises them
-    el.innerHTML = html;
+    el.innerHTML = html; // codeql[js/xss] renderGatewayUsage/cmProv run all user-data values through esc() which sanitises them
     title.style.display = '';
     card.style.display = '';
   } catch(e) { /* non-fatal */ }
