@@ -13,9 +13,7 @@
 
 services:
   clawmetry:
-    build:
-      context: ../..
-    image: clawmetry-selfhosted:latest
+    image: ghcr.io/vivekchand/clawmetry:0.12.879@sha256:46157aef18fb3ea47d1b09a46f8f75f3910f9ff1a030087307b504da746c222e
     restart: unless-stopped
     ports:
       - "8900:8900"
