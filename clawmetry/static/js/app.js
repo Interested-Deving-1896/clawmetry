@@ -19110,18 +19110,12 @@ function gatewaySpendEntry(gw, path, v) {
 function gatewayMoney(gw, path, v, label) {
   var unreported = v === null || v === undefined;
   var n = Number(v) || 0;
-  var cur = _e((gw && gw.currency) || 'USD');
-  var exact = unreported ? '' : ', ' + (n >= 0.01 || n <= 0 ? n.toFixed(4) : n.toPrecision(3))
-    + ' ' + cur + ' as reported';
-  if (window.cmProv) {
-    return window.cmProv.figure(unreported ? null : n, gatewaySpendEntry(gw, path, v),
-      { label: label + exact, noBadge: true, emptyText: 'not reported' });
-  }
-  return _e(unreported ? 'not reported' : n.toFixed(4) + ' ' + ((gw && gw.currency) || 'USD'));
+  if (unreported) return '<span class="cm-fig" data-basis="unknown">not reported</span>';
+  var display = n >= 0.01 || n <= -0.01 ? '$' + n.toFixed(2) : n > 0 ? '<$0.01' : '$0.00';
+  return '<span class="cm-fig" data-basis="measured">' + _e(display) + '</span>';
 }
 function gatewaySpendBadge(gw) {
-  var entry = ((gw && gw.provenance) || {})['teams[].cost_usd'];
-  return (window.cmProv && entry) ? ' ' + window.cmProv.badge(entry, { label: 'Spend through LiteLLM' }) : '';
+  return '';
 }
 function renderGatewayUsage(gw, hasAgentTable) {
   var t = gw.totals || {};
