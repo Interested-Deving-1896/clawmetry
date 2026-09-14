@@ -4,7 +4,7 @@
 > `python3 scripts/gen_module_map.py` (CI fails on drift via
 > `tests/test_module_map_drift.py`).
 
-256 modules, 82 Flask blueprints. `CLAUDE.md` carries a short curated table of the ones you reach for most often; this is the whole list.
+259 modules, 83 Flask blueprints. `CLAUDE.md` carries a short curated table of the ones you reach for most often; this is the whole list.
 
 Size bands are deliberately coarse so this file does not churn on every PR: **small** is under 200 lines, **medium** under 1k, **large** under 5k, **huge** is 5k and up.
 
@@ -70,6 +70,7 @@ One module per feature, each owning one or more Flask blueprints. New endpoints 
 | `routes/paywall_lifecycle.py` | small |  |  | the paywall beacons that reach the funnel. |
 | `routes/plugins.py` | medium | `bp_plugins` | `/api/plugins` | Plugin registry: unified view of installed plugins (#692). |
 | `routes/policy.py` | medium | `bp_policy` | `/api/approvals`, `/api/approvals-audit`, `/api/policy`, `/api/tool-policy` | tool-policy + sandbox + exec-approval audit (PRD P1-1). |
+| `routes/pricing.py` | small | `bp_pricing` | `/api/pricing` | the price book API (REQ-OBS-CEA-024, issue #5936). |
 | `routes/quality.py` | medium | `bp_quality` | `/api/quality` | the Quality tab endpoint. |
 | `routes/readiness.py` | small | `bp_readiness` | `/api/repo-readiness` | ``bp_readiness`` — repo AI-readiness. |
 | `routes/reasoning.py` | medium | `bp_reasoning` | `/api/reasoning` | Reasoning chain viewer endpoint. |
@@ -222,11 +223,13 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/otel_exporter.py` | medium | Outbound OTLP trace exporter for ClawMetry. |
 | `clawmetry/otel_profiles.py` | small | OTel runtime profiles — the seam between the generic OTLP receiver and runtime-specific knowledge (WO-57). |
 | `clawmetry/otel_push.py` | small | OSS delegating shim after the impl moved to clawmetry-pro. |
+| `clawmetry/otlp_guard.py` | medium | OTLP intake, before it is stored or judged (REQ-OBS-OTG-001). |
 | `clawmetry/otlp_json.py` | medium | stdlib OTLP/JSON decoder (issue #4781). |
 | `clawmetry/outcome_classifier.py` | large | Auto-label every session with an outcome. |
 | `clawmetry/policy_engine.py` | medium | Guard policies — turn a detector incident into an enforcement decision. |
 | `clawmetry/pr_provenance.py` | large | Pull-request provenance: which agent sessions wrote which changed files. |
 | `clawmetry/pr_provenance_cli.py` | medium | ``clawmetry trace report``: agent-session provenance for a change. |
+| `clawmetry/price_book.py` | medium | Price book contract: negotiated rates, Azure OpenAI aliases, effective dates. |
 | `clawmetry/process_control.py` | large | host-side process control for runaway agents. |
 | `clawmetry/provenance.py` | medium | Every number says how it was obtained. |
 | `clawmetry/providers_pricing.py` | medium | ClawMetry provider detection and pricing table. |
@@ -253,7 +256,7 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/secure.py` | medium | clawmetry secure — one-command numbat (Perplexity agent-EDR) setup. |
 | `clawmetry/security_posture.py` | large | Runtime-aware security posture registry. |
 | `clawmetry/self_diagnostics.py` | medium | Agent self-diagnostics: reports an agent files about its own trouble, and the independent check on whether the tool stream agrees (WO-59, REQ-SELF). |
-| `clawmetry/selfhosted.py` | small | clawmetry.selfhosted — ClawMetry Enterprise single-tenant server mode. |
+| `clawmetry/selfhosted.py` | medium | clawmetry.selfhosted — ClawMetry Enterprise single-tenant server mode. |
 | `clawmetry/session_context.py` | medium | Inputs & context: what the agent was actually given, per session. |
 | `clawmetry/session_titles.py` | medium | ChatGPT-style session titles from the first real user prompt. |
 | `clawmetry/siem.py` | small | OSS delegating shim after the impl moved to clawmetry-pro. |

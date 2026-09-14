@@ -1153,6 +1153,108 @@
       "text": "Claude Code is a paid runtime: the instrument command and every Claude Code specific mapping (session join, typed events, cache token tiles, waiting-on-you, span materialization) follow the claude_code runtime entitlement; without it the receiver still accepts batches and keeps only the generic ledger and span rows, and the command reports the plan requirement instead of writing."
     },
     {
+      "id": "AC-OBS-CEA-024.1",
+      "doc": "Price Book: negotiated rates, deployment aliases and effective dates",
+      "doc_id": "76e32850-c505-44a3-8ead-48a1bf350808",
+      "text": "The system shall accept a local price book whose entries identify a model exactly, by prefix, or by a validated pattern, carry an effective start date, and state either explicit per-token rates or a percentage discount off the published rate."
+    },
+    {
+      "id": "AC-OBS-CEA-024.2",
+      "doc": "Price Book: negotiated rates, deployment aliases and effective dates",
+      "doc_id": "76e32850-c505-44a3-8ead-48a1bf350808",
+      "text": "The system shall reject each malformed entry, and each pair of entries that would claim the same usage over overlapping dates, with a stated reason per entry, and shall continue to accept the valid remainder of the book rather than failing it whole."
+    },
+    {
+      "id": "AC-OBS-CEA-024.3",
+      "doc": "Price Book: negotiated rates, deployment aliases and effective dates",
+      "doc_id": "76e32850-c505-44a3-8ead-48a1bf350808",
+      "text": "When more than one valid entry could apply to a usage record and the documented precedence does not separate them, the system shall report the record as ambiguous and shall not choose a rate."
+    },
+    {
+      "id": "AC-OBS-CEA-024.4",
+      "doc": "Price Book: negotiated rates, deployment aliases and effective dates",
+      "doc_id": "76e32850-c505-44a3-8ead-48a1bf350808",
+      "text": "An entry shall apply to usage observed at or after its effective start and strictly before its effective end; usage with no observed time shall not be matched to a dated rate."
+    },
+    {
+      "id": "AC-OBS-CEA-024.5",
+      "doc": "Price Book: negotiated rates, deployment aliases and effective dates",
+      "doc_id": "76e32850-c505-44a3-8ead-48a1bf350808",
+      "text": "The system shall resolve an Azure OpenAI deployment name to a model through an explicit alias, scoped to its resource where the alias names one, and shall prefer that alias over a model name reported by the response."
+    },
+    {
+      "id": "AC-OBS-CEA-024.6",
+      "doc": "Price Book: negotiated rates, deployment aliases and effective dates",
+      "doc_id": "76e32850-c505-44a3-8ead-48a1bf350808",
+      "text": "The system shall resolve AWS Bedrock model identifiers, including region prefixes, vendor prefixes and version suffixes, to the same model a price book entry names."
+    },
+    {
+      "id": "AC-OBS-CEA-024.7",
+      "doc": "Price Book: negotiated rates, deployment aliases and effective dates",
+      "doc_id": "76e32850-c505-44a3-8ead-48a1bf350808",
+      "text": "Every edit to the price book shall produce a new version identifier; a version once recorded shall never be altered; and resolving usage against an earlier version shall return the rate that version held."
+    },
+    {
+      "id": "AC-OBS-CEA-024.8",
+      "doc": "Price Book: negotiated rates, deployment aliases and effective dates",
+      "doc_id": "76e32850-c505-44a3-8ead-48a1bf350808",
+      "text": "When no published rate exists for a model and no price book entry applies, the system shall report the price as unknown rather than substitute a generic default rate."
+    },
+    {
+      "id": "AC-OBS-CEA-024.9",
+      "doc": "Price Book: negotiated rates, deployment aliases and effective dates",
+      "doc_id": "76e32850-c505-44a3-8ead-48a1bf350808",
+      "text": "Every valuation the system returns shall state its basis (vendor reported, contract, list, default or unknown), the rate version and effective interval it used, and whether it restates an earlier valuation; a valuation lacking these shall not be returned."
+    },
+    {
+      "id": "AC-OBS-CEA-024.10",
+      "doc": "Price Book: negotiated rates, deployment aliases and effective dates",
+      "doc_id": "76e32850-c505-44a3-8ead-48a1bf350808",
+      "text": "For each usage record, the system shall state whether that source counts cached input tokens inside its input token total, so that a valuation neither adds nor subtracts them twice."
+    },
+    {
+      "id": "AC-OBS-CEA-024.11",
+      "doc": "Price Book: negotiated rates, deployment aliases and effective dates",
+      "doc_id": "76e32850-c505-44a3-8ead-48a1bf350808",
+      "text": "The price book, its rates and its recorded versions shall remain on the machine where they were written, and no path that sends data off the machine shall read them."
+    },
+    {
+      "id": "AC-OBS-OTG-001.1",
+      "doc": "Exported traces reach Guard, and are scrubbed before they are stored",
+      "doc_id": "ff78b7cc-7a85-4f0f-a155-3fc78c6cd8b6",
+      "text": "When a received trace contains a span describing a tool call in a known session, the system shall record it as a tool call, and a tool result, that the detectors evaluate exactly as they evaluate a machine-observed tool call, and each recorded event shall retain the trace, span and session it came from."
+    },
+    {
+      "id": "AC-OBS-OTG-001.2",
+      "doc": "Exported traces reach Guard, and are scrubbed before they are stored",
+      "doc_id": "ff78b7cc-7a85-4f0f-a155-3fc78c6cd8b6",
+      "text": "The system shall not record a tool call for a span that does not identify itself as a tool execution or that belongs to no session, and where a tool span does not carry its arguments, the system shall not treat that call as identical to any other call."
+    },
+    {
+      "id": "AC-OBS-OTG-001.3",
+      "doc": "Exported traces reach Guard, and are scrubbed before they are stored",
+      "doc_id": "ff78b7cc-7a85-4f0f-a155-3fc78c6cd8b6",
+      "text": "Where the tool calls of one session arrive both as log records and as trace spans, or are also observed on the machine, the system shall record them from one source only, so that no tool call is counted twice."
+    },
+    {
+      "id": "AC-OBS-OTG-001.4",
+      "doc": "Exported traces reach Guard, and are scrubbed before they are stored",
+      "doc_id": "ff78b7cc-7a85-4f0f-a155-3fc78c6cd8b6",
+      "text": "Before a received span is stored, the system shall apply the secret and personal-data redaction it applies to observed events to the span's prompts, responses, tool arguments, attributes (including URLs and paths), span events (including exception events), links, name and status message, and the same redaction shall apply to the attributes kept in the received log-record ledger."
+    },
+    {
+      "id": "AC-OBS-OTG-001.5",
+      "doc": "Exported traces reach Guard, and are scrubbed before they are stored",
+      "doc_id": "ff78b7cc-7a85-4f0f-a155-3fc78c6cd8b6",
+      "text": "Where a span value cannot be scanned, because it is too large or the scanner fails, the system shall withhold that value and mark the span as withheld rather than store it unscanned. Where the operator has turned redaction off, spans shall be stored as received, as events are."
+    },
+    {
+      "id": "AC-OBS-OTG-001.6",
+      "doc": "Exported traces reach Guard, and are scrubbed before they are stored",
+      "doc_id": "ff78b7cc-7a85-4f0f-a155-3fc78c6cd8b6",
+      "text": "An incident raised only from received telemetry shall state that the action was observed after it ran and shall not state or imply that the action was prevented."
+    },
+    {
       "id": "AC-GOV-ATR-001.1",
       "doc": "Guard ATLAS OpenClaw replay: case studies AML.CS0048 to AML.CS0051 scored against Guard",
       "doc_id": "7616fb6b-63d6-49ec-a295-39ec7add4725",
@@ -1325,6 +1427,114 @@
       "doc": "PR provenance report: agent sessions on changed files, as SARIF and an opt-in CI gate",
       "doc_id": "4e224b46-71a6-4d32-933d-7fb6bfde30d0",
       "text": "When any read limit truncates the evidence (sessions listed, sessions read, events or Guard findings per session, or commits in the range), the system shall report the evidence as partial with the reason, both in the report and in an exported bundle, so that an enabled gate applies the operator's missing-evidence behaviour rather than passing silently."
+    },
+    {
+      "id": "AC-OBS-OTR-001.1",
+      "doc": "Framework recipe: a LangGraph agent instrumented with OpenLLMetry, verified end to end",
+      "doc_id": "0130f6a6-3f5b-448f-bd59-d8820a4d5c88",
+      "text": "The project shall ship a runnable minimal LangGraph agent with exactly one tool that exports OpenTelemetry through OpenLLMetry to the ClawMetry receiver and runs with no model provider key."
+    },
+    {
+      "id": "AC-OBS-OTR-001.2",
+      "doc": "Framework recipe: a LangGraph agent instrumented with OpenLLMetry, verified end to end",
+      "doc_id": "0130f6a6-3f5b-448f-bd59-d8820a4d5c88",
+      "text": "On every change, an automated check shall run that recipe, with its framework, instrumentation and exporter versions pinned, against a live ClawMetry instance, and shall fail unless the run is readable back through the local query API as a session under the application's identity, carrying the token totals the model reported and the tool call by name."
+    },
+    {
+      "id": "AC-OBS-OTR-001.3",
+      "doc": "Framework recipe: a LangGraph agent instrumented with OpenLLMetry, verified end to end",
+      "doc_id": "0130f6a6-3f5b-448f-bd59-d8820a4d5c88",
+      "text": "When a LangGraph run carries a thread identifier, the system shall record every span of that run, including the model calls and tool calls beneath the run's top span, under one session identified by that thread, and every later run on the same thread under the same session. The instrumentation reports the thread as the conversation identifier on the run's top span only, and as a thread association on every span beneath it; both shall resolve to the same session, recorded exactly as sent, so a run is never split between a session for its top span and a separate per-trace session holding its tokens and tool calls."
+    },
+    {
+      "id": "AC-OBS-OTR-001.4",
+      "doc": "Framework recipe: a LangGraph agent instrumented with OpenLLMetry, verified end to end",
+      "doc_id": "0130f6a6-3f5b-448f-bd59-d8820a4d5c88",
+      "text": "An explicitly sent conversation identifier shall take precedence over a thread identifier, and a thread identifier shall take precedence over a session identifier sent on the span or on the resource, so that a session identifier stamped on the spans beneath a run's top span can never split that run away from the conversation identifier its top span sends; whichever identifier wins shall be recorded exactly as sent."
+    },
+    {
+      "id": "AC-OBS-OTR-001.5",
+      "doc": "Framework recipe: a LangGraph agent instrumented with OpenLLMetry, verified end to end",
+      "doc_id": "0130f6a6-3f5b-448f-bd59-d8820a4d5c88",
+      "text": "When a run carries neither a conversation identifier nor a thread identifier, the system shall record one session per trace, as REQ-OBS-RSO-033 defines, and the recipe page shall name that fallback and its cardinality."
+    },
+    {
+      "id": "AC-OBS-OTR-001.6",
+      "doc": "Framework recipe: a LangGraph agent instrumented with OpenLLMetry, verified end to end",
+      "doc_id": "0130f6a6-3f5b-448f-bd59-d8820a4d5c88",
+      "text": "When the agent runs in streaming mode, the check shall find the same session, token totals and tool call as for a non-streaming run."
+    },
+    {
+      "id": "AC-OBS-OTR-001.7",
+      "doc": "Framework recipe: a LangGraph agent instrumented with OpenLLMetry, verified end to end",
+      "doc_id": "0130f6a6-3f5b-448f-bd59-d8820a4d5c88",
+      "text": "When the recipe exports to a ClawMetry on another machine, the automated check shall prove that an export without the Bearer token is refused and an export carrying it is accepted, and the recipe page shall show how to set that header."
+    },
+    {
+      "id": "AC-OBS-OTR-001.8",
+      "doc": "Framework recipe: a LangGraph agent instrumented with OpenLLMetry, verified end to end",
+      "doc_id": "0130f6a6-3f5b-448f-bd59-d8820a4d5c88",
+      "text": "The recipe page shall record the framework, instrumentation and exporter versions that were verified, the wire encoding, the semantic-convention revision, the span parent and child structure, how application, run and conversation identity are derived, what each dashboard tab shows for span-only data, and that this path observes an agent but cannot pause, stop or gate it."
+    },
+    {
+      "id": "AC-OBS-SHI-001.1",
+      "doc": "Self-Hosted Server Image: Signed, Pullable, Verified After Release",
+      "doc_id": "49529742-f381-4957-9abf-c92efe7b7d65",
+      "text": "When an open-source release is published, the system shall publish a self-hosted server image for linux/amd64 and linux/arm64 to a public registry, built from the exact wheel published for that release after verifying that wheel's build provenance."
+    },
+    {
+      "id": "AC-OBS-SHI-001.2",
+      "doc": "Self-Hosted Server Image: Signed, Pullable, Verified After Release",
+      "doc_id": "49529742-f381-4957-9abf-c92efe7b7d65",
+      "text": "The published image shall carry a keyless signature, an SBOM attestation bound to its digest, and a build provenance attestation, each verifiable by anyone without ClawMetry credentials."
+    },
+    {
+      "id": "AC-OBS-SHI-001.3",
+      "doc": "Self-Hosted Server Image: Signed, Pullable, Verified After Release",
+      "doc_id": "49529742-f381-4957-9abf-c92efe7b7d65",
+      "text": "The image shall contain only the open-source package and its public dependencies, and shall not contain the proprietary Pro plugin."
+    },
+    {
+      "id": "AC-OBS-SHI-002.1",
+      "doc": "Self-Hosted Server Image: Signed, Pullable, Verified After Release",
+      "doc_id": "49529742-f381-4957-9abf-c92efe7b7d65",
+      "text": "After publishing, the release pipeline shall pull the image by digest with no registry credentials on each published architecture, verify its signature and SBOM attestation, and fail naming the reason when the image cannot be pulled anonymously."
+    },
+    {
+      "id": "AC-OBS-SHI-002.2",
+      "doc": "Self-Hosted Server Image: Signed, Pullable, Verified After Release",
+      "doc_id": "49529742-f381-4957-9abf-c92efe7b7d65",
+      "text": "The verification shall start the pulled image with persistent storage, send a non-sensitive event through the node ingest API from outside the container, restart the container, and confirm the event is still returned by the audit export and the node still appears on the fleet page."
+    },
+    {
+      "id": "AC-OBS-SHI-002.3",
+      "doc": "Self-Hosted Server Image: Signed, Pullable, Verified After Release",
+      "doc_id": "49529742-f381-4957-9abf-c92efe7b7d65",
+      "text": "The same image build and persistence check shall run on every pull request that changes the image definition or its verification, against an image built from that branch, so a broken image is caught before a release."
+    },
+    {
+      "id": "AC-OBS-SHI-003.1",
+      "doc": "Self-Hosted Server Image: Signed, Pullable, Verified After Release",
+      "doc_id": "49529742-f381-4957-9abf-c92efe7b7d65",
+      "text": "Only after verification passes, the system shall propose a change pinning the Compose deployment to the verified image by version and digest in place of the source build, and the Compose file shall never reference the published image by a tag alone."
+    },
+    {
+      "id": "AC-OBS-SHI-003.2",
+      "doc": "Self-Hosted Server Image: Signed, Pullable, Verified After Release",
+      "doc_id": "49529742-f381-4957-9abf-c92efe7b7d65",
+      "text": "The self-hosting documentation shall state how to verify the signature and SBOM, how to update and roll back by digest, how to back up and restore, and the actual authentication and transport defaults, and shall mark deployment targets and identity integrations that have not been verified as not available."
+    },
+    {
+      "id": "AC-OBS-SHI-004.1",
+      "doc": "Self-Hosted Server Image: Signed, Pullable, Verified After Release",
+      "doc_id": "49529742-f381-4957-9abf-c92efe7b7d65",
+      "text": "When the server runs in self-hosted mode, requests to the self-hosted server's own API routes shall be authorised by that server's node token or admin credentials regardless of the caller's network address, and shall not be refused for lacking a local gateway token."
+    },
+    {
+      "id": "AC-OBS-SHI-004.2",
+      "doc": "Self-Hosted Server Image: Signed, Pullable, Verified After Release",
+      "doc_id": "49529742-f381-4957-9abf-c92efe7b7d65",
+      "text": "Every other API route shall keep the existing rule for non-loopback callers, and a self-hosted route called without its own credentials shall still be refused."
     }
   ]
 }
