@@ -20,6 +20,28 @@ What this is NOT: prevention. A span is exported after the tool ran, so an
 incident raised from one is an observation. :func:`observation_label` marks
 such incidents so no surface says the action was stopped.
 
+Where each piece is wired (the call sites live deep in large files):
+
+* ``dashboard._process_otlp_traces`` calls :func:`tool_events_from_span` for
+  every received span that is not a wait span, and writes the resulting
+  ``tool_call`` / ``tool_result`` events in one ``LocalStore.put_otlp_batch``
+  hop together with the ``waiting_on_user`` events (AC-OBS-OTG-001.1, .2).
+* ``LocalStore.put_otlp_batch`` applies the daemon-ownership rule and uses
+  :data:`TRACE_EVENT_ID_PREFIX` so the first OTLP signal (logs or traces) to
+  report a session owns its tool stream (AC-OBS-OTG-001.3), and passes the
+  log-record ledger's attributes through :func:`scrub_ledger_attributes`.
+* ``LocalStore.ingest_spans_batch``, the single span write path, scrubs every
+  span with ``redaction.redact_span`` and withholds a value it cannot scan
+  (AC-OBS-OTG-001.4, .5).
+* ``sync._emit_detector_incidents`` calls :func:`observation_label` on the
+  session's events and :func:`label_incident` on each incident, then copies
+  ``incident["observation"]`` (``{"source": "received_telemetry", "signals",
+  "after_the_fact": True, "prevented": False}``) into the ``loop_signals``
+  row's details next to ``frameworks`` (AC-OBS-OTG-001.6).
+
+The six criteria are mirrored in ``docs/acceptance_criteria.json`` and covered
+by ``tests/test_otlp_trace_guard_redaction.py``.
+
 Normalisation rules, each one a guard against a false reading:
 
 * Only a span that says it is a tool execution counts: a ``gen_ai.tool.name``
