@@ -164,7 +164,7 @@ answer is worse than a missing one.
 | ISO 27001 / ISO 42001 | Not started |
 | Independent penetration test | Not yet commissioned |
 | Sub-processor list | **Available** — [clawmetry.com/subprocessors](https://clawmetry.com/subprocessors) |
-| DPA | In progress — a draft exists but has not been reviewed by counsel, so nothing is available to sign yet; see [clawmetry.com/dpa](https://clawmetry.com/dpa) |
+| DPA | In progress — first draft complete, legal review next, then offered for signature; see [clawmetry.com/dpa](https://clawmetry.com/dpa) |
 | GDPR EU representative / lead supervisory authority | Being determined |
 | SSO (SAML / OIDC) | In progress — managed cloud only, brokered by WorkOS (listed on [clawmetry.com/subprocessors](https://clawmetry.com/subprocessors)); not yet verified against a live identity provider; customer-hosted has no SSO |
 | SCIM | Not implemented |
