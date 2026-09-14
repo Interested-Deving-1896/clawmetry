@@ -660,21 +660,15 @@
         }
       };
 
-      // Self-poll /api/overview so the card stays live without coupling to
-      // app.js. The backend caches the heartbeat block for 30s so this is
-      // cheap; we still poll every 60s to keep the gap counter ticking.
+      // Self-poll /api/overview so the card stays live. The backend caches
+      // the heartbeat block for 30s; we poll every 60s to keep the gap
+      // counter ticking. #5935: uses the shared helper so the heartbeat card
+      // rides the same in-flight Promise as loadAll and initFlow — one request,
+      // not two.
       function pollOnce(){
-        // #2019: skip the poll when the browser tab is hidden. This is a
-        // second, independent /api/overview poller (decoupled from app.js's
-        // loadAll on purpose), so it can't ride loadAll's coalesce window —
-        // gate it directly so it doesn't fetch every 60s while backgrounded.
+        // #2019: skip the poll when the browser tab is hidden.
         if (typeof document !== 'undefined' && document.hidden) return;
-        // #5935: share the page's in-flight /api/overview instead of sending
-        // a third copy of it during startup.
-        (typeof _cmFetchOverviewShared === 'function'
-          ? _cmFetchOverviewShared()
-          : fetch('/api/overview', {credentials: 'same-origin'})
-              .then(function(r){ return r.ok ? r.json() : null; }))
+        _cmFetchOverviewShared()
           .then(function(d){
             if(d && d.heartbeat){ window.renderOverviewHeartbeat(d.heartbeat); }
           })

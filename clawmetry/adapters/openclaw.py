@@ -196,6 +196,10 @@ def _doctor_cache_ttl() -> float:
 
 
 def _refresh_doctor_cache() -> None:
+    """Background-thread target — never called from a page request.
+    Runs _openclaw_doctor_findings() (the synchronous subprocess call) in a
+    daemon thread so detect() and every page request can return immediately
+    while the cache warms behind them."""
     import time as _time
     try:
         value = _openclaw_doctor_findings()
