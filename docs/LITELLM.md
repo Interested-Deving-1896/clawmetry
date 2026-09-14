@@ -60,7 +60,7 @@ Per team, the Usage card shows requests, failed requests, spend, and each person
 
 ## Kept apart from your agents' costs
 
-A call an agent made *through* the proxy is already in that agent's own cost. So the gateway figure is a **separate subtotal**. It is never added to the agent totals, a proxied request never becomes an agent session, and the proxy never appears as an agent in the runtime switcher.
+A call an agent made *through* the proxy is already in that agent's own cost. So the gateway figure is a **separate subtotal**. It is never added to the agent totals, a proxied request never becomes an agent session, and the proxy never appears as an agent, in the runtime switcher or on the Agents tab.
 
 To tell you how much overlaps, the card says how many gateway requests share a trace with telemetry from another source (an agent that propagates W3C `traceparent` to the proxy), and how many could not be matched. An unmatched request may still be inside an agent's cost; ClawMetry says so rather than guessing.
 
