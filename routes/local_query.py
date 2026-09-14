@@ -942,6 +942,12 @@ _DAEMON_METHODS = frozenset({
     # set_agent_meta. The handler calls put_span(span=...) by keyword (the proxy
     # only forwards kwargs).
     "put_span",
+    # REQ-OBS-OIA-001: the /v1/traces receiver writes a whole export in ONE
+    # call and needs to know it landed. put_span returns None on success AND
+    # when the proxy could not reach the daemon, so a lost span was
+    # acknowledged as received; ingest_spans_batch returns a row count, and
+    # only a failed call returns None. Keyword-only: ingest_spans_batch(spans=[...]).
+    "ingest_spans_batch",
     # WO-7 daemon-free intake. The OTLP /v1/logs receiver runs in the
     # DASHBOARD process, which does not own the DuckDB writer lock, so its
     # batch write has to come through here or it silently no-ops on every
