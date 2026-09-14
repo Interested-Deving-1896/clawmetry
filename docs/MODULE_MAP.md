@@ -186,6 +186,7 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/extensions.py` | medium | ClawMetry extension/plugin system. |
 | `clawmetry/field_report.py` | medium | Field-failure reports from the sync daemon (Requirement: Daemon Field-Failure Reporting, AC-FFR-005). |
 | `clawmetry/flow_trace.py` | medium | Flow trace assembly for the Harness Engineering tab (REQ-HB-006). |
+| `clawmetry/framework_map.py` | medium | which published framework items a Guard finding is relevant to. |
 | `clawmetry/gateway_protocol.py` | small | the single source of the OpenClaw gateway WebSocket protocol range every connect frame must advertise. |
 | `clawmetry/gateway_tap.py` | medium | live OpenClaw gateway WebSocket subscriber. |
 | `clawmetry/git_config_exec.py` | small | Which git config settings make git execute a program. |
