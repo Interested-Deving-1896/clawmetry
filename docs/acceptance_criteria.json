@@ -1153,6 +1153,54 @@
       "text": "Claude Code is a paid runtime: the instrument command and every Claude Code specific mapping (session join, typed events, cache token tiles, waiting-on-you, span materialization) follow the claude_code runtime entitlement; without it the receiver still accepts batches and keeps only the generic ledger and span rows, and the command reports the plan requirement instead of writing."
     },
     {
+      "id": "AC-GOV-ATR-001.1",
+      "doc": "Guard ATLAS OpenClaw replay: case studies AML.CS0048 to AML.CS0051 scored against Guard",
+      "doc_id": "7616fb6b-63d6-49ec-a295-39ec7add4725",
+      "text": "The system shall pin, for every replayed case study, the ATLAS edition and source revision, the case identifier and name, each procedure step with the technique identifier published for it in that edition, and the ATLAS mitigations published against those techniques (ATLAS links mitigations to techniques, not to case studies, so the case to mitigation mapping is derived and labelled as such). A source report whose revision cannot be retrieved shall be named in the scorecard as not pinned."
+    },
+    {
+      "id": "AC-GOV-ATR-001.2",
+      "doc": "Guard ATLAS OpenClaw replay: case studies AML.CS0048 to AML.CS0051 scored against Guard",
+      "doc_id": "7616fb6b-63d6-49ec-a295-39ec7add4725",
+      "text": "For each scenario the system shall record the runtime, the evaluation tier, the policy set in force and the expected outcome of every stage."
+    },
+    {
+      "id": "AC-GOV-ATR-002.1",
+      "doc": "Guard ATLAS OpenClaw replay: case studies AML.CS0048 to AML.CS0051 scored against Guard",
+      "doc_id": "7616fb6b-63d6-49ec-a295-39ec7add4725",
+      "text": "The system shall score every stage of every scenario as unobservable, observed, partial, detected or held before action, naming the finding kinds that fired and the timestamp of the first flagged event, and shall roll each case up to caught, partial or missed."
+    },
+    {
+      "id": "AC-GOV-ATR-002.2",
+      "doc": "Guard ATLAS OpenClaw replay: case studies AML.CS0048 to AML.CS0051 scored against Guard",
+      "doc_id": "7616fb6b-63d6-49ec-a295-39ec7add4725",
+      "text": "A fixture replay shall never score a stage as held before action, and its results shall be labelled fixture replay, distinct from isolated execution evidence."
+    },
+    {
+      "id": "AC-GOV-ATR-002.3",
+      "doc": "Guard ATLAS OpenClaw replay: case studies AML.CS0048 to AML.CS0051 scored against Guard",
+      "doc_id": "7616fb6b-63d6-49ec-a295-39ec7add4725",
+      "text": "The suite shall include benign controls, an intentional allow and at least one failure mode of a pre-action control, and shall report any finding on a benign control as a false positive."
+    },
+    {
+      "id": "AC-GOV-ATR-003.1",
+      "doc": "Guard ATLAS OpenClaw replay: case studies AML.CS0048 to AML.CS0051 scored against Guard",
+      "doc_id": "7616fb6b-63d6-49ec-a295-39ec7add4725",
+      "text": "The system shall generate the scorecard from the replay, and continuous integration shall fail when the committed scorecard and the replay disagree, or when a stage outcome changes without its pinned expectation changing."
+    },
+    {
+      "id": "AC-GOV-ATR-003.2",
+      "doc": "Guard ATLAS OpenClaw replay: case studies AML.CS0048 to AML.CS0051 scored against Guard",
+      "doc_id": "7616fb6b-63d6-49ec-a295-39ec7add4725",
+      "text": "The scorecard shall state that fixture replay does not establish protection against CVE-2026-25253 or against prompt injection in general, and shall list the residual gaps."
+    },
+    {
+      "id": "AC-GOV-ATR-003.3",
+      "doc": "Guard ATLAS OpenClaw replay: case studies AML.CS0048 to AML.CS0051 scored against Guard",
+      "doc_id": "7616fb6b-63d6-49ec-a295-39ec7add4725",
+      "text": "The system shall produce a redacted evidence bundle that contains pins and sha256 of every fixture and stage outcomes, but no raw commands or file paths, and the bundle shall be deterministic given the same generated_at timestamp."
+    },
+    {
       "id": "AC-GOV-FWM-001.1",
       "doc": "Guard Framework References: OWASP LLM 2026, OWASP Agentic 2026 and MITRE ATLAS IDs on findings",
       "doc_id": "15504aea-9ca0-4a1a-a23d-8e825e4f78f9",
