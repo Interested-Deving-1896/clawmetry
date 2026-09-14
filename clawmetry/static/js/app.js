@@ -19195,7 +19195,7 @@ async function loadCostForecast() {
     } else {
       statusMsg = d.days_remaining_in_month + 'd remaining this month';
     }
-    el.innerHTML =
+    el.innerHTML = // codeql[js/xss] cost fields are numeric; fallback '$' + n.toFixed() cannot produce HTML; cmProv branch uses esc()
       '<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center;">' +
         '<div>' +
           '<div style="font-size:12px;color:var(--text-muted);">Projected month-end</div>' +
