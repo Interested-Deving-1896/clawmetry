@@ -221,6 +221,12 @@ def _add_cors(response):
             break
     if _acao is None:
         return response
+    # Belt-and-braces structural check on _acao. The value came from
+    # all_live_origins() (the key file on disk), so it is not
+    # user-controlled; the fullmatch here makes that explicit to static
+    # analysers that trace all_live_origins() through the loop above.
+    if not _ORIGIN_RE.fullmatch(_acao.rstrip("/")):
+        return response
 
     response.headers["Access-Control-Allow-Origin"] = _acao  # lgtm[py/http-response-splitting] codeql[py/http-response-splitting]
     response.headers["Vary"] = "Origin"
@@ -413,8 +419,10 @@ def q_shape(shape: str):
         )
     # Re-derive the shape name from the contract key so all downstream uses
     # (including _dispatch) are reading from QUERY_CONTRACT.keys(), not from
-    # the raw URL variable. This breaks the taint path completely.
+    # the raw URL variable. Re-fetch spec from that clean key so all
+    # subsequent accesses (scope, args) cannot be traced to the URL input.
     shape = next(k for k, v in QUERY_CONTRACT.items() if v is spec)
+    spec = QUERY_CONTRACT[shape]  # break taint: re-fetch via contract-derived key
     if shape not in apikeys.granted_shapes(record):
         needed = spec["scope"]
         # Do NOT reflect `shape` (URL input) in the response body.
