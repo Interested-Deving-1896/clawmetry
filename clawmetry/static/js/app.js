@@ -1425,6 +1425,18 @@ async function loadAnomalyPanel() {
     if (!panel) return;
     var anomalies = data.anomalies || [];
     var baselines = data.baselines || {};
+    // Under a selected runtime keep only that runtime's sessions. Node-wide
+    // aggregate rows (session_key "__error_rate__") and the node-wide
+    // baselines are not about this runtime, so they are left out.
+    var _anRt = (typeof _cmRuntimeFilter === 'function') ? _cmRuntimeFilter() : 'all';
+    var _anScoped = !!_anRt && _anRt !== 'all';
+    if (_anScoped) {
+      anomalies = anomalies.filter(function(a){
+        var sk = String(a && a.session_key || '');
+        return !!sk && sk.indexOf('__') !== 0 && _cmRuntimeOf({session_id: sk}) === _anRt;
+      });
+      baselines = {};
+    }
     var active = anomalies.filter(function(a){ return !a.acknowledged; });
 
     // Badge
@@ -1451,7 +1463,7 @@ async function loadAnomalyPanel() {
       if (baselines.baseline_cost_7d > 0) blHtml += '<span style="background:var(--bg-hover);padding:3px 8px;border-radius:6px;color:var(--text-secondary);">Avg cost: $' + Number(baselines.baseline_cost_7d).toFixed(4) + '/session</span>';
       if (baselines.baseline_tokens_7d > 0) blHtml += '<span style="background:var(--bg-hover);padding:3px 8px;border-radius:6px;color:var(--text-secondary);">Avg tokens: ' + Math.round(baselines.baseline_tokens_7d).toLocaleString() + '/session</span>';
       if (baselines.baseline_sessions_per_day_7d > 0) blHtml += '<span style="background:var(--bg-hover);padding:3px 8px;border-radius:6px;color:var(--text-secondary);">Sessions/day: ' + Number(baselines.baseline_sessions_per_day_7d).toFixed(1) + '</span>';
-      blEl.innerHTML = blHtml || '<span style="color:var(--text-muted);">Collecting baseline data...</span>';
+      blEl.innerHTML = blHtml || (_anScoped ? '' : '<span style="color:var(--text-muted);">Collecting baseline data...</span>');
     }
 
     // Anomaly list
@@ -2737,6 +2749,14 @@ async function loadReliabilityCard() {
   var detEl = document.getElementById('reliability-detail-lt');
   var iconEl = document.getElementById('reliability-icon-lt');
   if (!dirEl) return;
+  // The trend is built from this machine's daemon heartbeats plus every
+  // runtime's error events; it has no per-runtime form, so it is not shown
+  // under a selected runtime.
+  var _relRt = (typeof _cmRuntimeFilter === 'function') ? _cmRuntimeFilter() : 'all';
+  var _relScoped = !!_relRt && _relRt !== 'all';
+  var _relCard = document.getElementById('reliability-card-lt');
+  if (_relCard) _relCard.style.display = _relScoped ? 'none' : '';
+  if (_relScoped) return;
   try {
     var d = await fetchJsonWithTimeout('/api/reliability', 5000);
     d = d || {};
@@ -2792,9 +2812,12 @@ async function loadAutonomy() {
   }
 
   try {
+    // Check-in gaps are per runtime: Codex's cadence is not Claude Code's.
+    var _auRt = (typeof _cmRuntimeFilter === 'function') ? _cmRuntimeFilter() : 'all';
+    var _auUrl = '/api/autonomy' + ((_auRt && _auRt !== 'all') ? '?runtime=' + encodeURIComponent(_auRt) : '');
     var d = await (typeof fetchJsonWithTimeout === 'function'
-      ? fetchJsonWithTimeout('/api/autonomy', 5000)
-      : fetch('/api/autonomy').then(function(r){return r.json();}));
+      ? fetchJsonWithTimeout(_auUrl, 5000)
+      : fetch(_auUrl).then(function(r){return r.json();}));
 
     if (d.score == null) {
       labelEl.textContent = t("app.just_getting_started", null, "Just getting started");
@@ -3962,13 +3985,23 @@ async function loadHealthTimeline() {
   var card = document.getElementById('health-timeline-card');
   var body = document.getElementById('health-timeline-body');
   if (!card || !body) return;
+  var rt = (typeof _cmRuntimeFilter === 'function') ? _cmRuntimeFilter() : 'all';
+  var scoped = !!rt && rt !== 'all';
   var data;
   try {
-    var resp = await fetch('/api/health-timeline');
+    var resp = await fetch('/api/health-timeline' + (scoped ? '?runtime=' + encodeURIComponent(rt) : ''));
     if (!resp.ok) { card.style.display = 'none'; return; }
     data = await resp.json();
   } catch (e) { card.style.display = 'none'; return; }
   var runtimes = (data && data.runtimes) || [];
+  // Under a selected runtime only its own row renders: an older server and
+  // the hosted snapshot both answer with every runtime they know. NemoClaw
+  // runs the OpenClaw adapter, so its sessions bucket as openclaw.
+  if (scoped) {
+    runtimes = runtimes.filter(function (r) {
+      return r && (r.runtime === rt || (rt === 'nemoclaw' && r.runtime === 'openclaw'));
+    });
+  }
   if (!runtimes.length || !runtimes.some(function(r){ return (r.dots||[]).length; })) {
     card.style.display = 'none';
     return;
@@ -6804,8 +6837,11 @@ async function loadEvalSummary() {
   function setTitleCheck(show) { if (checkEl) checkEl.style.display = show ? '' : 'none'; }
   if (!avgEl) return;
   try {
-    var data = await fetch('/api/evals/summary?window=24h').then(function(r){return r.json();}).catch(function(){return null;});
-    if (!data || typeof data.scored !== 'number') {
+    var _evRt = (typeof _cmRuntimeFilter === 'function') ? _cmRuntimeFilter() : 'all';
+    var _evQ = (_evRt && _evRt !== 'all') ? '&runtime=' + encodeURIComponent(_evRt) : '';
+    var data = await fetch('/api/evals/summary?window=24h' + _evQ).then(function(r){return r.json();}).catch(function(){return null;});
+    // A server that ignores ?runtime answers for the whole node.
+    if (!data || typeof data.scored !== 'number' || (_evQ && data.runtime !== _evRt)) {
       setTitleCheck(false);
       avgEl.textContent = '--';
       if (covEl) covEl.textContent = '';
@@ -12882,6 +12918,9 @@ function _cmApplyRuntimeSelection(val) {
   // Swap the Flow + Overview diagram to the selected runtime's topology.
   try { if (typeof _applyRuntimeFlowDiagram === 'function') _applyRuntimeFlowDiagram(val); } catch (e) {}
   // Reload the current tab so any runtime-aware view re-filters in place.
+  // loadAll coalesces calls 2 s apart; a switch must not be swallowed by that,
+  // or the Overview keeps the previous runtime's cards until the next refresh.
+  try { _loadAllLastFinishedMs = 0; } catch (e) {}
   if (typeof switchTab === 'function' && _cmCurrentTab) switchTab(_cmCurrentTab);
   // System Health refreshes on a 30s timer and is not part of loadAll, so
   // re-scope it now or the previous runtime's checks linger.
@@ -17172,7 +17211,13 @@ async function loadSystemHealth() {
       }
     }
     var services = Array.isArray(d.services) ? d.services : [];
-    if (!isOc) services = services.filter(function (s) { return !/openclaw/i.test(String(s && s.name || '')); });
+    // OpenClaw's gateway arrives as "OpenClaw Gateway" locally and as a bare
+    // "Gateway" from the hosted snapshot; both, and anything on its port,
+    // belong to OpenClaw alone.
+    if (!isOc) services = services.filter(function (s) {
+      var name = String(s && s.name || '').trim();
+      return !(/openclaw/i.test(name) || /^gateway$/i.test(name) || Number(s && s.port) === 18789);
+    });
     var channels = (scope.has('CHANNELS') && Array.isArray(d.channels)) ? d.channels : [];
     var disks = Array.isArray(d.disks) ? d.disks : [];
     var crons = (d.crons && typeof d.crons === 'object') ? d.crons : {enabled: 0, ok24h: 0, failed: []};
@@ -17883,9 +17928,13 @@ async function loadActivityHeatmap() {
   var grid = document.getElementById('activity-heatmap-grid');
   if (!card || !grid) return;
   var data;
-  try { data = await fetchJsonWithTimeout('/api/activity-heatmap', 5000); } catch(e) { return; }
+  var rt = (typeof _cmRuntimeFilter === 'function') ? _cmRuntimeFilter() : 'all';
+  var q = (rt && rt !== 'all') ? ('?runtime=' + encodeURIComponent(rt)) : '';
+  try { data = await fetchJsonWithTimeout('/api/activity-heatmap' + q, 5000); } catch(e) { card.style.display = 'none'; return; }
   var days = (data && data.days) || [];
-  if (!days.length) return;
+  // A server that ignores ?runtime answers for the whole node; hide the card
+  // rather than draw every runtime's days under this one's name.
+  if (!days.length || (q && data.runtime !== rt)) { card.style.display = 'none'; return; }
   var maxSessions = Math.max.apply(null, days.map(function(d){ return d.sessions || 0; }));
   var shades = ['#12122a','#1a3a2a','#2a6a3a','#4a9a2a','#6adb3a'];
   var html = '';
