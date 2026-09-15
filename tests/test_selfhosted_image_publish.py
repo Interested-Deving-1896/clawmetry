@@ -102,7 +102,7 @@ def _matrix_arches(job: dict) -> dict:
     return {row["arch"]: row["runner"] for row in include}
 
 
-# ── publish ─────────────────────────────────────────────────────────────────
+# -- publish -----------------------------------------------------------------
 
 
 def test_release_dispatches_image_after_pypi_upload() -> None:
@@ -180,7 +180,7 @@ def test_image_installs_only_the_published_wheel() -> None:
     )
 
 
-# ── verify ──────────────────────────────────────────────────────────────────
+# -- verify ------------------------------------------------------------------
 
 
 def test_verify_job_pulls_with_no_credentials_on_each_architecture(image_wf) -> None:
@@ -245,7 +245,7 @@ def test_pull_request_leg_builds_and_verifies_the_branch_image(image_wf) -> None
     assert "--anonymous" not in steps[verify]["run"]
 
 
-# ── pin ─────────────────────────────────────────────────────────────────────
+# -- pin ---------------------------------------------------------------------
 
 
 def test_pin_runs_only_after_verification(image_wf) -> None:
@@ -284,10 +284,20 @@ def test_pin_replaces_the_source_build_with_version_and_digest() -> None:
 def test_check_rejects_a_tag_only_or_build_shadowed_image() -> None:
     current = _read("deploy", "self-hosted", "docker-compose.yml")
     assert pin_mod.check(current) == [], "the shipped Compose file must pass its own check"
-    tag_only = current.replace(
-        "image: clawmetry-selfhosted:latest", "image: ghcr.io/vivekchand/clawmetry:latest"
+    # Synthesise a Compose fragment with the published image named by tag only
+    # AND a build: block still present.  Using a literal rather than mutating
+    # `current` keeps this test stable across pin updates: the shipped file no
+    # longer contains the pre-pin `image: clawmetry-selfhosted:latest` string,
+    # so a replace-based approach would leave the fragment unchanged and the
+    # check would trivially pass.
+    bad_compose = (
+        "services:\n"
+        "  clawmetry:\n"
+        "    build:\n"
+        "      context: ../..\n"
+        "    image: ghcr.io/vivekchand/clawmetry:latest\n"
     )
-    problems = pin_mod.check(tag_only)
+    problems = pin_mod.check(bad_compose)
     assert any("digest" in p for p in problems)
     assert any("build" in p for p in problems), (
         "a published image next to a build: block would silently fall back to "
@@ -296,7 +306,7 @@ def test_check_rejects_a_tag_only_or_build_shadowed_image() -> None:
     assert pin_mod.main(["--compose", os.path.join(SELF_HOSTED, "docker-compose.yml"), "check"]) == 0
 
 
-# ── documentation ───────────────────────────────────────────────────────────
+# -- documentation -----------------------------------------------------------
 
 
 def _section(md: str, heading: str) -> str:
