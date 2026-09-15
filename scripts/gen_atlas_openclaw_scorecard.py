@@ -168,7 +168,7 @@ def render(report: dict) -> str:
     w("Framework IDs in parentheses after a finding's severity (e.g. `(LLM02:2026, ASI03, AML.T0055)`) "
       "are from ClawMetry's framework contract (`clawmetry/framework_map.py`, mapping version "
       f"`{_fm.MAPPING_VERSION}`), sourced from #5952. They indicate the finding is *relevant to* those "
-      "OWASP LLM 2026, OWASP Agentic 2026 and MITRE ATLAS items \u2014 not that the risk is prevented. "
+      "OWASP LLM 2026, OWASP Agentic 2026 and MITRE ATLAS items - not that the risk is prevented. "
       "A finding with no IDs has no honest match in any of the three frameworks.")
     w("")
 
