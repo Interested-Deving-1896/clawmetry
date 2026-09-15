@@ -27036,7 +27036,11 @@ function loadCostOptimizerData(isRefresh) {
   var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
   var timedOut = false;
   var timer = setTimeout(function() { timedOut = true; if (ctrl) ctrl.abort(); }, _COST_OPT_TIMEOUT_MS);
-  fetch('/api/cost-optimizer', ctrl ? { signal: ctrl.signal } : undefined).then(function(r) {
+  // Scope to the runtime switcher, like every other Cost surface: without it a
+  // Codex dashboard opened an optimizer full of Claude Code spend.
+  var _coRt = (typeof _cmRuntimeFilter === 'function') ? _cmRuntimeFilter() : 'all';
+  var _coUrl = '/api/cost-optimizer' + (_coRt && _coRt !== 'all' ? '?runtime=' + encodeURIComponent(_coRt) : '');
+  fetch(_coUrl, ctrl ? { signal: ctrl.signal } : undefined).then(function(r) {
     // 402 is the entitlement answer, not data: never parse it as figures.
     if (r.status === 402) return { error: 'upgrade_required' };
     if (!r.ok) throw new Error('unavailable');
