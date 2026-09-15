@@ -784,6 +784,10 @@ _DAEMON_METHODS = frozenset({
     # split for the Tokens-tab daily chart. Replaces the legacy fast-path
     # that returned 0 for every split on real OpenClaw v3 installs.
     "query_daily_usage_splits",
+    # Issue #5936: one usage fact per billable turn (tokens, model, Azure
+    # deployment), valued at read time by the local /api/usage handler.
+    # Read-only, and it returns no cost: the valuation is never stored.
+    "query_usage_facts",
     # Issue #5289: Fish Audio TTS cost breakdown for /api/usage attribution.
     # TTS events store cost_usd in ``events``; this rollup surfaces per-provider
     # spend alongside the LLM model breakdown so audio synthesis costs are visible.

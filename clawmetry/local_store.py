@@ -18258,116 +18258,13 @@ class LocalStore(ProjectsMixin, TrailStoreMixin):
         # Per-day buckets keyed by YYYY-MM-DD.
         day_bucket: dict[str, dict[str, Any]] = {}
 
-        # Dedup: real OpenClaw + Claude Code installs emit both an
-        # ``assistant`` (Anthropic-SDK envelope, has cache splits) and a
-        # ``model.completed`` (slim ``promptCache.lastCallUsage`` only) for
-        # the SAME LLM turn — typically ~100-200 ms apart because they
-        # come from different log writers. Counting both inflates the
-        # input + output buckets by 2× and silently drops cache splits
-        # whenever the slim sibling wins the dedup race.
-        #
-        # Strategy: bucket events by (session_id, ts-rounded-to-second).
-        # When two events hash to the same bucket OR one second apart
-        # (sibling writers race, ~100-300 ms drift seen in the wild),
-        # prefer the richer envelope (assistant/message > model.completed).
-        # ±1 s is wide enough to catch the writer race without colliding
-        # turns: model-completion latency on a hot Anthropic call is
-        # consistently ≥ 2 s, so two distinct LLM turns never round to
-        # adjacent integer seconds in practice.
-        DEDUP_WINDOW_S = 1
-
-        def _priority(et: str | None) -> int:
-            et = (et or "").lower()
-            if et in ("assistant", "subagent:assistant", "message"):
-                return 2  # full Anthropic envelope
-            if et == "model.completed":
-                return 1  # slim sibling
-            return 0
-
-        def _ts_to_epoch_s(ts_str: str) -> int | None:
-            """ISO-8601 → integer seconds since epoch. Returns None on
-            parse failure (caller treats as "skip dedup, count it")."""
-            if not ts_str:
-                return None
-            try:
-                from datetime import datetime as _dt
-                s = ts_str.replace("Z", "+00:00") if ts_str.endswith("Z") else ts_str
-                return int(_dt.fromisoformat(s).timestamp())
-            except (TypeError, ValueError):
-                return None
-
-        # First pass: parse + dedup. Build a map of
-        # (sid, window_start) -> {priority, splits, cost, day, etype, ts}
-        # so we can collapse sibling events deterministically before
-        # bucketing.
-        chosen: dict[tuple[str, int], dict[str, Any]] = {}
-        loose: list[dict[str, Any]] = []  # rows we couldn't dedup-key
-
-        for ev_id, ts, sid, etype, raw, col_cost in rows:
-            data: dict[str, Any] = {}
-            if raw is not None:
-                try:
-                    raw = _ccr.maybe_decompress(raw)
-                    text = raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else raw
-                    parsed = json.loads(text) if text else {}
-                    if isinstance(parsed, dict):
-                        data = parsed
-                except (ValueError, TypeError, UnicodeDecodeError):
-                    continue
-            splits = _extract_usage_splits(data)
-            if splits["input_tokens"] <= 0 and splits["output_tokens"] <= 0:
-                # Skip rows with no recoverable usage — the daemon writes
-                # session.started / model.changed / tool.call rows with
-                # the same event_type net but no usage payload.
-                continue
-
-            day = _local_day(ts)
-            if not day:
-                continue
-
-            try:
-                cost_val = float(col_cost or 0.0)
-            except (TypeError, ValueError):
-                cost_val = 0.0
-            if cost_val <= 0:
-                cost_val = _extract_usage_cost(data)
-
-            this_pri = _priority(etype)
-            payload = {
-                "priority":    this_pri,
-                "splits":      splits,
-                "cost_usd":    cost_val,
-                "day":         day,
-                "etype":       etype,
-                "ts":          ts,
-            }
-
-            epoch_s = _ts_to_epoch_s(ts)
-            if epoch_s is None or not sid:
-                # No usable dedup key — keep the row but don't dedup it.
-                loose.append(payload)
-                continue
-
-            # Probe the ±DEDUP_WINDOW_S range for an existing sibling.
-            # First match wins; we keep the higher-priority of the two.
-            collision_key: tuple[str, int] | None = None
-            for delta in range(-DEDUP_WINDOW_S, DEDUP_WINDOW_S + 1):
-                k = (sid, epoch_s + delta)
-                if k in chosen:
-                    collision_key = k
-                    break
-
-            if collision_key is None:
-                chosen[(sid, epoch_s)] = payload
-                continue
-
-            existing = chosen[collision_key]
-            if this_pri > existing["priority"]:
-                # Richer envelope wins — replace the slim one.
-                chosen[collision_key] = payload
+        # Dedup of the v3 sibling pair (assistant + model.completed for the
+        # same LLM turn) lives in _pick_billable_turns, shared with
+        # query_usage_facts so both surfaces count exactly the same turns.
+        picks = _pick_billable_turns(rows)
 
         # Second pass: aggregate the deduped picks into per-day buckets.
-        for payload in list(chosen.values()) + loose:
+        for payload in picks:
             day = payload["day"]
             splits = payload["splits"]
             cost_val = payload["cost_usd"]
@@ -18388,6 +18285,82 @@ class LocalStore(ProjectsMixin, TrailStoreMixin):
             bucket["event_count"]        += 1
 
         return sorted(day_bucket.values(), key=lambda r: r["day"], reverse=True)
+
+    def query_usage_facts(
+        self,
+        *,
+        since: str | None = None,
+        until: str | None = None,
+        runtime: str | None = None,
+        limit_events: int = 50000,
+    ) -> list[dict[str, Any]]:
+        """One usage fact per billable LLM turn, oldest first (issue #5936).
+
+        The stored event is the usage fact; this reads it without pricing it.
+        Each row is ``{request_id, observed_at, session_id, model, provider,
+        deployment, resource, input_tokens, output_tokens, cache_read_tokens,
+        cache_write_tokens}``: the event id, its observed time, the model the
+        turn reported, and the Azure OpenAI deployment and resource host when
+        the interceptor recorded them. Turns are deduped exactly as
+        ``query_daily_usage_splits`` dedupes them. No cost is returned and
+        nothing is written: a valuation is derived by the local reader, never
+        stored here.
+        """
+        clauses: list[str] = [f"event_type IN {_sql_in_clause(_BILLABLE_TURN_EVENT_TYPES)}"]
+        params: list[Any] = []
+        if since:
+            clauses.append("ts >= ?")
+            params.append(since)
+        if until:
+            clauses.append("ts <= ?")
+            params.append(until)
+        _rt_clause, _rt_params = _runtime_session_id_clause(runtime)
+        if _rt_clause:
+            clauses.append(_rt_clause)
+            params.extend(_rt_params)
+        sql = f"""
+            SELECT id, ts, session_id, event_type, data, cost_usd, model
+            FROM events
+            WHERE {" AND ".join(clauses)}
+            ORDER BY ts ASC, id ASC
+            LIMIT ?
+        """
+        params.append(int(max(1, limit_events)))
+        rows = self._fetch(sql, params)
+
+        def _extra(data: dict[str, Any], row: tuple) -> dict[str, Any]:
+            model = row[6] if len(row) > 6 else None
+            if not model:
+                msg = data.get("message")
+                model = (msg.get("model") if isinstance(msg, dict) else None) or data.get("model")
+
+            def _text(key: str) -> str | None:
+                v = data.get(key)
+                return v.strip() if isinstance(v, str) and v.strip() else None
+
+            return {
+                "model": model if isinstance(model, str) and model else None,
+                "provider": _text("provider"),
+                "deployment": _text("deployment"),
+                "resource": _text("endpoint_host"),
+            }
+
+        facts: list[dict[str, Any]] = []
+        for p in _pick_billable_turns(rows, extra=_extra):
+            extra = p.get("extra") or {}
+            facts.append({
+                "request_id": p.get("id"),
+                "observed_at": p.get("ts"),
+                "session_id": p.get("session_id"),
+                "model": extra.get("model"),
+                "provider": extra.get("provider"),
+                "deployment": extra.get("deployment"),
+                "resource": extra.get("resource"),
+                **{k: int(p["splits"].get(k) or 0) for k in (
+                    "input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens")},
+            })
+        facts.sort(key=lambda f: (str(f.get("observed_at") or ""), str(f.get("request_id") or "")))
+        return facts
 
     def query_cache_metrics(
         self,
@@ -20511,6 +20484,132 @@ def _read_usage_int(usage: Any, keys: tuple[str, ...]) -> int:
         if iv > 0:
             return iv
     return 0
+
+
+def _pick_billable_turns(rows, extra=None):
+    """Decode, dedupe and keep the billable LLM turns in ``rows``.
+
+    ``rows`` are ``(id, ts, session_id, event_type, data, cost_usd, ...)``
+    tuples ordered by ``ts``. Returns one payload dict per kept turn,
+    ``{priority, splits, cost_usd, day, etype, ts, id, session_id, extra}``,
+    where ``extra`` is ``extra(data, row)`` when given. Shared by
+    ``query_daily_usage_splits`` and ``query_usage_facts`` so the daily chart
+    and the usage facts count exactly the same turns.
+    """
+
+    # Dedup: real OpenClaw + Claude Code installs emit both an
+    # ``assistant`` (Anthropic-SDK envelope, has cache splits) and a
+    # ``model.completed`` (slim ``promptCache.lastCallUsage`` only) for
+    # the SAME LLM turn — typically ~100-200 ms apart because they
+    # come from different log writers. Counting both inflates the
+    # input + output buckets by 2× and silently drops cache splits
+    # whenever the slim sibling wins the dedup race.
+    #
+    # Strategy: bucket events by (session_id, ts-rounded-to-second).
+    # When two events hash to the same bucket OR one second apart
+    # (sibling writers race, ~100-300 ms drift seen in the wild),
+    # prefer the richer envelope (assistant/message > model.completed).
+    # ±1 s is wide enough to catch the writer race without colliding
+    # turns: model-completion latency on a hot Anthropic call is
+    # consistently ≥ 2 s, so two distinct LLM turns never round to
+    # adjacent integer seconds in practice.
+    DEDUP_WINDOW_S = 1
+
+    def _priority(et: str | None) -> int:
+        et = (et or "").lower()
+        if et in ("assistant", "subagent:assistant", "message"):
+            return 2  # full Anthropic envelope
+        if et == "model.completed":
+            return 1  # slim sibling
+        return 0
+
+    def _ts_to_epoch_s(ts_str: str) -> int | None:
+        """ISO-8601 → integer seconds since epoch. Returns None on
+        parse failure (caller treats as "skip dedup, count it")."""
+        if not ts_str:
+            return None
+        try:
+            from datetime import datetime as _dt
+            s = ts_str.replace("Z", "+00:00") if ts_str.endswith("Z") else ts_str
+            return int(_dt.fromisoformat(s).timestamp())
+        except (TypeError, ValueError):
+            return None
+
+    # First pass: parse + dedup. Build a map of
+    # (sid, window_start) -> {priority, splits, cost, day, etype, ts}
+    # so we can collapse sibling events deterministically before
+    # bucketing.
+    chosen: dict[tuple[str, int], dict[str, Any]] = {}
+    loose: list[dict[str, Any]] = []  # rows we couldn't dedup-key
+
+    for row in rows:
+        ev_id, ts, sid, etype, raw, col_cost = row[:6]
+        data: dict[str, Any] = {}
+        if raw is not None:
+            try:
+                raw = _ccr.maybe_decompress(raw)
+                text = raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else raw
+                parsed = json.loads(text) if text else {}
+                if isinstance(parsed, dict):
+                    data = parsed
+            except (ValueError, TypeError, UnicodeDecodeError):
+                continue
+        splits = _extract_usage_splits(data)
+        if splits["input_tokens"] <= 0 and splits["output_tokens"] <= 0:
+            # Skip rows with no recoverable usage — the daemon writes
+            # session.started / model.changed / tool.call rows with
+            # the same event_type net but no usage payload.
+            continue
+
+        day = _local_day(ts)
+        if not day:
+            continue
+
+        try:
+            cost_val = float(col_cost or 0.0)
+        except (TypeError, ValueError):
+            cost_val = 0.0
+        if cost_val <= 0:
+            cost_val = _extract_usage_cost(data)
+
+        this_pri = _priority(etype)
+        payload = {
+            "priority":    this_pri,
+            "splits":      splits,
+            "cost_usd":    cost_val,
+            "day":         day,
+            "etype":       etype,
+            "ts":          ts,
+            "id":          ev_id,
+            "session_id":  sid,
+            "extra":       extra(data, row) if extra is not None else None,
+        }
+
+        epoch_s = _ts_to_epoch_s(ts)
+        if epoch_s is None or not sid:
+            # No usable dedup key — keep the row but don't dedup it.
+            loose.append(payload)
+            continue
+
+        # Probe the ±DEDUP_WINDOW_S range for an existing sibling.
+        # First match wins; we keep the higher-priority of the two.
+        collision_key: tuple[str, int] | None = None
+        for delta in range(-DEDUP_WINDOW_S, DEDUP_WINDOW_S + 1):
+            k = (sid, epoch_s + delta)
+            if k in chosen:
+                collision_key = k
+                break
+
+        if collision_key is None:
+            chosen[(sid, epoch_s)] = payload
+            continue
+
+        existing = chosen[collision_key]
+        if this_pri > existing["priority"]:
+            # Richer envelope wins — replace the slim one.
+            chosen[collision_key] = payload
+
+    return list(chosen.values()) + loose
 
 
 def _extract_usage_splits(data: dict) -> dict[str, int]:
