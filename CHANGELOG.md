@@ -1,5 +1,19 @@
 ## Unreleased
 
+### Release: the Cost Optimizer follows the runtime switcher (2026-09-15)
+- **Carries:** #6016 (a runtime-scoped dashboard, for example `?runtime=codex`, no longer shows another runtime's spend, expensive calls or experiments in the Cost Optimizer; the daemon ships `costOptimizerByRuntime` for the hosted dashboard, served by clawmetry-cloud#2457 after this pin). Any other change merged before this release carries its own entry below.
+
+### Fixed: the Cost Optimizer ignored the runtime switcher (2026-09-15)
+- **Why:** with Codex selected (`?runtime=codex`), the optimizer opened under "all runtimes on <host>" and listed claude-opus-5 calls and a "claude-opus-5 via Anthropic" experiment, so Claude Code spend read as Codex's. The route, its DuckDB helper and the hosted snapshot slice were all node-wide, and a scoped view could fall back to the interceptor ring, which is not attributed to any runtime.
+- **What:** `/api/cost-optimizer?runtime=<id>` reads that runtime's sessions only (`query_aggregates` / `query_events` with `runtime=`), labels the header "Codex only, on this computer", and with no spend for the runtime shows unknown figures instead of borrowing the ring. The dashboard passes the switcher's runtime. The daemon ships `costOptimizerByRuntime` beside `costOptimizer` for the hosted dashboard (served by the matching clawmetry-cloud change).
+- **Verified:** `tests/test_cost_optimizer_runtime_scope.py` (6 tests): Codex and Claude Code sessions in one store, scoped route shows only Codex models and spend, unscoped still shows both, an empty runtime is unknown even with a populated ring, and the per-runtime snapshot slice equals the scoped route.
+- **Refs:** REQ-OBS-CEA-023 (AC-OBS-CEA-023.3, AC-OBS-CEA-023.9).
+
+### Fixed: Guard listed Claude Code sessions with Codex selected (2026-09-15)
+- **Why:** the Guard tab ignored the runtime switcher. With Codex selected it listed every running claude_code session and "$23.72 at risk across 1 flagged session" from one of them, locally and on the hosted dashboard.
+- **What:** the tab passes `?runtime=` from the switcher; `/api/guard/sessions` filters its rows (the live-probe rows included) before counting flagged sessions and spend at risk, so the headline describes only what is listed. An empty scoped list names the runtime ("No Codex sessions running right now."). The daemon's `guardSessions` snapshot slice still carries every runtime; the hosted interceptor already filters it by `?runtime=` and recomputes the totals.
+- **Verified:** `tests/test_cloud_guard_signals_slices.py` (route, builder and loader).
+
 ### Changed: Sessions sits next to Agents in the navigation (2026-09-15)
 - **What:** the Sessions item moved from above the Monitoring label to directly under Agents (Home, Agents, Sessions, Activity, Cost, Models, Context usage). It is still the page the dashboard opens on and keeps the default highlight; the tab id and deep links are unchanged.
 - **Verified:** `tests/test_beginner_nav_phase_a.py` and `tests/test_trail_tab_template.py` pin the new order.
