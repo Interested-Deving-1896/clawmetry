@@ -1,5 +1,8 @@
 ## Unreleased
 
+### Release: the Cost Optimizer follows the runtime switcher (2026-09-15)
+- **Carries:** #6016 (a runtime-scoped dashboard, for example `?runtime=codex`, no longer shows another runtime's spend, expensive calls or experiments in the Cost Optimizer; the daemon ships `costOptimizerByRuntime` for the hosted dashboard, served by clawmetry-cloud#2457 after this pin). Any other change merged before this release carries its own entry below.
+
 ### Fixed: the Cost Optimizer ignored the runtime switcher (2026-09-15)
 - **Why:** with Codex selected (`?runtime=codex`), the optimizer opened under "all runtimes on <host>" and listed claude-opus-5 calls and a "claude-opus-5 via Anthropic" experiment, so Claude Code spend read as Codex's. The route, its DuckDB helper and the hosted snapshot slice were all node-wide, and a scoped view could fall back to the interceptor ring, which is not attributed to any runtime.
 - **What:** `/api/cost-optimizer?runtime=<id>` reads that runtime's sessions only (`query_aggregates` / `query_events` with `runtime=`), labels the header "Codex only, on this computer", and with no spend for the runtime shows unknown figures instead of borrowing the ring. The dashboard passes the switcher's runtime. The daemon ships `costOptimizerByRuntime` beside `costOptimizer` for the hosted dashboard (served by the matching clawmetry-cloud change).
