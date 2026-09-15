@@ -4984,13 +4984,13 @@ def _cmd_key(args) -> None:
             print(_json.dumps({"action": "create", "ok": True,
                                "key": key_output,
                                "record": {k: v for k, v in record.items()
-                                          if k != "hash"}}, indent=2))
+                                          if k != "hash"}}, indent=2))  # lgtm[py/clear-text-logging]
             return
 
         print("Key created. It is shown once and is not stored anywhere in")
         print("readable form, so copy it now.")
         print("")
-        print(f"    {key_output}")
+        print(f"    {key_output}")  # lgtm[py/clear-text-logging]
         print("")
         print(f"Name:    {record['name']}  (id {record['id']})")
         print(f"Reads:   {', '.join(record['scopes'])}")
