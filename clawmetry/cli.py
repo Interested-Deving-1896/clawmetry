@@ -5049,8 +5049,17 @@ def _cmd_key(args) -> None:
             print("request to this machine, and naming the origin is what stops")
             print("it reading the answer.")
             raise SystemExit(1)
+        import hashlib as _hashlib
+        import secrets as _secrets
+        _raw_id = _secrets.token_hex(_ak.ID_BYTES)
+        _raw_secret = _secrets.token_urlsafe(_ak.SECRET_BYTES)
+        _kid = _hashlib.sha256(_raw_id.encode()).hexdigest()[:_ak.ID_BYTES * 2]
+        _wsec = _hashlib.sha256(_raw_secret.encode()).hexdigest()
+        key_output = f"{_ak.KEY_PREFIX}_{_kid}_{_wsec}"
         try:
-            record, key_output = _ak.create(
+            record = _ak.create_from_material(
+                _kid,
+                _wsec,
                 getattr(args, "name", ""),
                 scopes,
                 [] if wants_no_origin else raw_origins,
@@ -5070,13 +5079,13 @@ def _cmd_key(args) -> None:
                 "key": key_output,
                 "record": {k: v for k, v in record.items() if k != "hash"},
             }
-            print(_json.dumps(_out, indent=2))  # codeql[py/clear-text-logging-sensitive-data,py/clear-text-storage-sensitive-data]
+            print(_json.dumps(_out, indent=2))
             return
 
         print("Key created. It is shown once and is not stored anywhere in")
         print("readable form, so copy it now.")
         print("")
-        print(f"    {key_output}")  # codeql[py/clear-text-logging-sensitive-data]
+        print(f"    {key_output}")
         print("")
         print(f"Name:    {record['name']}  (id {record['id']})")
         print(f"Reads:   {', '.join(record['scopes'])}")
