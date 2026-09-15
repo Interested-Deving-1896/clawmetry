@@ -70,7 +70,7 @@ One module per feature, each owning one or more Flask blueprints. New endpoints 
 | `routes/paywall_lifecycle.py` | small |  |  | the paywall beacons that reach the funnel. |
 | `routes/plugins.py` | medium | `bp_plugins` | `/api/plugins` | Plugin registry: unified view of installed plugins (#692). |
 | `routes/policy.py` | medium | `bp_policy` | `/api/approvals`, `/api/approvals-audit`, `/api/policy`, `/api/tool-policy` | tool-policy + sandbox + exec-approval audit (PRD P1-1). |
-| `routes/pricing.py` | small | `bp_pricing` | `/api/pricing` | the price book API (REQ-OBS-CEA-024, issue #5936). |
+| `routes/pricing.py` | medium | `bp_pricing` | `/api/pricing` | the price book API (REQ-OBS-CEA-024, issue #5936). |
 | `routes/projects.py` | medium | `bp_projects` | `/api/projects` | project attribution and per-project budgets (REQ-OBS-PRJ-001). |
 | `routes/quality.py` | medium | `bp_quality` | `/api/quality` | the Quality tab endpoint. |
 | `routes/readiness.py` | small | `bp_readiness` | `/api/repo-readiness` | ``bp_readiness`` — repo AI-readiness. |
@@ -237,6 +237,8 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/pr_provenance.py` | large | Pull-request provenance: which agent sessions wrote which changed files. |
 | `clawmetry/pr_provenance_cli.py` | medium | ``clawmetry trace report``: agent-session provenance for a change. |
 | `clawmetry/price_book.py` | medium | Price book contract: negotiated rates, Azure OpenAI aliases, effective dates. |
+| `clawmetry/price_book_edit.py` | medium | Editing the price book, and when each version came into effect. |
+| `clawmetry/price_book_usage.py` | medium | Usage valued from the price book, when it is read. |
 | `clawmetry/process_control.py` | large | host-side process control for runaway agents. |
 | `clawmetry/project_attribution.py` | medium | Project attribution and per-project budget arithmetic (REQ-OBS-PRJ-001). |
 | `clawmetry/prompt_injection.py` | medium | injection signatures and the untrusted-content signal. |

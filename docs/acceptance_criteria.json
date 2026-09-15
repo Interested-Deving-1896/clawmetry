@@ -1285,6 +1285,42 @@
       "text": "The price book, its rates and its recorded versions shall remain on the machine where they were written, and no path that sends data off the machine shall read them."
     },
     {
+      "id": "AC-OBS-CEA-024.12",
+      "doc": "Price Book: negotiated rates, deployment aliases and effective dates",
+      "doc_id": "76e32850-c505-44a3-8ead-48a1bf350808",
+      "text": "When the price book version in effect at the time usage was observed selects exactly one entry for that usage and a valuation engine is present, the local Usage view shall show that usage valued at the contract rate, labelled as contract rate and naming the recorded book version; a figure whose book version is not recorded shall not be labelled contract, and the published-rate figures shall stay shown beside it."
+    },
+    {
+      "id": "AC-OBS-CEA-024.13",
+      "doc": "Price Book: negotiated rates, deployment aliases and effective dates",
+      "doc_id": "76e32850-c505-44a3-8ead-48a1bf350808",
+      "text": "Each usage record shall be valued against the book version that was in effect when it was observed. A later edit to the book shall not change the figure shown for usage observed before the edit, unless the user explicitly asks for a restatement; a restated figure shall be labelled as a restatement and shown beside the original amount."
+    },
+    {
+      "id": "AC-OBS-CEA-024.14",
+      "doc": "Price Book: negotiated rates, deployment aliases and effective dates",
+      "doc_id": "76e32850-c505-44a3-8ead-48a1bf350808",
+      "text": "Usage for which the applicable entries are ambiguous, or which no rate can price, shall be counted and shown as unknown with its reason, and shall add no amount to a contract figure."
+    },
+    {
+      "id": "AC-OBS-CEA-024.15",
+      "doc": "Price Book: negotiated rates, deployment aliases and effective dates",
+      "doc_id": "76e32850-c505-44a3-8ead-48a1bf350808",
+      "text": "The local dashboard shall provide a price book screen showing the validated entries, the aliases, each rejected entry with its reasons, and the recorded versions with the time each came into effect, and shall let the user add an entry or edit an existing one."
+    },
+    {
+      "id": "AC-OBS-CEA-024.16",
+      "doc": "Price Book: negotiated rates, deployment aliases and effective dates",
+      "doc_id": "76e32850-c505-44a3-8ead-48a1bf350808",
+      "text": "An entry edit shall be validated before it is saved; each problem shall be shown as a readable sentence beside the field it concerns; nothing shall be written without an explicit save; a save shall be refused when the book changed after it was loaded; and a successful save shall report the new version and the time from which it applies."
+    },
+    {
+      "id": "AC-OBS-CEA-024.17",
+      "doc": "Price Book: negotiated rates, deployment aliases and effective dates",
+      "doc_id": "76e32850-c505-44a3-8ead-48a1bf350808",
+      "text": "Usage facts shall be stored once, as the recorded usage events, and contract valuations shall be derived when read; no valuation shall be written back into stored usage, and no process that sends data off the machine shall compute or carry one."
+    },
+    {
       "id": "AC-OBS-OTG-001.1",
       "doc": "Exported traces reach Guard, and are scrubbed before they are stored",
       "doc_id": "ff78b7cc-7a85-4f0f-a155-3fc78c6cd8b6",

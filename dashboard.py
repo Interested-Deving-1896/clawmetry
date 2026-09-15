@@ -7022,6 +7022,7 @@ DASHBOARD_HTML = r"""
 <script src="{{ url_for('static', filename='js/alerts.js', v=version) }}" defer></script>
 <script src="{{ url_for('static', filename='js/trail.js', v=version) }}" defer></script>
 <script src="{{ url_for('static', filename='js/compliance.js', v=version) }}" defer></script>
+<script src="{{ url_for('static', filename='js/price-book.js', v=version) }}" defer></script>
 <!-- Vendored + pinned (no external CDN, no supply-chain risk): marked renders
      transcript markdown, DOMPurify sanitizes it before it touches innerHTML.
      See cmSafeMarkdown() in app.js — never call marked.parse() into the DOM directly.
@@ -7363,6 +7364,9 @@ DASHBOARD_HTML = r"""
 
 <!-- USAGE -->
 {% include 'tabs/usage.html' %}
+
+<!-- PRICE BOOK (settings screen for negotiated rates, opened from Cost; #5936) -->
+{% include 'tabs/price-book.html' %}
 
 <!-- DIVES (NL-to-SQL-to-chart over local DuckDB) -->
 
