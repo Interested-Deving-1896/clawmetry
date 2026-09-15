@@ -3687,14 +3687,14 @@ def api_skill_attribution():
 
     sessions_dir = _d._get_sessions_dir()
     if not sessions_dir or not os.path.isdir(sessions_dir):
-        # Nothing was read, so the total is not a measured $0.00.
+        # No skill read was found, so nothing is attributed to any skill: the
+        # total over zero skills is exactly 0 (the card shows "no skill
+        # invocations", not a dollar figure). Same label as the other paths.
         return jsonify(_cost_labels.stamp({
             "skills": [], "top5_week": [], "total_cost": 0.0,
             "note": "No sessions directory found.",
             "clawhub": {"enabled": False, "url": None},
-        }, {"total_cost": _cost_basis.unavailable(
-            "no session transcripts were found to attribute cost from",
-            source="/api/skill-attribution")}))
+        }, _cost_labels.skill_attribution_entries("session transcripts on disk")))
 
     SKILL_MD_RE = _re.compile(r'[/\\]([^/\\]+)[/\\]SKILL\.md', _re.IGNORECASE)
     # Also match bare "SKILL.md" references with skill name in path context
