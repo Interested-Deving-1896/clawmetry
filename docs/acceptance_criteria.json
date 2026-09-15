@@ -361,6 +361,66 @@
       "text": "Where this path is described to a customer, the description shall state which runtimes it covers and that records arrive unencrypted."
     },
     {
+      "id": "AC-OBS-PRJ-001.1",
+      "doc": "Project attribution and per-project budgets: burn against budget",
+      "doc_id": "e4d8425a-c610-42bd-b63d-e4d600c9e58e",
+      "text": "The system shall attribute each session's spend to a project derived from where the session ran or from an operator assignment, and shall report for each project the source it came from and a confidence. A project or tenant name carried inside an agent's own activity shall not determine attribution."
+    },
+    {
+      "id": "AC-OBS-PRJ-001.2",
+      "doc": "Project attribution and per-project budgets: burn against budget",
+      "doc_id": "e4d8425a-c610-42bd-b63d-e4d600c9e58e",
+      "text": "Sessions that ran in two different repositories shall be reported as two projects even when the repositories share a directory name, and shall be combined only by an explicit operator assignment."
+    },
+    {
+      "id": "AC-OBS-PRJ-001.3",
+      "doc": "Project attribution and per-project budgets: burn against budget",
+      "doc_id": "e4d8425a-c610-42bd-b63d-e4d600c9e58e",
+      "text": "Spend from sessions whose working directory is unknown shall be reported in a visible unassigned group, with its amount and session count, rather than dropped or attributed to a default project."
+    },
+    {
+      "id": "AC-OBS-PRJ-001.4",
+      "doc": "Project attribution and per-project budgets: burn against budget",
+      "doc_id": "e4d8425a-c610-42bd-b63d-e4d600c9e58e",
+      "text": "Attribution shall be derived when read rather than stored on activity records, so an assignment applies to history already collected. Each assignment shall carry the period it is effective for, who made it, when and why, and a correction shall be recorded as a new assignment that supersedes the earlier one without erasing it."
+    },
+    {
+      "id": "AC-OBS-PRJ-001.5",
+      "doc": "Project attribution and per-project budgets: burn against budget",
+      "doc_id": "e4d8425a-c610-42bd-b63d-e4d600c9e58e",
+      "text": "Project figures the system publishes shall identify a project by a label and an opaque identifier, and shall not include the full local path it was derived from."
+    },
+    {
+      "id": "AC-OBS-PRJ-001.6",
+      "doc": "Project attribution and per-project budgets: burn against budget",
+      "doc_id": "e4d8425a-c610-42bd-b63d-e4d600c9e58e",
+      "text": "A project budget shall declare its amount, period, timezone, currency and the financial basis of the spend it is measured against. The system shall refuse a budget whose currency or timezone it cannot honour rather than silently substituting another."
+    },
+    {
+      "id": "AC-OBS-PRJ-001.7",
+      "doc": "Project attribution and per-project budgets: burn against budget",
+      "doc_id": "e4d8425a-c610-42bd-b63d-e4d600c9e58e",
+      "text": "Spend shall count toward the budget period in which it occurred, on the budget's own timezone, so a session running across a period boundary is split between the two periods and a record that arrives late counts in the period it occurred in."
+    },
+    {
+      "id": "AC-OBS-PRJ-001.8",
+      "doc": "Project attribution and per-project budgets: burn against budget",
+      "doc_id": "e4d8425a-c610-42bd-b63d-e4d600c9e58e",
+      "text": "When a project's spend in a period reaches 50%, 80% or 100% of its budget, the system shall record an alert once per threshold per period, deliver it to the operator, and state that the alert is a notification that does not stop or reverse any charge."
+    },
+    {
+      "id": "AC-OBS-PRJ-001.9",
+      "doc": "Project attribution and per-project budgets: burn against budget",
+      "doc_id": "e4d8425a-c610-42bd-b63d-e4d600c9e58e",
+      "text": "The budget status shall report spend for each day of the current period next to the budget, so burn can be compared against it."
+    },
+    {
+      "id": "AC-OBS-PRJ-001.10",
+      "doc": "Project attribution and per-project budgets: burn against budget",
+      "doc_id": "e4d8425a-c610-42bd-b63d-e4d600c9e58e",
+      "text": "The per-project export shall include assigned, unassigned and unpriced amounts and a completeness figure. Usage that carries tokens but no price shall be counted as unpriced, never as zero cost."
+    },
+    {
       "id": "AC-OBS-CEA-001.1",
       "doc": "Cost and Efficiency Analytics",
       "doc_id": "43d6b27c-0e37-45dc-9fdd-df4200844c29",

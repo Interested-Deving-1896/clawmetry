@@ -134,6 +134,7 @@ from routes.selfconfig import bp_selfconfig
 from routes.agents import bp_agents
 from routes.inventory import bp_inventory
 from routes.govern import bp_govern
+from routes.projects import bp_projects
 from routes.assets import bp_assets
 from routes.reasoning import bp_reasoning
 from routes.plugins import bp_plugins
@@ -6260,6 +6261,7 @@ def detect_config(args=None):
     app.register_blueprint(bp_agents)
     app.register_blueprint(bp_inventory)
     app.register_blueprint(bp_govern)
+    app.register_blueprint(bp_projects)
     if not _pro_loaded:
         app.register_blueprint(bp_assets)
     app.register_blueprint(bp_reasoning)
