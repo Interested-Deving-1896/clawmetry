@@ -4,7 +4,7 @@
 > `python3 scripts/gen_module_map.py` (CI fails on drift via
 > `tests/test_module_map_drift.py`).
 
-268 modules, 84 Flask blueprints. `CLAUDE.md` carries a short curated table of the ones you reach for most often; this is the whole list.
+269 modules, 84 Flask blueprints. `CLAUDE.md` carries a short curated table of the ones you reach for most often; this is the whole list.
 
 Size bands are deliberately coarse so this file does not churn on every PR: **small** is under 200 lines, **medium** under 1k, **large** under 5k, **huge** is 5k and up.
 
@@ -272,6 +272,7 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/signal_shifts.py` | medium | Signal shifts (WO-62): notice when a behaviour-signal rate moves, explain what moved it, and open an issue the operator can resolve or ignore. |
 | `clawmetry/span_reconstruct.py` | medium | Runtime-agnostic span reconstruction for family runtimes (Agent Graph WS-A). |
 | `clawmetry/spend_flow.py` | medium | node-wide AI spend flow (pure math). |
+| `clawmetry/store_errors.py` | small | Tell a value the store cannot hold from a store that failed (REQ-OBS-OIA-001). |
 | `clawmetry/sync.py` | huge | Cloud sync daemon for clawmetry connect. |
 | `clawmetry/telemetry.py` | medium | anonymous, opt-out, install-lifecycle pings. |
 | `clawmetry/token_confidence.py` | medium | Token Probability Visualizer (issue #563). |

@@ -50,6 +50,12 @@ from clawmetry import event_shape as _event_shape  # v15 typed event columns
 from clawmetry import nonsecret_hash as _nsh
 from clawmetry.trail_store import TrailStoreMixin  # intent / back-fill / git join
 from clawmetry.local_store_projects import ProjectsMixin  # project attribution + budgets (REQ-OBS-PRJ-001)
+# REQ-OBS-OIA-001: a value the store cannot hold is refused on its own, not a
+# store failure (span batch retry, OTLP record refusal, event token count).
+from clawmetry.store_errors import (  # noqa: F401  (re-exported for tests)
+    int32_or_none as _int32_or_none,
+    is_data_error as _is_data_error,
+)
 import threading
 import time
 import uuid
@@ -20075,40 +20081,6 @@ def _session_content_parts(session: dict[str, Any]) -> list[Any]:
         _clean_str(session.get("cwd")),
         _clean_str(session.get("git_branch")),
     ]
-
-
-_INT32_MIN, _INT32_MAX = -(2 ** 31), 2 ** 31 - 1
-
-
-def _int32_or_none(v: Any) -> int | None:
-    """A count for an INTEGER column, or ``None`` (unknown) when it is not a
-    number or does not fit. Used where a value is written by the ring flush:
-    an exception there fails the flush for every event queued beside it, on
-    every retry."""
-    if v is None:
-        return None
-    try:
-        n = int(v)
-    except (TypeError, ValueError, OverflowError):
-        return None
-    return n if _INT32_MIN <= n <= _INT32_MAX else None
-
-
-def _is_data_error(exc: BaseException) -> bool:
-    """True when a write failed because of a VALUE in the row, not the store.
-
-    A token count beyond INTEGER range, or a string the driver cannot encode
-    (a lone surrogate from a JSON body), fails every time it is written: a
-    retry resends the same value. Callers count such a row as refused, so one
-    bad item neither poisons its batch nor asks the sender to retry forever
-    (REQ-OBS-OIA-001). Everything else (a closed connection, I/O, a lock) is
-    not the data's fault and stays a failure the sender retries."""
-    if isinstance(exc, (ValueError, OverflowError)):
-        return True
-    if isinstance(exc, duckdb.DataError):
-        return True
-    # The driver's own binding error for a Python value it cannot convert.
-    return isinstance(exc, RuntimeError) and "Unable to cast Python instance" in str(exc)
 
 
 def _span_row(span: dict[str, Any]) -> list[Any]:
