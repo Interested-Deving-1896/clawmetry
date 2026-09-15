@@ -301,13 +301,13 @@ def create(name: str, scopes, origins, *, note: str = "") -> tuple:
             "at_capacity",
         )
 
-    key_id = secrets.token_hex(_ID_BYTES)
-    secret = secrets.token_urlsafe(_SECRET_BYTES)
+    key_id = hashlib.sha256(secrets.token_hex(_ID_BYTES).encode()).hexdigest()[:_ID_BYTES * 2]
+    wire_secret = hashlib.sha256(secrets.token_urlsafe(_SECRET_BYTES).encode()).hexdigest()
     record = {
         "id": key_id,
         "name": label,
         "note": (note or "").strip()[:200],
-        "hash": _hash_secret(secret),
+        "hash": _hash_secret(wire_secret),
         "scopes": scope_list,
         "origins": origin_list,
         "created_at": int(time.time()),
@@ -317,7 +317,7 @@ def create(name: str, scopes, origins, *, note: str = "") -> tuple:
     }
     doc["keys"].append(record)
     _write_store(doc)
-    return record, f"{KEY_PREFIX}_{key_id}_{secret}"
+    return record, f"{KEY_PREFIX}_{key_id}_{wire_secret}"
 
 
 def list_keys(*, include_revoked: bool = False) -> list:
