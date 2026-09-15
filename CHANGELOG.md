@@ -1,7 +1,13 @@
 ## Unreleased
 
 ### Release: enterprise readiness, batch 3 (2026-09-15)
-- **Carries:** #5950 (fleet install for shared hosts and virtual desktops, refs #5942), #5965 (LiteLLM gateway spend by team, person and key, refs #5940), #5957 (the dashboard's first load no longer times out its own requests, refs #5935) and #5967 (SECURITY.md: the DPA is not available and the sub-processor list is published; documentation only). Their entries follow.
+- **Carries:** #5950 (fleet install for shared hosts and virtual desktops, refs #5942), #5965 (LiteLLM gateway spend by team, person and key, refs #5940), #5957 (the dashboard's first load no longer times out its own requests, refs #5935), #5996 (the hosted Cost Optimizer shows evidence-backed experiments, refs #5934; hosted rendering lands with clawmetry-cloud#2450 after this pin) and #5967 (SECURITY.md: the DPA is not available and the sub-processor list is published; documentation only). Their entries follow.
+
+### Fixed: the hosted Cost Optimizer showed no experiments (2026-09-15)
+- **Why:** after #5951 the renderer hides recommendations that cite no evidence. The cloud interceptor sent only hardcoded ones and a "40-70%" claim, so app.clawmetry.com showed nothing (#5934).
+- **What:** the daemon builds the optimizer's data slice with the local route's own rules (`clawmetry/cost_optimizer_snapshot.py`, shared `advice_fields` / `tokens_recorded_or_none`) and ships it as `costOptimizer` in the E2E-encrypted snapshot; clawmetry-cloud#2450 decrypts it in the browser. Hosted figures name "the connected computer", an empty store reads unknown, not $0, and llmfit and Ollama details stay on the computer. A daemon that has not updated shows an "update ClawMetry" note instead of recommendations.
+- **Verified:** `tests/test_cost_optimizer_snapshot_slice.py` (5 tests, MOAT verifier job; 4 red on main): the slice equals the local route's advice, figures and bases for the same store. AC-OBS-CEA-023.9 mirrored.
+- **Refs:** #5934.
 
 ### Fixed: the dashboard's first load timed out its own requests (2026-09-14)
 - **Why:** on a cold start the console showed `Initial load failed timeout`, `System health load failed timeout` and `loadCrons failed timeout`, and the tiles those requests feed rendered empty, which reads as missing data (#5935). Measured in a headless browser against a scratch install with a seeded store: one page load sent 103 API requests in its first 10 s against the browser's six connections per origin, and those requests spent a combined 34-66 s waiting in the browser's own queue while the server answered most of them in milliseconds. On a machine with OpenClaw installed, `/api/agents` and `/api/inventory` each ran `openclaw doctor --json` synchronously, holding two connections for 7-15 s.
