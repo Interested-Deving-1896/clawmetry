@@ -2240,6 +2240,7 @@ function switchTab(name) {
   if (name === 'alerts') { if (typeof loadAlertsPage === 'function') loadAlertsPage(); }
   if (name === 'guard') { if (typeof loadGuardTab === 'function') loadGuardTab(); }
   if (name === 'signals') { if (typeof loadSignalsTab === 'function') loadSignalsTab(); }
+  if (name === 'compliance') { if (typeof loadComplianceTab === 'function') loadComplianceTab(); }
   if (name === 'evals') { if (typeof loadEvalsTab === 'function') loadEvalsTab(); }
   if (name === 'bench') { if (typeof loadBenchTab === 'function') loadBenchTab(); }
   if (name === 'logs') loadLogs();
@@ -12478,11 +12479,13 @@ var _CM_CAP_TABS = {
 // no capability map, so selecting any runtime hid it (0.12.806 field hit).
 // signals: the behaviour-signal surface covers every runtime that lands
 // text in the store and states its coverage per runtime, so it is node-level.
-var _CM_NODE_TABS = ['alerts','notifications','security','approvals','guard','memory','skills','signals'];
+// compliance: framework controls are evaluated over every runtime's findings
+// for the node, so selecting a runtime must not hide the tab.
+var _CM_NODE_TABS = ['alerts','notifications','security','approvals','guard','memory','skills','signals','compliance'];
 // Every togglable sidebar tab (so switching runtimes RE-SHOWS what a prior one
 // hid). overview is never togglable.
 var _CM_RT_ALL_TABS = ['flow','brain','models','tracing','turn-anatomy',
-  'context-economics','approvals','guard','signals','alerts','usage','crons','memory',
+  'context-economics','approvals','guard','signals','compliance','alerts','usage','crons','memory',
   'notifications','security','policy','skills','selfevolve',
   'nemoclaw','logs','version-impact','agents'];
 // Foreign OTLP apps only emit spans/traces (events + maybe cost). They get the
