@@ -5065,16 +5065,20 @@ def _cmd_key(args) -> None:
             raise SystemExit(1)
 
         if as_json:
-            print(_json.dumps({"action": "create", "ok": True,
-                               "key": key_output,  # codeql[py/clear-text-logging-sensitive-data,py/clear-text-storage-sensitive-data]
-                               "record": {k: v for k, v in record.items()
-                                          if k != "hash"}}, indent=2))
+            _out = {
+                "action": "create", "ok": True,
+                # codeql[py/clear-text-logging-sensitive-data,py/clear-text-storage-sensitive-data]
+                "key": key_output,
+                "record": {k: v for k, v in record.items() if k != "hash"},
+            }
+            print(_json.dumps(_out, indent=2))
             return
 
         print("Key created. It is shown once and is not stored anywhere in")
         print("readable form, so copy it now.")
         print("")
-        print(f"    {key_output}")  # codeql[py/clear-text-logging-sensitive-data]
+        # codeql[py/clear-text-logging-sensitive-data]
+        print(f"    {key_output}")
         print("")
         print(f"Name:    {record['name']}  (id {record['id']})")
         print(f"Reads:   {', '.join(record['scopes'])}")
