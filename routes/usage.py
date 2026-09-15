@@ -3687,11 +3687,14 @@ def api_skill_attribution():
 
     sessions_dir = _d._get_sessions_dir()
     if not sessions_dir or not os.path.isdir(sessions_dir):
-        return jsonify({
+        # Nothing was read, so the total is not a measured $0.00.
+        return jsonify(_cost_labels.stamp({
             "skills": [], "top5_week": [], "total_cost": 0.0,
             "note": "No sessions directory found.",
             "clawhub": {"enabled": False, "url": None},
-        })
+        }, {"total_cost": _cost_basis.unavailable(
+            "no session transcripts were found to attribute cost from",
+            source="/api/skill-attribution")}))
 
     SKILL_MD_RE = _re.compile(r'[/\\]([^/\\]+)[/\\]SKILL\.md', _re.IGNORECASE)
     # Also match bare "SKILL.md" references with skill name in path context
