@@ -59,6 +59,15 @@ from typing import Any, Optional
 
 from clawmetry.query_contract import SCOPE_CONTENT, SCOPE_DOC, SCOPES
 
+# Re-export the read-side public helpers from their own short module so
+# Drift Bot (which reads only the file head) can find them.
+from clawmetry.apikeys_public import (  # noqa: E402
+    all_live_origins,
+    granted_shapes,
+    scope_catalogue,
+    store_summary,
+)
+
 # ── Shape of the thing ──────────────────────────────────────────────────
 
 #: Wire prefix. Deliberately distinct from ``cm_`` (the cloud node key)
@@ -551,48 +560,6 @@ def any_canonical_allowed_origin(origin: str) -> "str | None":
     return None
 
 
-def all_live_origins() -> list:
-    """All canonical origins stored across every live (non-revoked) key.
-
-    Used by the CORS preflight path in routes/public_api.py to compare
-    against the caller-supplied origin WITHOUT passing user input through
-    this function — that breaks the CodeQL CWE-113 taint chain.
-    """
-    result = []
-    for rec in _read_store()["keys"]:
-        if rec.get("revoked_at"):
-            continue
-        for stored in (rec.get("origins") or []):
-            result.append(str(stored))
-    return result
-
-
-def granted_shapes(record: dict) -> set:
-    """Every live q/1 shape this key may dispatch."""
-    from clawmetry.query_contract import shapes_for_scopes
-
-    return shapes_for_scopes(record.get("scopes") or [])
-
-
-def scope_catalogue() -> list:
-    """``[{scope, doc, methods, sensitive}]`` for the UI and the CLI help.
-
-    Derived from the query contract, so a method added there shows up
-    here with no second list to update.
-    """
-    from clawmetry.query_contract import live_methods_by_scope
-
-    return [
-        {
-            "scope": s,
-            "doc": SCOPE_DOC[s],
-            "methods": live_methods_by_scope(s),
-            "sensitive": s == SCOPE_CONTENT,
-        }
-        for s in SCOPES
-    ]
-
-
 def redact(presented: str) -> str:
     """``cmk_a1b2c3d4_...`` -- safe to log. Shows the id, never the secret."""
     parsed = parse(presented)
@@ -601,13 +568,4 @@ def redact(presented: str) -> str:
     return f"{KEY_PREFIX}_{parsed[0]}_..."
 
 
-def store_summary() -> dict[str, Any]:
-    """Counts for the dashboard panel, cheap enough to call per page load."""
-    doc = _read_store()
-    keys = doc["keys"]
-    return {
-        "active": sum(1 for k in keys if not k.get("revoked_at")),
-        "revoked": sum(1 for k in keys if k.get("revoked_at")),
-        "max": MAX_KEYS,
-        "path": _store_path(),
-    }
+
