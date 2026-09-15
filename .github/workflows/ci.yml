@@ -872,6 +872,7 @@ jobs:
             tests/test_guard_control_transparency.py \
             tests/test_guard_resume_hints.py \
             tests/test_guard_resume_route.py \
+            tests/test_cloud_guard_signals_slices.py \
             tests/test_guard_live_probe.py \
             tests/test_process_control.py \
             tests/test_process_control_windows.py \
