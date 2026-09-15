@@ -1,5 +1,9 @@
 ## Unreleased
 
+### Changed: Sessions sits next to Agents in the navigation (2026-09-15)
+- **What:** the Sessions item moved from above the Monitoring label to directly under Agents (Home, Agents, Sessions, Activity, Cost, Models, Context usage). It is still the page the dashboard opens on and keeps the default highlight; the tab id and deep links are unchanged.
+- **Verified:** `tests/test_beginner_nav_phase_a.py` and `tests/test_trail_tab_template.py` pin the new order.
+
 ### Release: enterprise readiness, batch 3 (2026-09-15)
 - **Carries:** #5950 (fleet install for shared hosts and virtual desktops, refs #5942), #5965 (LiteLLM gateway spend by team, person and key, refs #5940), #5957 (the dashboard's first load no longer times out its own requests, refs #5935), #5996 (the hosted Cost Optimizer shows evidence-backed experiments, refs #5934; hosted rendering lands with clawmetry-cloud#2450 after this pin) #5967 (SECURITY.md: the DPA is not available and the sub-processor list is published; documentation only) and #6007 (Compliance tab shell, refs clawmetry-pro#250; the evaluation ships in clawmetry-pro 0.7.29). Any other change merged before this release carries its own entry below. Their entries follow.
 
