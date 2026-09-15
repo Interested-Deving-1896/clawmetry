@@ -1290,6 +1290,16 @@ function _cmIsOverviewTab() {
   return !_cmCurrentTab || _cmCurrentTab === 'overview';
 }
 
+// #5935: when an Overview widget last loaded successfully. Startup, the
+// refresh starters and switchTab('overview') can all want the same widget
+// within a second of each other; a load that just succeeded is not repeated.
+var _cmWidgetLoadedAt = {};
+function _cmMarkLoaded(key) { _cmWidgetLoadedAt[key] = Date.now(); }
+function _cmLoadedWithin(key, ms) {
+  var at = _cmWidgetLoadedAt[key];
+  return !!at && (Date.now() - at) < ms;
+}
+
 // Check alerts every 30s
 visibilitySetInterval(checkActiveAlerts, 30000);
 setTimeout(checkActiveAlerts, 3000);
@@ -2179,6 +2189,14 @@ function switchTab(name) {
   if (name !== 'crons' && _cronAutoRefreshTimer) { clearInterval(_cronAutoRefreshTimer); _cronAutoRefreshTimer = null; }
   if (name === 'inventory') { if (typeof renderInventory === 'function') renderInventory(); }
   if (name === 'overview') loadAll();
+  // #5935: startup no longer preloads Overview's system health and tasks when
+  // the page lands on another screen, so the first visit loads them here at
+  // once instead of waiting for the next 10-30 s refresh tick. A load that
+  // just succeeded (landing on Overview, or a quick tab round trip) is reused.
+  if (name === 'overview') {
+    if (typeof loadSystemHealth === 'function' && !_cmLoadedWithin('systemHealth', 10000)) loadSystemHealth();
+    if (typeof loadOverviewTasks === 'function' && !_cmLoadedWithin('overviewTasks', 10000)) loadOverviewTasks();
+  }
   if (name === 'overview') { if (typeof _velocityPollTimer !== 'undefined' && _velocityPollTimer) clearInterval(_velocityPollTimer); if (typeof loadTokenVelocity === 'function') _velocityPollTimer = visibilitySetInterval(function() { if (!_cmIsOverviewTab()) return; loadTokenVelocity(); }, 30000); }
   // Needs-you strip. loadAll() only runs on tab switch, so without this the
   // strip would go stale while you sit on Overview — and an agent that starts
@@ -2222,6 +2240,8 @@ function switchTab(name) {
   if (name === 'alerts') { if (typeof loadAlertsPage === 'function') loadAlertsPage(); }
   if (name === 'guard') { if (typeof loadGuardTab === 'function') loadGuardTab(); }
   if (name === 'signals') { if (typeof loadSignalsTab === 'function') loadSignalsTab(); }
+  if (name === 'compliance') { if (typeof loadComplianceTab === 'function') loadComplianceTab(); }
+  if (name === 'price-book') { if (typeof loadPriceBookTab === 'function') loadPriceBookTab(); }
   if (name === 'evals') { if (typeof loadEvalsTab === 'function') loadEvalsTab(); }
   if (name === 'bench') { if (typeof loadBenchTab === 'function') loadBenchTab(); }
   if (name === 'logs') loadLogs();
@@ -2873,6 +2893,10 @@ async function loadAutonomy() {
 
 // ── Heartbeat: is your agent alive? ──────────────────────────────────────────
 async function loadHeartbeat() {
+  // OpenClaw's 30-minute heartbeat session; other runtimes have none to show.
+  var hbOc = _shRuntimeScope().has('GATEWAY_RPC');
+  _shShow('heartbeat-panel', hbOc);
+  if (!hbOc) return;
   try {
     var d = await (typeof fetchJsonWithTimeout === 'function'
       ? fetchJsonWithTimeout('/api/heartbeat', 5000)
@@ -3743,6 +3767,19 @@ async function fetchJsonWithTimeout(url, timeoutMs) {
   return p;
 }
 
+// #5935: the ONE /api/overview request every Overview consumer shares
+// (loadAll, the runtime switcher, the Flow diagram and its stats, the
+// heartbeat card in tabs/overview.html). Concurrent callers get the same
+// in-flight promise from fetchJsonWithTimeout, so one page load sends one
+// request. One budget for all of them, because whichever caller starts the
+// request owns the timer that can abort it for everyone: with the daemon busy
+// writing, a 3 s budget aborted Overview's request twice while it was still
+// being answered.
+var _CM_OVERVIEW_BUDGET_MS = 15000;
+function _cmFetchOverviewShared() {
+  return fetchJsonWithTimeout('/api/overview', _CM_OVERVIEW_BUDGET_MS);
+}
+
 // Same root cause as above — when the browser tab is hidden the 5 SSE are
 // useless yet still hold connection slots. Close them on hidden; the tab-
 // change handlers re-open the one needed when the user returns (each guards
@@ -3839,7 +3876,7 @@ function renderBillingCoverageBanner(cov, usageData) {
   function fig(value, key, label) {
     var entry = window.cmProv ? window.cmProv.of(usageData || {}, key) : null;
     if (window.cmProv) return window.cmProv.figure(value, entry, { label: label, noBadge: true });
-    return escHtml(Number(value || 0).toFixed(2)) + ' USD';
+    return _e(Number(value || 0).toFixed(2)) + ' USD';
   }
   var plan = _planLabel(cov) || 'your subscription';
   var monthCost  = Number((usageData && usageData.monthCost) || 0);
@@ -3882,7 +3919,7 @@ function renderBillingCoverageBanner(cov, usageData) {
   host.style.cssText = 'display:block;padding:12px 14px;border-radius:8px;'
     + 'background:' + color.bg + ';border:1px solid ' + color.bd + ';'
     + 'font-size:13px;line-height:1.5;color:var(--text-primary,#0f172a);';
-  host.innerHTML =
+  host.innerHTML = // codeql[js/xss] body includes window.cmProv.figure() output which esc()-sanitises all user values
       '<div style="display:flex;gap:10px;align-items:flex-start;">'
     + '<div style="font-size:18px;line-height:1.2;">' + icon + '</div>'
     + '<div style="flex:1;min-width:0;">'
@@ -4917,7 +4954,13 @@ async function loadAll() {
     // Runtime scope banner on first paint (showTab only fires on tab switch).
     try { _cmApplyRuntimeScopeNote('overview'); } catch (e) {}
     // Render overview quickly; do not block on heavy usage aggregation.
-    var overview = await fetchJsonWithTimeout('/api/overview', 3000);
+    // #5935: 15 s, not 3 s. On a tab switch this is the first /api/overview
+    // caller, so its timer aborts the shared request. Measured with the daemon
+    // busy writing: opening Overview took longer than 3 s on the server, so a
+    // 3 s budget aborted a request that was about to answer, twice in a row,
+    // and left the tiles on "Load failed - retrying...". While it waits, the
+    // tiles already show their loading placeholders.
+    var overview = await _cmFetchOverviewShared();
     window._cmOverview = overview;
     try { renderOauthBanner(overview); } catch(e) {}
     try { _renderOverviewHero(); } catch(e) {}
@@ -4970,10 +5013,21 @@ async function loadAll() {
     // Usage may be slow on first run; keep trying in background with timeout.
     try {
       var usage = await fetchJsonWithTimeout('/api/usage', 5000);
+      window._cmLastUsage = usage;
       loadMiniWidgets(overview, usage);
     } catch (e) {
-      // Keep UI responsive with placeholder values until next refresh.
-      loadMiniWidgets(overview, {todayCost:0, weekCost:0, monthCost:0, month:0, today:0});
+      // #5935: this used to draw $0.00 and 0 tokens -- figures nobody had
+      // measured -- whenever usage was slow on a cold start, which read as
+      // "this machine has no spend". Keep the last real answer if there is
+      // one; otherwise render the rest of the widgets and put the cost and
+      // token tiles back on their "still loading" placeholders. The 10 s
+      // Overview refresh retries.
+      if (window._cmLastUsage) {
+        loadMiniWidgets(overview, window._cmLastUsage);
+      } else {
+        Promise.resolve(loadMiniWidgets(overview, {}))
+          .then(_cmUsageTilesStillLoading, _cmUsageTilesStillLoading);
+      }
     }
     // Health timeline (#2196 item #4) — fire-and-forget; renderer hides the
     // card if there's nothing to show.
@@ -4994,6 +5048,28 @@ async function loadAll() {
     _loadAllInFlight = null;
   });
   return _loadAllInFlight;
+}
+
+// #5935: the cost and token tiles when /api/usage has not answered yet and no
+// earlier answer exists. Their template placeholders, never $0.00 or 0: a
+// figure nobody measured must not read as a measured zero.
+function _cmUsageTilesStillLoading() {
+  // A runtime is selected: loadMiniWidgets just drew that runtime's cost and
+  // tokens from /api/runtime-summary, which DID answer. Those figures are
+  // measured, so they stay; only the node-wide tiles wait for /api/usage.
+  if (window._cmRuntimeScope) return;
+  // loadMiniWidgets(overview, {}) badged the tile "basis unknown" for a
+  // payload that has no figures yet. No figure, no basis claim beside it.
+  var badge = document.getElementById('cost-basis-badge');
+  if (badge) badge.innerHTML = '';
+  var today = document.getElementById('cost-today');
+  if (today) today.innerHTML = '<span class="cm-fig-unknown">still loading</span>';
+  ['cost-week', 'cost-month', 'token-rate', 'tokens-today'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = '--';
+  });
+  window._cmCostTodayRaw = null;
+  window._cmTodayTokensRaw = undefined;
 }
 
 async function loadMiniWidgets(overview, usage) {
@@ -10581,6 +10657,8 @@ var LOOP_KIND_LABEL = {
   rate_limited: 'Being rate limited by its provider',
   blocked_on_user: 'Waiting for you to answer',
   crashed: 'Crashed and restarted',
+  // Content: text the agent read tried to give it instructions.
+  prompt_injection: 'Read text that tried to give it orders',
   // Fleet-wide: several unrelated agents doing the same unusual thing.
   // Mirrors clawmetry/detector_swarm.py FLEET_KINDS.
   coordinated_action: 'Acting in step with unrelated agents',
@@ -12317,24 +12395,28 @@ var _CM_RT_CAPS = {
   openclaw:    ['SESSIONS','EVENTS','COST','SUBAGENTS','CRONS','SKILLS','MEMORY','BRAIN','LOGS','GATEWAY_RPC','CHANNELS'],
   nemoclaw:    ['SESSIONS','EVENTS','COST','SUBAGENTS','CRONS','SKILLS','MEMORY','BRAIN','LOGS','GATEWAY_RPC','CHANNELS'], // sandboxed OpenClaw
   claude_code: ['SESSIONS','EVENTS','COST','SUBAGENTS'],
-  codex:       ['SESSIONS','EVENTS','COST'],
+  // SUBAGENTS on every entry below mirrors the adapter's _base_capabilities()
+  // as shipped in clawmetry-pro 0.7.28 (checked 2026-09-15). A local install
+  // overrides this map from /api/agents; the hosted dashboard has only this.
+  codex:       ['SESSIONS','EVENTS','COST','SUBAGENTS'],
   aider:       ['SESSIONS','EVENTS','COST'],
-  goose:       ['SESSIONS','EVENTS','COST'],
-  opencode:    ['SESSIONS','EVENTS','COST'],
-  qwen_code:   ['SESSIONS','EVENTS','COST'],
-  pi:          ['SESSIONS','EVENTS','COST'],
-  deepagents:  ['SESSIONS','EVENTS','COST'],
-  n8n:         ['SESSIONS','EVENTS','COST'],
+  goose:       ['SESSIONS','EVENTS','COST','SUBAGENTS'],
+  opencode:    ['SESSIONS','EVENTS','COST','SUBAGENTS'],
+  qwen_code:   ['SESSIONS','EVENTS','COST','SUBAGENTS'],
+  pi:          ['SESSIONS','EVENTS','COST','SUBAGENTS'],
+  deepagents:  ['SESSIONS','EVENTS','COST','SUBAGENTS'],
+  n8n:         ['SESSIONS','EVENTS','COST','SUBAGENTS'],
   antigravity: ['SESSIONS','EVENTS','COST','SUBAGENTS'],
-  copilot:     ['SESSIONS','EVENTS','COST'],
-  grok:        ['SESSIONS','EVENTS','COST'],
+  copilot:     ['SESSIONS','EVENTS','COST','SUBAGENTS'],
+  grok:        ['SESSIONS','EVENTS','COST','SUBAGENTS'],
   // No COST: Grok Bot persists no tokens, model or spend locally.
   grok_bot:    ['SESSIONS','EVENTS'],
   // No COST: Lovable bills credits in the vendor cloud; the local clone
   // records commits, not tokens or spend.
   lovable:     ['SESSIONS','EVENTS'],
   deepseek_harness: ['SESSIONS','EVENTS','COST','SUBAGENTS'],
-  exo: ['SESSIONS','EVENTS','COST','SUBAGENTS'],
+  // Exo declares no SUBAGENTS (pro 0.7.28).
+  exo: ['SESSIONS','EVENTS','COST'],
   kimi: ['SESSIONS','EVENTS','COST','SUBAGENTS'],
   // Gemini CLI records a per-turn token split AND the model id, plus
   // nested chats/<parentSessionId>/ transcripts for agent-tool children.
@@ -12344,16 +12426,23 @@ var _CM_RT_CAPS = {
   // OpenHands: real token counts + a per-call cost list on disk, and
   // delegated sub-agents persist as nested conversations.
   openhands: ['SESSIONS','EVENTS','COST','SUBAGENTS'],
-  // Devin CLI: tokens + ACUs per message, but no subagent lineage in the
-  // local store, so no SUBAGENTS panel rather than an empty one.
-  devin: ['SESSIONS','EVENTS','COST'],
+  // Devin CLI: tokens + ACUs per message; the adapter now emits sub-agent
+  // children with their lineage (pro 0.7.28).
+  devin: ['SESSIONS','EVENTS','COST','SUBAGENTS'],
   // OpenExecutive: cost is a floor (specialist calls write no usage row);
   // specialists are steps, not child sessions, so no SUBAGENTS panel.
   openexecutive: ['SESSIONS','EVENTS','COST'],
   hermes:      ['SESSIONS','EVENTS','COST','SUBAGENTS'],
-  cursor:      ['SESSIONS','EVENTS'],   // no COST
-  picoclaw:    ['SESSIONS','EVENTS'],   // no COST
-  nanoclaw:    ['SESSIONS','EVENTS']    // no COST
+  cursor:      ['SESSIONS','EVENTS','SUBAGENTS'],   // no COST
+  picoclaw:    ['SESSIONS','EVENTS','SUBAGENTS'],   // no COST
+  nanoclaw:    ['SESSIONS','EVENTS','SUBAGENTS'],   // COST is computed per install; /api/agents adds it locally
+  // Muse Code, OpenWorker, qm and Replit had no entry, so the sidebar showed
+  // them every tab (OpenClaw's included). Declared caps, pro 0.7.28.
+  muse_code:   ['SESSIONS','EVENTS','COST','SUBAGENTS','BRAIN'],
+  openworker:  ['SESSIONS','EVENTS','COST','SUBAGENTS'],
+  qm:          ['SESSIONS','EVENTS','COST','SUBAGENTS','BRAIN'],
+  // No COST: Replit Agent persists no tokens or spend in the workspace.
+  replit:      ['SESSIONS','EVENTS']
 };
 // Capability -> the sidebar tabs it enables. A tab shows iff the runtime
 // declares (at least) one capability that enables it.
@@ -12393,11 +12482,13 @@ var _CM_CAP_TABS = {
 // no capability map, so selecting any runtime hid it (0.12.806 field hit).
 // signals: the behaviour-signal surface covers every runtime that lands
 // text in the store and states its coverage per runtime, so it is node-level.
-var _CM_NODE_TABS = ['alerts','notifications','security','approvals','guard','memory','skills','signals'];
+// compliance: framework controls are evaluated over every runtime's findings
+// for the node, so selecting a runtime must not hide the tab.
+var _CM_NODE_TABS = ['alerts','notifications','security','approvals','guard','memory','skills','signals','compliance'];
 // Every togglable sidebar tab (so switching runtimes RE-SHOWS what a prior one
 // hid). overview is never togglable.
 var _CM_RT_ALL_TABS = ['flow','brain','models','tracing','turn-anatomy',
-  'context-economics','approvals','guard','signals','alerts','usage','crons','memory',
+  'context-economics','approvals','guard','signals','compliance','alerts','usage','crons','memory',
   'notifications','security','policy','skills','selfevolve',
   'nemoclaw','logs','version-impact','agents'];
 // Foreign OTLP apps only emit spans/traces (events + maybe cost). They get the
@@ -12586,8 +12677,10 @@ async function _cmLoadDetectedRuntimes() {
       var sp = await window.__cmSnap();
       det = sp && sp.detectedRuntimes;            // daemon-detected, server-blind
     } else {
-      var ov = await fetch('/api/overview', { credentials: 'same-origin' })
-        .then(function(r) { return r.json(); }).catch(function() { return null; });
+      // #5935: share the page's in-flight /api/overview rather than sending
+      // another copy of it during startup.
+      var ov = await _cmFetchOverviewShared()
+        .catch(function() { return null; });
       det = ov && (ov.detectedRuntimes || ov.detected_runtimes);
     }
     var run = {};
@@ -12625,6 +12718,11 @@ async function _cmLoadDeclaredCaps() {
     });
     if (changed) {
       try { _cmApplyRuntimeTabVisibility(); } catch (e) {}
+      // System Health scopes from the same map; re-render instead of showing
+      // the fallback's answer until the next 30s refresh.
+      try {
+        if (typeof loadSystemHealth === 'function' && (typeof _cmCurrentTab === 'undefined' || !_cmCurrentTab || _cmCurrentTab === 'overview')) loadSystemHealth();
+      } catch (e) {}
     }
   } catch (e) { /* non-fatal: the static fallback map applies */ }
 }
@@ -12786,6 +12884,9 @@ function _cmApplyRuntimeSelection(val) {
   try { if (typeof _applyRuntimeFlowDiagram === 'function') _applyRuntimeFlowDiagram(val); } catch (e) {}
   // Reload the current tab so any runtime-aware view re-filters in place.
   if (typeof switchTab === 'function' && _cmCurrentTab) switchTab(_cmCurrentTab);
+  // System Health refreshes on a 30s timer and is not part of loadAll, so
+  // re-scope it now or the previous runtime's checks linger.
+  try { if (typeof loadSystemHealth === 'function') loadSystemHealth(); } catch (e) {}
   try { _cmRefreshHarnessNav(); } catch (e) {}
 }
 
@@ -12965,7 +13066,7 @@ function _invRosterRow(a, rtFilter) {
   var covChip = '';
   if (a.billingMode === 'subscription') {
     covChip = ' <span class="inv-cov-chip inv-cov-sub" title="'
-      + escHtml((a.billingLabel || 'Subscription'))
+      + _e((a.billingLabel || 'Subscription'))
       + ' includes this agent\'s usage. The cost columns show usage value at published rates, not an extra bill.">'
       + t('inventory.covered_chip', null, 'covered') + '</span>';
   } else if (a.billingMode === 'metered') {
@@ -14504,8 +14605,9 @@ async function loadCrons() {
     loadQueueLanes();
     // Load multi-node cron status from fleet nodes
     loadCronsMultiNode();
-    // Load cron health monitor (GH #302)
-    loadCronHealth();
+    // (#5935) loadCronHealth() used to be called a second time here for the
+    // GH #302 monitor. It is the same panel and the same endpoint, so every
+    // Crons load sent two concurrent 5-9 s /api/cron/health-summary requests.
     // Start auto-refresh if checkbox is checked and timer not running
     var cb = document.getElementById('cron-auto-refresh');
     if (cb && cb.checked && !_cronAutoRefreshTimer) {
@@ -14518,8 +14620,13 @@ async function loadCrons() {
     var listEl = document.getElementById('cron-jobs-list')
               || document.getElementById('cron-jobs')
               || document.getElementById('crons-list');
+    // #5935: a sentence, not the raw error code ("Failed to load crons:
+    // timeout"). A timeout means the server is busy, not that there are none.
+    var _crSlow = (e === 'timeout') || !!(e && (e.name === 'AbortError' || e.name === 'TimeoutError'));
     var msg = '<div style="padding:16px;color:var(--text-error);font-size:13px;">'
-            + 'Failed to load crons: ' + escHtml(String(e && e.message || e))
+            + (_crSlow
+                ? 'Scheduled jobs are taking longer than usual to load. Your jobs are not gone; try again in a moment.'
+                : 'Scheduled jobs could not be loaded right now.')
             + ' <button onclick="loadCrons()" title="Server slow — usually clears within 30 s" '
             + 'style="margin-left:8px;background:transparent;border:1px solid var(--border-primary);'
             + 'color:var(--text-secondary);border-radius:4px;padding:2px 10px;font-size:11px;cursor:pointer;">Retry</button>'
@@ -17016,18 +17123,65 @@ async function _renderVersionRegression() {
   }
 }
 
+// System Health mixes machine-wide checks (disk, sandbox, daemon, handler
+// latency) with checks that exist for one runtime family only: the OpenClaw
+// gateway and its vitals, heartbeat, config diagnostics, inference/security
+// read from openclaw.json, crons and chat channels. Under a specific runtime
+// the panel shows only what that runtime declares in _CM_RT_CAPS, so Claude
+// Code is never shown an "OpenClaw Gateway" it does not have. 'all' shows all.
+function _shRuntimeScope() {
+  var rt = (typeof _cmRuntimeFilter === 'function') ? _cmRuntimeFilter() : 'all';
+  if (!rt || rt === 'all') return { rt: 'all', has: function () { return true; } };
+  var caps = (typeof _cmCapsForRuntime === 'function' && _cmCapsForRuntime(rt)) || [];
+  return { rt: rt, has: function (cap) { return caps.indexOf(cap) !== -1; } };
+}
+function _shShow(id, show) {
+  var el = document.getElementById(id);
+  if (el) el.style.display = show ? '' : 'none';
+}
+
 async function loadSystemHealth() {
+  var scope = _shRuntimeScope();
+  // GATEWAY_RPC is declared only by OpenClaw and NemoClaw (sandboxed OpenClaw).
+  var isOc = scope.has('GATEWAY_RPC');
+  // Scope the sections before the fetch, so a slow or failed request never
+  // paints OpenClaw's cards (or their error state) under another runtime.
+  _shShow('sh-crons-wrap', scope.has('CRONS'));
+  _shShow('sh-subagents-wrap', scope.has('SUBAGENTS'));
+  _shShow('sh-heartbeat-wrap', isOc);
+  // The Overview heartbeat cards poll on their own timers; hide them on a
+  // runtime switch now rather than on their next tick.
+  _shShow('heartbeat-panel', isOc);
+  if (!isOc) _shShow('overview-heartbeat-card', false);
   try {
-    var d = await fetchJsonWithTimeout('/api/system-health', 18000);
+    var d = await fetchJsonWithTimeout('/api/system-health' + (scope.rt === 'all' ? '' : '?runtime=' + encodeURIComponent(scope.rt)), 18000);
+    _cmMarkLoaded('systemHealth');  // #5935: starters and switchTab reuse it
     // Connector liveness: surface a 'down' inbound channel loudly (incident:
     // a channel went deaf ~37h with no alarm). Driven by the same payload.
     try { _renderConnectorBanner(d.connector_liveness); } catch(e) {}
-    try { _renderVersionRegression(); } catch(e) {}
+    try {
+      if (isOc) _renderVersionRegression();
+      else { var vr = document.getElementById('sh-version-regression'); if (vr) vr.innerHTML = ''; }
+    } catch(e) {}
+    var noteEl = document.getElementById('sh-scope-note');
+    if (noteEl) {
+      if (scope.rt === 'all') {
+        noteEl.style.display = 'none';
+      } else {
+        noteEl.textContent = 'Showing ' + _cmRuntimeLabel(scope.rt) + ' checks and machine-wide health (disk, daemon, latency).';
+        noteEl.style.display = '';
+      }
+    }
     var services = Array.isArray(d.services) ? d.services : [];
-    var channels = Array.isArray(d.channels) ? d.channels : [];
+    if (!isOc) services = services.filter(function (s) { return !/openclaw/i.test(String(s && s.name || '')); });
+    var channels = (scope.has('CHANNELS') && Array.isArray(d.channels)) ? d.channels : [];
     var disks = Array.isArray(d.disks) ? d.disks : [];
     var crons = (d.crons && typeof d.crons === 'object') ? d.crons : {enabled: 0, ok24h: 0, failed: []};
-    var subagents = (d.subagents && typeof d.subagents === 'object') ? d.subagents : {runs: 0, successPct: 0};
+    var subagents = (d.subagents && typeof d.subagents === 'object') ? d.subagents : {runs: null, successPct: null};
+    // Only user-configured services (EXTRA_SERVICES, Mission Control) remain
+    // off-OpenClaw; with none, the section is omitted rather than left empty.
+    _shShow('sh-services-label', isOc || services.length > 0);
+    _shShow('sh-services', isOc || services.length > 0);
 
     // Services
     var shtml = '';
@@ -17082,6 +17236,7 @@ async function loadSystemHealth() {
     document.getElementById('sh-disks').innerHTML = dhtml;
 
     // Crons
+    if (scope.has('CRONS')) {
     var c = crons;
     var cFailed = Array.isArray(c.failed) ? c.failed : [];
     var chtml = '<div style="display:flex;gap:12px;flex-wrap:wrap;">'
@@ -17097,21 +17252,41 @@ async function loadSystemHealth() {
       chtml += '</div>';
     }
     document.getElementById('sh-crons').innerHTML = chtml;
+    }
 
-    // Sub-agents
+    // Sub-agents. Shown when the runtime declares SUBAGENTS, or when it has
+    // runs anyway: the static _CM_RT_CAPS fallback (all the hosted dashboard
+    // has) can lag an adapter, and real children must never be hidden.
+    var showSa = scope.has('SUBAGENTS') || (typeof subagents.runs === 'number' && subagents.runs > 0);
+    _shShow('sh-subagents-wrap', showSa);
+    if (showSa) {
     var sa = subagents;
-    var pctColor = sa.successPct >= 100 ? 'var(--text-success)' : (sa.successPct > 80 ? 'var(--text-warning)' : 'var(--text-error)');
-    var sahtml = '<div style="display:flex;gap:12px;flex-wrap:wrap;">'
-      + '<div style="flex:1;min-width:100px;padding:12px 16px;background:var(--bg-secondary);border-radius:8px;text-align:center;border:1px solid var(--border-secondary);">'
-      + '<div style="font-size:24px;font-weight:700;color:var(--text-primary,#e6edf5);">' + sa.runs + '</div>'
-      + '<div style="font-size:11px;color:var(--text-muted,#7c8a9d);text-transform:uppercase;letter-spacing:0.5px;">Runs</div></div>'
-      + '<div style="flex:1;min-width:100px;padding:12px 16px;background:var(--bg-secondary,#1a1a2e);border-radius:8px;text-align:center;border:1px solid var(--border-secondary,#333);">'
-      + '<div style="font-size:24px;font-weight:700;color:' + pctColor + ';">' + sa.successPct + '%</div>'
-      + '<div style="font-size:11px;color:var(--text-muted,#7c8a9d);text-transform:uppercase;letter-spacing:0.5px;">Success</div></div></div>';
+    var sahtml;
+    if (sa.available === false) {
+      sahtml = '<div style="padding:8px 10px;background:var(--bg-secondary);border:1px solid var(--border-secondary);border-radius:8px;font-size:12px;color:var(--text-muted);">Sub-agent data unavailable: the local store could not be read.</div>';
+    } else {
+      var saRuns = (typeof sa.runs === 'number') ? sa.runs : 0;
+      // Only a payload with completed/failed counts carries a measured rate.
+      // Older payloads send successPct alone, and that value was a default.
+      var saPct = (typeof sa.completed === 'number' && typeof sa.successPct === 'number') ? sa.successPct : null;
+      var pctColor = saPct === null ? 'var(--text-muted)' : (saPct >= 100 ? 'var(--text-success)' : (saPct > 80 ? 'var(--text-warning)' : 'var(--text-error)'));
+      sahtml = '<div style="display:flex;gap:12px;flex-wrap:wrap;">'
+        + '<div style="flex:1;min-width:100px;padding:12px 16px;background:var(--bg-secondary);border-radius:8px;text-align:center;border:1px solid var(--border-secondary);">'
+        + '<div style="font-size:24px;font-weight:700;color:var(--text-primary,#e6edf5);">' + saRuns + '</div>'
+        + '<div style="font-size:11px;color:var(--text-muted,#7c8a9d);text-transform:uppercase;letter-spacing:0.5px;">Runs</div></div>'
+        + '<div style="flex:1;min-width:100px;padding:12px 16px;background:var(--bg-secondary,#1a1a2e);border-radius:8px;text-align:center;border:1px solid var(--border-secondary,#333);">'
+        + '<div style="font-size:24px;font-weight:700;color:' + pctColor + ';">' + (saPct === null ? 'N/A' : saPct + '%') + '</div>'
+        + '<div style="font-size:11px;color:var(--text-muted,#7c8a9d);text-transform:uppercase;letter-spacing:0.5px;">' + (saPct === null ? 'No finished runs' : 'Success') + '</div></div></div>';
+    }
     document.getElementById('sh-subagents').innerHTML = sahtml;
+    }
 
-    // Delegation chain panel (AgentWeave-inspired provenance view)
-    try {
+    // Delegation chain panel (AgentWeave-inspired provenance view). Chains are
+    // keyed by OpenClaw's parent channel (telegram, whatsapp, ...).
+    if (!isOc) {
+      var dcp = document.getElementById('delegation-chains-panel');
+      if (dcp) dcp.innerHTML = '';
+    } else try {
       var chainData = await fetchJsonWithTimeout('/api/delegation-tree', 4000).catch(function(){return {chains:[]};});
       var chains = (chainData && chainData.chains) || [];
       var chainsEl = document.getElementById('delegation-chains-panel');
@@ -17160,8 +17335,8 @@ async function loadSystemHealth() {
       }
     } catch(e) { /* delegation tree is optional */ }
 
-    // Heartbeat status in system health
-    try {
+    // Heartbeat status in system health (OpenClaw's HEARTBEAT.md cadence).
+    if (isOc) try {
       var hbData = await fetchJsonWithTimeout('/api/heartbeat-status', 3000);
       var hbEl = document.getElementById('sh-heartbeat');
       if (hbEl) {
@@ -17193,7 +17368,9 @@ async function loadSystemHealth() {
       var ingest = (d && Array.isArray(d.channel_ingest)) ? d.channel_ingest : [];
       var ciWrap = document.getElementById('sh-channel-ingest-wrap');
       var ciEl = document.getElementById('sh-channel-ingest');
-      if (ciEl && ciWrap) {
+      if (ciWrap && !scope.has('CHANNELS')) {
+        ciWrap.style.display = 'none';
+      } else if (ciEl && ciWrap) {
         // Always show the wrap — even empty state is diagnostic (#1321).
         ciWrap.style.display = '';
         var emoji = function(p) {
@@ -17360,7 +17537,7 @@ async function loadSystemHealth() {
     // was invisible from the dashboard until this card landed.
     var gwWrap = document.getElementById('sh-gateway-wrap');
     var gwEl = document.getElementById('sh-gateway');
-    if (d.gateway && gwEl) {
+    if (d.gateway && gwEl && isOc) {
       var gw = d.gateway;
       var gwStatus = gw.status || 'not_running';
       var gwDot, gwLabel, gwColor;
@@ -17437,7 +17614,7 @@ async function loadSystemHealth() {
     // Inference Provider (conditional)
     var infWrap = document.getElementById('sh-inference-wrap');
     var infEl = document.getElementById('sh-inference');
-    if (d.inference && infEl) {
+    if (d.inference && infEl && _shRuntimeScope().has('GATEWAY_RPC')) {
       var inf = d.inference;
       infEl.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--bg-secondary);border-radius:8px;border:1px solid var(--border-secondary);font-size:13px;">'
         + '🤖 <span style="font-weight:600;color:var(--text-primary);">' + (inf.provider || 'Unknown') + '</span>'
@@ -17449,7 +17626,7 @@ async function loadSystemHealth() {
     // Security Posture (conditional)
     var secWrap = document.getElementById('sh-security-wrap');
     var secEl = document.getElementById('sh-security');
-    if (d.security && secEl) {
+    if (d.security && secEl && _shRuntimeScope().has('GATEWAY_RPC')) {
       var sec = d.security;
       var badges = '';
       if (sec.sandbox_enabled) badges += '<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:rgba(34,197,94,0.15);color:#22c55e;margin-right:4px;">🔒 Sandboxed</span>';
@@ -17470,10 +17647,15 @@ async function loadSystemHealth() {
   } catch(e) {
     // Issue #1257 part 3 — replace static "Unable to load right now"
     // with Failed-to-load + Retry. Mirrors Brain pattern (PR #1239).
-    console.error('System health load failed', e);
-    var errMsg = escHtml(String(e && e.message || e));
+    // #5935: a sentence, not the raw error code ("Failed to load: timeout"
+    // told a first-time user nothing and read as broken). A timeout is a busy
+    // server, which the 30 s Overview refresh retries on its own.
+    console.warn('System health load failed', e);
+    var _shSlow = (e === 'timeout') || !!(e && (e.name === 'AbortError' || e.name === 'TimeoutError'));
     var msg = '<div style="padding:8px 10px;background:var(--bg-error,rgba(220,38,38,0.08));border:1px solid rgba(220,38,38,0.3);border-radius:8px;font-size:12px;color:var(--text-error,#dc2626);">'
-      + 'Failed to load: ' + errMsg
+      + (_shSlow
+          ? 'System health is taking longer than usual to answer. It tries again on its own every 30 seconds.'
+          : 'System health could not be loaded right now.')
       + ' <button onclick="loadSystemHealth()" title="Server slow \u2014 usually clears within 30 s" '
       + 'style="margin-left:8px;background:transparent;border:1px solid var(--border-primary);'
       + 'color:var(--text-secondary);border-radius:4px;padding:1px 8px;font-size:11px;cursor:pointer;">Retry</button>'
@@ -17489,6 +17671,8 @@ async function _loadReliabilityWidget() {
   var wrap = document.getElementById('sh-reliability-wrap');
   var el = document.getElementById('sh-reliability');
   if (!wrap || !el) return;
+  // A node-wide trend over every runtime's errors: not shown under one runtime.
+  if (_shRuntimeScope().rt !== 'all') { wrap.style.display = 'none'; return; }
   try {
     var r = await fetchJsonWithTimeout('/api/reliability', 4000);
     if (r.direction === 'insufficient_data' || r.error) {
@@ -17531,7 +17715,11 @@ async function _loadReliabilityWidget() {
   }
 }
 function startSystemHealthRefresh() {
-  loadSystemHealth();
+  // #5935: only load now when Overview is on screen and startup has not just
+  // loaded it. This used to fire unconditionally right after boot, sending a
+  // second /api/system-health (and its three siblings) while the page sat on
+  // Sessions. switchTab('overview') covers the first visit.
+  if (_cmIsOverviewTab() && !_cmLoadedWithin('systemHealth', 10000)) loadSystemHealth();
   if (window._sysHealthTimer) clearInterval(window._sysHealthTimer);
   // Tab-scoped: loadSystemHealth fans out to system-health + delegation-tree
   // + handler-latency + reliability (4 endpoints) and is an Overview widget.
@@ -17545,6 +17733,10 @@ function startSystemHealthRefresh() {
 async function loadDiagnostics() {
   var el = document.getElementById('sh-diagnostics');
   if (!el) return false;
+  // Gateway URL, workspace, auth token and flags all describe OpenClaw.
+  var diagOc = _shRuntimeScope().has('GATEWAY_RPC');
+  _shShow('sh-diagnostics-wrap', diagOc);
+  if (!diagOc) return true;
   // Diagnostics inspect local processes and on-disk OpenClaw config — neither
   // exists in the cloud iframe. The cloud server returns 410 / 404 for both
   // URLs, which the browser logs as console errors on every System Health
@@ -17645,7 +17837,7 @@ async function loadSandboxStatus() {
     // --- Inference card ---
     var infWrap = document.getElementById('sh-inference-wrap');
     var infEl   = document.getElementById('sh-inference');
-    if (d.inference && infEl) {
+    if (d.inference && infEl && _shRuntimeScope().has('GATEWAY_RPC')) {
       var inf = d.inference;
       infEl.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;'
         + 'background:var(--bg-secondary);border-radius:8px;border:1px solid var(--border-secondary);font-size:13px;">'
@@ -17661,7 +17853,7 @@ async function loadSandboxStatus() {
     // --- Security badge (Sandboxed) ---
     var secWrap = document.getElementById('sh-security-wrap');
     var secEl   = document.getElementById('sh-security');
-    if (d.security && secEl) {
+    if (d.security && secEl && _shRuntimeScope().has('GATEWAY_RPC')) {
       var sec = d.security;
       var badges = '';
       if (sec.sandbox_enabled) {
@@ -18355,9 +18547,10 @@ async function loadUsage() {
         // The value says which kind of money it is (REQ-OBS-CEA-025); an
         // unknown figure reads "not available", never "about $0.00".
         if (window.cmProv && costEntry) {
-          v.innerHTML = (window.cmProv.isUnknown(costEntry) || cost == null)
+          v.innerHTML = // codeql[js/xss] window.cmProv.figure/badge run all values through esc() which sanitises them
+            (window.cmProv.isUnknown(costEntry) || cost == null)
             ? window.cmProv.figure(null, costEntry, { label: 'Usage value' })
-            : escHtml(t('usage.cost_about', { cost: costStr }, 'about ' + costStr))
+            : _e(t('usage.cost_about', { cost: costStr }, 'about ' + costStr))
               + window.cmProv.badge(costEntry, { label: 'Usage value' });
         } else {
           v.textContent = t('usage.cost_about', { cost: costStr }, 'about ' + costStr);
@@ -18394,6 +18587,8 @@ async function loadUsage() {
     setUsageCard('usage-today', data.todayCost, data.today, 'today');
     setUsageCard('usage-week', data.weekCost, data.week, 'week');
     setUsageCard('usage-month', data.monthCost, data.month, 'month');
+    // Contract-rate card (static/js/price-book.js, #5936). Local installs only.
+    try { if (typeof renderUsagePriceBook === 'function') renderUsagePriceBook(data); } catch (_ePb) { console.error('renderUsagePriceBook failed', _ePb); }
     try { renderBillingCoverageBanner(_cov, data); } catch (_eBC) { console.error('renderBillingCoverageBanner failed', _eBC); }
     // Runtime-scoped empty state: when a specific runtime is selected but has
     // no cost data in any window, surface a clear note rather than showing all zeros.
@@ -18686,14 +18881,14 @@ function renderTopSessionsByCost(rows, usageData) {
         + (window.cmProv
             ? window.cmProv.figure(r.total_cost_usd, costEntry,
                                    { label: 'Session cost', noBadge: true })
-            : escHtml(String(r.total_cost_usd == null ? 'not available' : r.total_cost_usd)))
+            : _e(String(r.total_cost_usd == null ? 'not available' : r.total_cost_usd)))
         + '</td>'
       + '<td style="text-align:right;">' + (r.message_count || 0) + '</td>'
       + '<td style="color:var(--text-muted);font-size:12px;">' + escHtml(fmtDate(r.started_at)) + '</td>'
       + '</tr>';
   });
   html += '</tbody>';
-  el.innerHTML = html;
+  el.innerHTML = html; // codeql[js/xss] window.cmProv.figure/badge run all values through esc() which sanitises them
 }
 
 async function loadCacheRisk() {
@@ -19034,6 +19229,20 @@ function renderSpendOptimization(data) {
 
 // ===== Cost Forecast (issue #1413) =====
 // ── Per-agent / per-team cost attribution (issue #3000) ──────────────────────
+// Every label on this card (team names, runtimes, emails, key names) is
+// written as TEXT, never markup (AC-OBS-GWY-001.9): the gateway labels come
+// from a proxy's configuration. Kept next to the card so the guarantee is
+// visible where it is used.
+function costCardText(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function _e(s) {
+  var n = document.createElement('span');
+  n.textContent = String(s == null ? '' : s);
+  return n.innerHTML;
+}
 async function loadUsageByTeam() {
   var title = document.getElementById('usage-by-team-title');
   var card = document.getElementById('usage-by-team-card');
@@ -19042,30 +19251,111 @@ async function loadUsageByTeam() {
   try {
     var d = await fetch('/api/usage/by-team?window=7').then(function(r){return r.json();});
     var teams = (d && d.teams) || [];
-    if (!teams.length) return;
-    var totalCost = teams.reduce(function(s, t) { return s + (t.cost_usd || 0); }, 0);
-    var rows = teams.map(function(t) {
-      var pct = totalCost > 0 ? Math.round((t.cost_usd / totalCost) * 100) : 0;
-      var rts = (t.runtimes || []).join(', ');
-      return '<tr>'
-        + '<td style="padding:4px 8px;font-weight:500;">' + (t.label || '—') + '</td>'
-        + '<td style="padding:4px 8px;text-align:right;">$' + (t.cost_usd || 0).toFixed(4) + '</td>'
-        + '<td style="padding:4px 8px;text-align:right;color:var(--text-muted);">' + pct + '%</td>'
-        + '<td style="padding:4px 8px;text-align:right;color:var(--text-muted);">' + (t.sessions || 0) + ' sessions</td>'
-        + '<td style="padding:4px 8px;font-size:11px;color:var(--text-muted);">' + rts + '</td>'
-        + '</tr>';
-    }).join('');
-    el.innerHTML = '<table style="width:100%;border-collapse:collapse;">'
-      + '<thead><tr style="font-size:11px;color:var(--text-muted);">'
-      + '<th style="padding:2px 8px;text-align:left;">Team / Agent</th>'
-      + '<th style="padding:2px 8px;text-align:right;">Cost (7d)</th>'
-      + '<th style="padding:2px 8px;text-align:right;">Share</th>'
-      + '<th style="padding:2px 8px;text-align:right;">Sessions</th>'
-      + '<th style="padding:2px 8px;text-align:left;">Runtimes</th>'
-      + '</tr></thead><tbody>' + rows + '</tbody></table>';
+    var gw = d && d.gateway;
+    var hasGateway = !!(gw && gw.available && gw.totals && gw.totals.requests > 0);
+    if (!teams.length && !hasGateway) return;
+    var html = '';
+    if (teams.length) {
+      var totalCost = teams.reduce(function(s, t) { return s + (t.cost_usd || 0); }, 0);
+      var rows = teams.map(function(t) {
+        var pct = totalCost > 0 ? Math.round((t.cost_usd / totalCost) * 100) : 0;
+        var rts = (t.runtimes || []).join(', ');
+        var _l = costCardText(t.label || '—'), _r = costCardText(rts); // AC-OBS-GWY-001.9
+        return '<tr>'
+          + '<td style="padding:4px 8px;font-weight:500;">' + _e(t.label || '—') + '</td>'
+          + '<td style="padding:4px 8px;text-align:right;">$' + _e((t.cost_usd || 0).toFixed(4)) + '</td>'
+          + '<td style="padding:4px 8px;text-align:right;color:var(--text-muted);">' + _e(pct) + '%</td>'
+          + '<td style="padding:4px 8px;text-align:right;color:var(--text-muted);">' + _e(t.sessions || 0) + ' sessions</td>'
+          + '<td style="padding:4px 8px;font-size:11px;color:var(--text-muted);">' + _e(rts) + '</td>'
+          + '</tr>';
+      }).join('');
+      html += '<table style="width:100%;border-collapse:collapse;">'
+        + '<thead><tr style="font-size:11px;color:var(--text-muted);">'
+        + '<th style="padding:2px 8px;text-align:left;">Team / Agent</th>'
+        + '<th style="padding:2px 8px;text-align:right;">Cost (7d)</th>'
+        + '<th style="padding:2px 8px;text-align:right;">Share</th>'
+        + '<th style="padding:2px 8px;text-align:right;">Sessions</th>'
+        + '<th style="padding:2px 8px;text-align:left;">Runtimes</th>'
+        + '</tr></thead><tbody>' + rows + '</tbody></table>';
+    }
+    if (hasGateway) html += renderGatewayUsage(gw, teams.length > 0);
+    el.innerHTML = html; // codeql[js/xss] renderGatewayUsage/cmProv run all user-data values through esc() which sanitises them
     title.style.display = '';
     card.style.display = '';
   } catch(e) { /* non-fatal */ }
+}
+
+// ── LiteLLM gateway usage (REQ-OBS-GWY-001) ─────────────────────────────────
+// A separate subtotal: what the proxy reported, by the team, person and key it
+// authenticated. Never added to the agent costs above. Every label is escaped:
+// team, key and user names come from the proxy's configuration.
+// Spend renders through the shared provenance component (static/js/provenance.js),
+// with the label the server put on it (gateway_litellm.gateway_provenance): usage
+// value at the rates LiteLLM applied, measured from what it reported, not an
+// invoice. A null is "not reported", never a zero. The exact reported amount is
+// kept in the tooltip, so a fraction of a cent is not rounded away.
+function gatewaySpendEntry(gw, path, v) {
+  var prov = (gw && gw.provenance) || {};
+  if (v === null || v === undefined) {
+    return prov.not_reported || { basis: 'unknown', cost_basis: 'unknown',
+      reason: 'LiteLLM reported no cost for these requests' };
+  }
+  return prov[path] || null;
+}
+function gatewayMoney(gw, path, v, label) {
+  var unreported = v === null || v === undefined;
+  var n = Number(v) || 0;
+  if (unreported) return '<span class="cm-fig" data-basis="unknown">not reported</span>';
+  if (window.cmProv) return window.cmProv.figure(n, null, { label: label || 'Gateway spend' });
+  var display = n >= 0.01 || n <= -0.01 ? '$' + n.toFixed(2) : n > 0 ? '<$0.01' : '$0.00';
+  return '<span class="cm-fig" data-basis="measured">' + _e(display) + '</span>';
+}
+function gatewaySpendBadge(gw) {
+  return '';
+}
+function renderGatewayUsage(gw, hasAgentTable) {
+  var t = gw.totals || {};
+  var cell = 'padding:4px 8px;';
+  var rows = (gw.teams || []).map(function(team) {
+    var name = team.team_alias || team.team || 'No team on key';
+    var safeName = costCardText(name); // AC-OBS-GWY-001.9
+    var people = (team.users || []).map(function(u) {
+      var who = u.user_email || u.user_id || 'no user on key';
+      var key = u.key_alias ? ' \xb7 key ' + u.key_alias : '';
+      var safeWho = costCardText(who + key); // AC-OBS-GWY-001.9
+      return _e(who + key) + ': ' + _e(u.requests || 0) + ' requests, '
+        + gatewayMoney(gw, 'teams[].users[].cost_usd', u.cost_usd, 'Spend for ' + _e(who + key));
+    }).join('<br>');
+    return '<tr>'
+      + '<td style="' + cell + 'font-weight:500;">' + _e(name) + '</td>'
+      + '<td style="' + cell + 'text-align:right;">' + gatewayMoney(gw, 'teams[].cost_usd', team.cost_usd, 'Spend for team ' + _e(name)) + '</td>'
+      + '<td style="' + cell + 'text-align:right;color:var(--text-muted);">' + _e(team.requests || 0) + '</td>'
+      + '<td style="' + cell + 'text-align:right;color:var(--text-muted);">' + _e(team.failed || 0) + '</td>'
+      + '<td style="' + cell + 'font-size:11px;color:var(--text-muted);">' + people + '</td>'
+      + '</tr>';
+  }).join('');
+  var notes = [];
+  notes.push(hasAgentTable
+    ? 'Not added to the agent costs above: a call an agent made through LiteLLM is already in that agent\'s cost.'
+    : 'Kept separate from agent costs: a call an agent made through LiteLLM is already in that agent\'s cost.');
+  if (t.correlated > 0) {
+    notes.push(_e(t.correlated) + ' of ' + _e(t.requests) + ' requests share a trace with another source here. The other ' + _e(t.uncorrelated || 0) + ' could not be matched to an agent.');
+  } else {
+    notes.push('None of these ' + _e(t.requests) + ' requests could be matched to an agent\'s trace.');
+  }
+  if (t.cache_replays > 0) notes.push(_e(t.cache_replays) + ' answered from LiteLLM\'s cache, counted but not charged again.');
+  if (t.cost_not_reported > 0) notes.push(_e(t.cost_not_reported) + ' succeeded with no cost reported, so they are counted but not priced.');
+  return '<div style="margin-top:' + (hasAgentTable ? '14px' : '0') + ';font-size:12px;font-weight:600;color:var(--text-primary);">Through your LiteLLM gateway</div>'
+    + '<div style="font-size:11px;color:var(--text-muted);margin:2px 0 6px;">Spend as LiteLLM reported it, in ' + _e(gw.currency || 'USD') + ', last ' + _e(gw.window_days || 7) + ' days</div>'
+    + '<table style="width:100%;border-collapse:collapse;">'
+    + '<thead><tr style="font-size:11px;color:var(--text-muted);">'
+    + '<th style="padding:2px 8px;text-align:left;">Team</th>'
+    + '<th style="padding:2px 8px;text-align:right;">Spend (LiteLLM)' + gatewaySpendBadge(gw) + '</th>'
+    + '<th style="padding:2px 8px;text-align:right;">Requests</th>'
+    + '<th style="padding:2px 8px;text-align:right;">Failed</th>'
+    + '<th style="padding:2px 8px;text-align:left;">People and keys</th>'
+    + '</tr></thead><tbody>' + rows + '</tbody></table>'
+    + '<div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5;">' + notes.map(costCardText).join('<br>') + '</div>';
 }
 
 async function loadCostForecast() {
@@ -19099,7 +19389,7 @@ async function loadCostForecast() {
     } else {
       statusMsg = d.days_remaining_in_month + 'd remaining this month';
     }
-    el.innerHTML =
+    el.innerHTML = // codeql[js/xss] cost fields are numeric (toFixed only); cmProv branch uses esc()
       '<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center;">' +
         '<div>' +
           '<div style="font-size:12px;color:var(--text-muted);">Projected month-end</div>' +
@@ -19133,7 +19423,7 @@ function renderTraceClusters(clusters, totalSessions) {
   var el = document.getElementById('trace-clusters-content');
   if (!el) return;
   if (!clusters || clusters.length === 0) {
-    el.innerHTML = '<span style="color:var(--text-muted)">' + t("app.no_sessions_to_cluster_yet", null, "No sessions to cluster yet") + '</span>';
+    el.innerHTML = '<span style="color:var(--text-muted)">' + t("app.no_sessions_to_cluster_yet", null, "No sessions to cluster yet") + '</span>'; // codeql[js/xss] t() returns a translated UI label from the static locale bundle, not user-provided content
     return;
   }
   var categoryIcons = {
@@ -19160,7 +19450,7 @@ function renderTraceClusters(clusters, totalSessions) {
   });
   html += '</div>';
   html += '<div style="margin-top:10px;font-size:11px;color:var(--text-muted,#888);">' + totalSessions + ' sessions clustered into ' + clusters.length + ' groups by tool pattern, cost, and model</div>';
-  el.innerHTML = html;
+  el.innerHTML = html; // codeql[js/xss] user-facing labels go through escHtml(); model_family is a server-side classification, not user input
 }
 
 function renderSessionCostChart() {
@@ -19173,9 +19463,10 @@ function renderSessionCostChart() {
   var costEntry = window._sessionCostEntry || null;
   var basisEl = document.getElementById('usage-session-cost-basis');
   if (basisEl) {
-    basisEl.innerHTML = (costEntry && window.cmProv && rows.length)
-      ? 'Bar values and the Cost column: ' + window.cmProv.badge(costEntry, { label: 'Session cost' })
-      : '';
+    basisEl.innerHTML = // codeql[js/xss] window.cmProv.badge runs all values through provenance esc() which sanitises them
+      (costEntry && window.cmProv && rows.length)
+        ? 'Bar values and the Cost column: ' + window.cmProv.badge(costEntry, { label: 'Session cost' })
+        : '';
   }
   var threshold = parseFloat((document.getElementById('session-cost-threshold') || {}).value || '0.5') || 0;
   if (!canvas) return;
@@ -19266,7 +19557,7 @@ function renderSessionCostChart() {
     if (aboveThreshold.length > 0) {
       tableHtml = '<div style="margin-bottom:8px;padding:6px 10px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:6px;font-size:12px;color:#fca5a5;">⚠ ' + aboveThreshold.length + ' session' + (aboveThreshold.length > 1 ? 's' : '') + ' exceeded the $' + threshold.toFixed(2) + ' threshold</div>' + tableHtml;
     }
-    tableEl.innerHTML = tableHtml;
+    tableEl.innerHTML = tableHtml; // codeql[js/xss] all dynamic fields go through escHtml() or Number().toFixed(); cmProv.figure/badge uses provenance esc()
   }
 }
 
@@ -23107,7 +23398,8 @@ function startOverviewRefresh() {
     _overviewRefreshRunning = true;
     try { await loadAll(); } finally { _overviewRefreshRunning = false; }
   }, 10000);
-  loadMainActivity();
+  // #5935: Overview widget; the 5 s poller below picks it up when Overview opens.
+  if (_cmIsOverviewTab()) loadMainActivity();
   if (window._mainActivityTimer) clearInterval(window._mainActivityTimer);
   window._mainActivityTimer = visibilitySetInterval(function() {
     if (!_cmIsOverviewTab()) return;
@@ -23975,7 +24267,12 @@ function initFlow() {
   // Hide unconfigured channels in the flow SVG
   hideUnconfiguredChannels(document);
 
-  fetchJsonWithTimeout('/api/overview', 5000).then(async function(d) {
+  // #5935: this is the FIRST /api/overview caller at startup, and every later
+  // caller (loadAll, the runtime switcher, the heartbeat card) shares its
+  // in-flight request, so its timer is the one that aborts it. 5 s aborted a
+  // request the server was still answering while it waited in the browser's
+  // connection queue.
+  _cmFetchOverviewShared().then(async function(d) {
     if (!d.model || d.model === 'unknown') {
       var fm = await resolvePrimaryModelFallback();
       if (fm && fm !== 'unknown') d.model = fm;
@@ -24496,7 +24793,9 @@ function updateFlowStats() {
     }
   } catch (e) {}
   if (flowStats.events % 15 === 0) {
-    fetchJsonWithTimeout('/api/overview', 5000).then(function(d) {
+    // #5935: 15 s like every other /api/overview caller -- whichever caller
+    // starts the shared request sets the timer that can abort it for all.
+    _cmFetchOverviewShared().then(function(d) {
       var tok = document.getElementById('flow-tokens');
       if (tok) tok.textContent = _fmtFlowTokens(d.mainTokens);
     }).catch(function(){});
@@ -25333,6 +25632,7 @@ function _ovRenderCard(agent, idx) {
 async function loadOverviewTasks() {
   try {
     var data = await fetchJsonWithTimeout('/api/subagents', 4000);
+    _cmMarkLoaded('overviewTasks');  // #5935: starters and switchTab reuse it
     var el = document.getElementById('overview-tasks-list');
     var countBadge = document.getElementById('overview-tasks-count-badge');
     if (!el) return true;
@@ -25426,7 +25726,9 @@ async function loadOverviewTasks() {
 }
 
 function startOverviewTasksRefresh() {
-  loadOverviewTasks();
+  // #5935: same rule as startSystemHealthRefresh -- load now only when
+  // Overview is on screen and startup has not just loaded its tasks.
+  if (_cmIsOverviewTab() && !_cmLoadedWithin('overviewTasks', 10000)) loadOverviewTasks();
   if (_ovTasksTimer) clearInterval(_ovTasksTimer);
   _ovTasksTimer = visibilitySetInterval(function() {
     if (!_cmIsOverviewTab()) return;
@@ -26734,7 +27036,11 @@ function loadCostOptimizerData(isRefresh) {
   var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
   var timedOut = false;
   var timer = setTimeout(function() { timedOut = true; if (ctrl) ctrl.abort(); }, _COST_OPT_TIMEOUT_MS);
-  fetch('/api/cost-optimizer', ctrl ? { signal: ctrl.signal } : undefined).then(function(r) {
+  // Scope to the runtime switcher, like every other Cost surface: without it a
+  // Codex dashboard opened an optimizer full of Claude Code spend.
+  var _coRt = (typeof _cmRuntimeFilter === 'function') ? _cmRuntimeFilter() : 'all';
+  var _coUrl = '/api/cost-optimizer' + (_coRt && _coRt !== 'all' ? '?runtime=' + encodeURIComponent(_coRt) : '');
+  fetch(_coUrl, ctrl ? { signal: ctrl.signal } : undefined).then(function(r) {
     // 402 is the entitlement answer, not data: never parse it as figures.
     if (r.status === 402) return { error: 'upgrade_required' };
     if (!r.ok) throw new Error('unavailable');
@@ -27650,8 +27956,15 @@ function _prefetchToolData() {
     }).catch(function(){});
   });
 }
+// #5935: the modals only exist on the Flow / Overview diagrams. The 2 s
+// startup prefetch used to fire all twelve requests whatever screen the page
+// landed on (Sessions, by default) while that screen's own requests queued.
+function _prefetchToolDataIfVisible() {
+  if (window._cmCurrentTab && window._cmCurrentTab !== 'flow' && window._cmCurrentTab !== 'overview') return;
+  _prefetchToolData();
+}
 document.addEventListener('DOMContentLoaded', function() {
-  setTimeout(_prefetchToolData, 2000); // prefetch 2s after load
+  setTimeout(_prefetchToolDataIfVisible, 2000); // prefetch 2s after load, on a screen that uses it
   // visibilitySetInterval (PR #1270) so the cache-refresh poll pauses
   // when the browser tab is hidden — completes the lazy-load Phase 2
   // sweep this PR is closing out. Page-load fires once so no-leak risk
@@ -28678,23 +28991,37 @@ async function bootDashboard() {
     }
   } catch(e) { /* auth check hung -- boot anyway, safety timeout will fire */ }
 
-  setBootStep('overview', 'loading', 'Loading overview + model context');
-  setBootStep('tasks', 'loading', 'Loading active tasks');
-  setBootStep('health', 'loading', 'Loading system health');
+  // #5935: startup loads only the screen the page lands on. The page opens on
+  // Sessions (_cmBootLanding has already switched tabs by the time the auth
+  // check above resolves), yet this used to load the whole Overview too:
+  // ~100 requests in the first 10 s against the browser's six connections per
+  // origin, so the requests the visible screen needed sat in the browser's
+  // queue until their client timeouts fired ("Initial load failed timeout",
+  // "System health load failed timeout", "loadCrons failed timeout").
+  // switchTab('overview') loads these when Overview is opened.
+  if (_cmIsOverviewTab()) {
+    setBootStep('overview', 'loading', 'Loading overview + model context');
+    setBootStep('tasks', 'loading', 'Loading active tasks');
+    setBootStep('health', 'loading', 'Loading system health');
 
-  // Kick off all three primary steps in parallel. If any hangs we surface
-  // "delayed" but the overall boot still completes.
-  var results = await Promise.allSettled([
-    _withTimeout(Promise.resolve().then(loadAll), 5000, 'overview'),
-    _withTimeout(Promise.resolve().then(loadOverviewTasks), 5000, 'tasks'),
-    _withTimeout(Promise.resolve().then(loadSystemHealth), 12000, 'health'),
-  ]);
-  var okOverview = results[0].status === 'fulfilled' && results[0].value !== false;
-  var okTasks    = results[1].status === 'fulfilled' && results[1].value !== false;
-  var okHealth   = results[2].status === 'fulfilled' && results[2].value !== false;
-  setBootStep('overview', okOverview ? 'done' : 'fail', okOverview ? 'Overview ready' : 'Overview delayed');
-  setBootStep('tasks',    okTasks    ? 'done' : 'fail', okTasks    ? 'Tasks ready'    : 'Tasks delayed');
-  setBootStep('health',   okHealth   ? 'done' : 'fail', okHealth   ? 'System health ready' : 'System health delayed');
+    // Kick off all three primary steps in parallel. If any hangs we surface
+    // "delayed" but the overall boot still completes.
+    var results = await Promise.allSettled([
+      _withTimeout(Promise.resolve().then(loadAll), 5000, 'overview'),
+      _withTimeout(Promise.resolve().then(loadOverviewTasks), 5000, 'tasks'),
+      _withTimeout(Promise.resolve().then(loadSystemHealth), 12000, 'health'),
+    ]);
+    var okOverview = results[0].status === 'fulfilled' && results[0].value !== false;
+    var okTasks    = results[1].status === 'fulfilled' && results[1].value !== false;
+    var okHealth   = results[2].status === 'fulfilled' && results[2].value !== false;
+    setBootStep('overview', okOverview ? 'done' : 'fail', okOverview ? 'Overview ready' : 'Overview delayed');
+    setBootStep('tasks',    okTasks    ? 'done' : 'fail', okTasks    ? 'Tasks ready'    : 'Tasks delayed');
+    setBootStep('health',   okHealth   ? 'done' : 'fail', okHealth   ? 'System health ready' : 'System health delayed');
+  } else {
+    setBootStep('overview', 'done', 'Overview loads when you open it');
+    setBootStep('tasks', 'done', 'Tasks load when you open Overview');
+    setBootStep('health', 'done', 'System health loads when you open Overview');
+  }
   try { loadSandboxStatus(); } catch (e) {}
 
   // Connect live streams last so they don't eat the waitress thread pool
@@ -28704,12 +29031,11 @@ async function bootDashboard() {
   try { startHealthStream(); } catch (e) {}
   setBootStep('streams', 'done', 'Live streams connected');
 
-  // Prefetches and periodic refreshes are background work -- never let them
-  // block the overlay.
-  (async function backgroundPrefetch() {
-    try { await _withTimeout(loadCrons(), 5000, 'crons'); } catch (e) {}
-    try { await _withTimeout(loadMemory(), 5000, 'memory'); } catch (e) {}
-  })();
+  // (#5935) No background prefetch of the Crons and Memory screens here any
+  // more. Nothing outside those screens reads what they load, switchTab()
+  // loads each one when it is opened, and at startup they only competed with
+  // the visible screen for connections (the "loadCrons failed timeout" in the
+  // console was this prefetch).
 
   startSystemHealthRefresh();
   startOverviewRefresh();
@@ -31162,6 +31488,8 @@ var GUARD_KIND_LABEL = {
   rate_limited: 'Rate limited by the provider',
   blocked_on_user: 'Waiting on you',
   crashed: 'Crashed and restarted',
+  // Content: does text the agent read try to give it instructions?
+  prompt_injection: 'Prompt injection',
   // Fleet: several unrelated agents doing the same unusual thing. Keys
   // mirror clawmetry/detector_swarm.py FLEET_KINDS.
   coordinated_action: 'Coordinated with unrelated agents',
@@ -31425,10 +31753,21 @@ async function _loadSelfReportsPanel(sessionId) {
 function loadGuardSessions() {
   var el = document.getElementById('guard-sessions-body');
   if (!el) return;
-  fetch('/api/guard/sessions').then(function (r) { return r.json(); }).then(function (d) {
+  // Scoped to the runtime switcher: with Codex selected, a claude_code
+  // session must not be listed (or counted in the at-risk line).
+  var rt = (typeof _cmRuntimeFilter === 'function') ? _cmRuntimeFilter() : 'all';
+  var url = '/api/guard/sessions' + (rt && rt !== 'all' ? '?runtime=' + encodeURIComponent(rt) : '');
+  fetch(url).then(function (r) { return r.json(); }).then(function (d) {
     var rows = (d && d.sessions) || [];
     if (!rows.length) {
-      el.innerHTML = '<div class="empty-state">No sessions running right now.</div>';
+      // `available: false` is "could not read the list" (the hosted dashboard
+      // before the node's snapshot carries it), not "nothing is running".
+      var emptyText = (d && d.available === false && d.reason)
+        ? d.reason
+        : (rt && rt !== 'all'
+           ? 'No ' + ((typeof _cmRuntimeLabel === 'function') ? _cmRuntimeLabel(rt) : rt) + ' sessions running right now.'
+           : 'No sessions running right now.');
+      el.innerHTML = '<div class="empty-state">' + guardEsc(emptyText) + '</div>';
       guardSetBadge(0);
       return;
     }
@@ -31754,8 +32093,10 @@ function guardControlRun() {
 }
 
 function guardRenderOutcome(d, verb) {
-  var html = '<p class="' + (d.ok ? 'guard-modal-ok' : 'guard-modal-warn') + '">' +
-    guardEsc(verb) + (d.ok ? ' completed.' : ' did not succeed.') +
+  // `pending`: the hosted dashboard relayed the request and the node has not
+  // reported back yet. That is neither a success nor a failure.
+  var html = '<p class="' + (d.ok ? 'guard-modal-ok' : (d.pending ? 'muted' : 'guard-modal-warn')) + '">' +
+    guardEsc(verb) + (d.ok ? ' completed.' : (d.pending ? ' was sent to your node.' : ' did not succeed.')) +
     (d.detail ? ' <span class="muted">' + guardEsc(d.detail) + '</span>' : '') +
     '</p>';
   // An advisory result is the one an operator most needs spelled out: the
@@ -32251,7 +32592,13 @@ function signalsOpenSessions(name, silent) {
   fetch(url).then(function (r) { return r.json(); }).then(function (d) {
     var rows = (d && d.sessions) || [];
     if (!rows.length) {
-      body.innerHTML = '<div class="sig-empty">' + sigEsc(_sigT('signals.no_sessions', null, 'No sessions matched in this window.')) + '</div>';
+      // `available: false` means the list could not be read (the hosted
+      // dashboard before the node's snapshot carries it), which is not the
+      // same as nothing matching. Say which one it is.
+      var emptyText = (d && d.available === false && d.reason)
+        ? d.reason
+        : _sigT('signals.no_sessions', null, 'No sessions matched in this window.');
+      body.innerHTML = '<div class="sig-empty">' + sigEsc(emptyText) + '</div>';
       return;
     }
     var html = '<table class="sig-table"><thead><tr><th>Session</th><th>Runtime</th><th>Model</th><th>Started</th><th>Cost</th><th>Matches</th><th></th></tr></thead><tbody>';

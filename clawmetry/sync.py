@@ -17841,6 +17841,50 @@ def _build_activity_heatmap_snapshot():
         return {}
 
 
+def _build_cost_optimizer_snapshot():
+    """Cost Optimizer slice for the hosted dashboard (AC-OBS-CEA-023.9).
+
+    The same experiments, local-model advice and basis-labelled figures the
+    local /api/cost-optimizer derives, built on the daemon's own store handle
+    by ``clawmetry/cost_optimizer_snapshot.py``. ``{}`` on any failure.
+    """
+    try:
+        from clawmetry import local_store as _ls_co
+        from clawmetry.cost_optimizer_snapshot import build_slice
+
+        return build_slice(_ls_co.get_store()) or {}
+    except Exception as _e_co:
+        log.debug("snapshot: cost optimizer slice failed: %s", _e_co)
+        return {}
+
+
+def _build_cost_optimizer_by_runtime(runtimes):
+    """``{runtime: costOptimizer slice}`` for each runtime on this node.
+
+    Served by the cloud for ``/api/cost-optimizer?runtime=<rt>`` so a
+    runtime-scoped dashboard never shows another runtime's spend or advice.
+    ``{}`` on any failure (the cloud then says the node must update).
+    """
+    try:
+        from clawmetry import local_store as _ls_co
+        from clawmetry.cost_optimizer_snapshot import build_slice
+
+        store = _ls_co.get_store()
+        if store is None:
+            return {}
+        out = {}
+        for rt in runtimes or []:
+            if not isinstance(rt, str) or not rt or rt == "all":
+                continue
+            s = build_slice(store, runtime=rt)
+            if s:
+                out[rt] = s
+        return out
+    except Exception as _e_co:
+        log.debug("snapshot: cost optimizer by-runtime slice failed: %s", _e_co)
+        return {}
+
+
 def _build_usage_snapshot():
     """Usage tab slices (anomalies, cost-comparison, cache-trends, cost-breakdown,
     spend-optimization, forecast). Trial-bug #12: these Usage cards were blank on
@@ -23950,19 +23994,48 @@ def sync_system_snapshot(config: dict, state: dict, paths: dict) -> int:
 
     # Behaviour Signals (WO-58): the same shape /api/signals serves, per
     # window (1d / 7d / 30d) and per runtime, so the hosted dashboard renders
-    # the identical numbers. No per-session lists ride the snapshot. Same
-    # store handle as above; a failure here leaves both slices empty and
-    # never breaks the snapshot.
+    # the identical numbers. `signalSessions` carries the drill-down lists
+    # (sessions and match counts, never the phrases), so a hosted "Sessions"
+    # click lists what the rate counted instead of reading as none. Same
+    # store handle as above; a failure here leaves the slices empty and never
+    # breaks the snapshot.
     _signals_slice: dict = {}
     _signals_by_rt: dict = {}
+    _signal_sessions_slice: dict = {}
     try:
         from clawmetry import behaviour_signals as _bsig_snap
         from clawmetry import local_store as _ls_sig
         _sig_store = _ls_sig.get_store()
         if _sig_store is not None:
             _signals_slice, _signals_by_rt = _bsig_snap.build_snapshot_slices(_sig_store)
+            _signal_sessions_slice = _bsig_snap.build_session_slice(
+                _sig_store, _signals_slice, _signals_by_rt)
     except Exception as _e_sig:
         log.debug("snapshot: signals slice failed: %s", _e_sig)
+
+    # Guard running sessions: the exact /api/guard/sessions body, built on
+    # this machine because only this machine has the store and the process
+    # table. Without it the hosted Guard tab asked a container with neither
+    # and printed "No sessions running right now" beside a node running 39.
+    # The builder is handed THIS store handle (never a read_only re-open --
+    # FLYWHEEL section 1). Rows carry the control verdict computed here; the
+    # cloud relays a click to this daemon, which re-resolves before acting.
+    _guard_sessions_slice: dict = {}
+    try:
+        from clawmetry import local_store as _ls_guard
+        _guard_store = _ls_guard.get_store()
+        if _guard_store is not None:
+            from routes.guard import build_guard_sessions_body as _bgsb
+
+            def _guard_call(method, **kw):
+                fn = getattr(_guard_store, method, None)
+                return fn(**kw) if callable(fn) else None
+
+            _guard_sessions_slice = json.loads(json.dumps(
+                _bgsb(50, call=_guard_call), default=str))
+            _guard_sessions_slice["generated_at"] = int(time.time() * 1000)
+    except Exception as _e_guard:
+        log.debug("snapshot: guardSessions slice failed: %s", _e_guard)
 
     # Signal shifts (WO-62): open issues + the last 20 resolved, each with
     # its plain-words headline, so the hosted Signals tab shows the same
@@ -24025,6 +24098,12 @@ def sync_system_snapshot(config: dict, state: dict, paths: dict) -> int:
         # for ?runtime= and falls back to the node-wide slice).
         "signals": _signals_slice,
         "signalsByRuntime": _signals_by_rt,
+        # Drill-down lists behind each rate: byRuntime[rt|"all"][window][signal]
+        # -> sessions with match counts (never the phrases).
+        "signalSessions": _signal_sessions_slice,
+        # The /api/guard/sessions body (running sessions, incidents, control
+        # verdicts) plus generated_at, for the hosted Guard tab.
+        "guardSessions": _guard_sessions_slice,
         # WO-62 Signal shifts: issues opened when a rate left its band.
         "signalIssues": _signal_issues_slice,
         # WO-62 Briefs: saved questions with a schedule and a channel, read-only
@@ -24078,6 +24157,14 @@ def sync_system_snapshot(config: dict, state: dict, paths: dict) -> int:
         "cronHealthSummary": _build_cron_health_summary_snapshot(),
         "harness": _build_harness_snapshot(),
         "usage": _build_usage_snapshot(),
+        # Cost Optimizer experiments + basis-labelled figures (AC-OBS-CEA-023.9).
+        # Read by the cloud cm-cloud-overview interceptor for /api/cost-optimizer.
+        "costOptimizer": _build_cost_optimizer_snapshot(),
+        # The same slice per runtime, served for /api/cost-optimizer?runtime=<rt>.
+        # Without it a Codex-scoped dashboard showed Claude Code's spend and
+        # Anthropic experiments under an "all runtimes" header.
+        "costOptimizerByRuntime": _build_cost_optimizer_by_runtime(
+            list(_runtime_summary.keys()) if isinstance(_runtime_summary, dict) else []),
         # Inputs & context per session (Trail triad). Read by the cloud
         # cm-cloud-session-context interceptor for /api/sessions/<id>/context.
         "sessionContext": _build_session_context_snapshot(),
@@ -25833,6 +25920,12 @@ def run_daemon() -> None:
                         )
                 except Exception as _ae:
                     log.warning(f"alerts: evaluator tick errored: {_ae}")
+                # Per-project budgets ride the same throttle. Independent of
+                # cloud rules: a node with no cloud account still alerts.
+                try:
+                    evaluate_project_budget_alerts(config)
+                except Exception as _pbe:
+                    log.warning(f"project budgets: tick errored: {_pbe}")
                 last_alerts_eval = now_alerts
                 # Persist the eval state (last_eval_ts, cooldown memo) so
                 # cooldown survives a daemon restart.
@@ -27862,6 +27955,43 @@ def _evaluate_alerts_local(config: dict, state: dict) -> int:
             delivered += 1
 
     state["alerts_last_eval_ts"] = _iso_now()
+    return delivered
+
+
+def evaluate_project_budget_alerts(config: dict) -> int:
+    """Per-project budget thresholds (REQ-OBS-PRJ-001) on the alert tick.
+
+    The store latches each 50/80/100% crossing once per budget period
+    (``project_budget_alerts``) and returns only the crossings THIS call
+    recorded, so every one is delivered exactly once, including across a
+    restart. Delivery is the same local banner row the other budget alerts
+    use; the message says the alert does not stop spend, because it does not.
+    Budget breach banners are free, matching the per-agent budget alerts.
+    Never raises into the daemon loop."""
+    try:
+        from clawmetry import local_store
+        store = local_store.get_store()
+        fired = store.evaluate_project_budgets()
+    except Exception as e:
+        log.warning("project budgets: evaluation failed: %s", e)
+        return 0
+    delivered = 0
+    for a in fired or []:
+        log.info("project budgets: %s", a.get("message"))
+        match = {
+            "rule": {
+                "id": "project_budget:%s:%s:%s" % (
+                    a.get("budget_id"), a.get("period_start"), a.get("threshold_pct")),
+                "name": "Project budget",
+                "condition_json": {"type": "project_budget", "cooldown_sec": 0},
+            },
+            "summary": a.get("message") or "",
+        }
+        try:
+            if _persist_local_alert_banner(match):
+                delivered += 1
+        except Exception as e:
+            log.warning("project budgets: banner delivery failed: %s", e)
     return delivered
 
 
