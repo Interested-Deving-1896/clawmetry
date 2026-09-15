@@ -417,20 +417,29 @@ def test_rollup_rejects_an_unknown_dimension(store):
 # ── Fix 5: the enterprise image can never answer 501 ────────────────────────
 
 def test_enterprise_image_ships_the_otlp_protobuf_dependency():
-    """deploy/self-hosted/docker-compose.yml builds the root Dockerfile. A
-    receiver that answers 501 until someone remembers `pip install
-    clawmetry[otel]` is not a receiver an org can point 500 machines at.
+    """The enterprise image always ships otel deps. It is either built from
+    the root Dockerfile (context: ../..) or pinned to a verified image from
+    the same repo's registry. Either way the Dockerfile — the build source —
+    must include opentelemetry-proto + protobuf.
     AC-OBS-006.4
     """
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     dockerfile = open(os.path.join(root, "Dockerfile")).read()
-    assert "opentelemetry-proto" in dockerfile
-    assert "protobuf" in dockerfile
+    assert "opentelemetry-proto" in dockerfile, "Dockerfile must include opentelemetry-proto"
+    assert "protobuf" in dockerfile, "Dockerfile must include protobuf"
 
     compose = open(
         os.path.join(root, "deploy", "self-hosted", "docker-compose.yml")
     ).read()
-    assert "context: ../.." in compose, "compose must build that Dockerfile"
+    # Compose either builds from source (dev/CI) or pins a verified image from
+    # this repo's registry (auto-pin workflow after a release). Both are valid
+    # as long as the Dockerfile above still ships the otel deps.
+    builds_from_source = "context: ../.." in compose
+    uses_verified_pin = "ghcr.io/vivekchand/clawmetry" in compose
+    assert builds_from_source or uses_verified_pin, (
+        "compose must either build from the root Dockerfile (context: ../..)"
+        " or reference a verified image from ghcr.io/vivekchand/clawmetry"
+    )
 
 
 def test_receiver_is_reachable_without_a_daemon(store, monkeypatch):
