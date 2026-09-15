@@ -342,7 +342,7 @@ def scope_label(runtime: Optional[str], where: str) -> str:
     if not rt or rt == "all":
         return "all runtimes on " + where
     try:
-        from clawmetry.entitlements import runtime_label
+        from clawmetry.behaviour_signals import runtime_label
 
         name = runtime_label(rt)
     except Exception:

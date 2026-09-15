@@ -6,6 +6,7 @@ opened under "all runtimes on <host>" and listed claude-opus-5 calls and an
 the hosted snapshot slice all ignored the runtime, and a scoped view could
 fall back to the interceptor ring, which is not attributed to any runtime.
 
+  AC-OBS-CEA-023.10 -> every test here
   AC-OBS-CEA-023.3 -> test_runtime_with_no_spend_is_unknown_not_another_runtimes_figures
   AC-OBS-CEA-023.9 -> test_hosted_slice_per_runtime_matches_the_scoped_route,
                       test_daemon_ships_a_slice_per_runtime
