@@ -1746,8 +1746,78 @@ def _apply_oss_24h_cap(result):
                              "this plan and carry no value")
             prov["days[].cost"] = entry
             capped[_prov.PROVENANCE_KEY] = prov
+    _cap_price_book(capped)
     capped["capped_at_24h"] = True
     return capped
+
+
+def _cap_price_book(capped):
+    """Hold the price book block to the same 24h window as the chart. Week and
+    month figures are withheld (null, marked), never zeroed. Never raises."""
+    try:
+        block = capped.get("priceBook")
+        if not isinstance(block, dict) or not block.get("usable"):
+            return
+        block = dict(block)
+        windows = dict(block.get("windows") or {})
+        prov = dict(block.get(_prov.PROVENANCE_KEY) or {})
+        for w in ("week", "month"):
+            if w in windows:
+                windows[w] = {k: (None if k != "contract_versions" else []) for k in windows[w]}
+                windows[w]["withheld"] = True
+            for key in [k for k in prov if k.startswith("windows.%s." % w)
+                        or k.startswith("restatement.windows.%s." % w)]:
+                prov[key] = _cost_basis.unavailable(
+                    "usage older than 24 hours is withheld on this plan")
+        block["windows"] = windows
+        block[_prov.PROVENANCE_KEY] = prov
+        days = list(block.get("days") or [])
+        for i in range(max(0, len(days) - 2)):
+            days[i] = {"date": days[i].get("date"), "withheld": True,
+                       "contract_usd": None, "covered_published_usd": None, "unknown_events": None}
+        block["days"] = days
+        # Reasons stay visible for the window that is still shown.
+        block["unknown"] = list(block.get("unknown_today") or [])
+        rs = block.get("restatement")
+        if isinstance(rs, dict):
+            rs = dict(rs)
+            rs["windows"] = {k: (v if k == "today" else {"withheld": True}) for k, v in (rs.get("windows") or {}).items()}
+            block["restatement"] = rs
+        capped["priceBook"] = block
+    except Exception:
+        pass
+
+
+def _attach_price_book(result, runtime):
+    """Value the usage the local price book covers (REQ-OBS-CEA-024 .12-.14).
+
+    Local-only by construction: this is called from the ``/api/usage`` request
+    handler and nowhere else, so the daemon, the snapshot and the hosted
+    dashboard (which overrides ``/api/usage``) never compute or carry it. The
+    usage facts come from the store; the valuation is derived here, on read,
+    and never written back. ``?restate=current`` or ``?restate=<version>``
+    asks for an explicit restatement beside the original figures. Never
+    raises: a failure leaves the payload exactly as it was.
+    """
+    try:
+        from clawmetry import entitlements as _ent
+        if not _ent.get_entitlement().allows_feature("price_book"):
+            return result
+    except Exception:
+        pass  # fail open on an entitlement read error, as every gate does
+    try:
+        from clawmetry import price_book_usage as _pbu
+        restate = (request.args.get("restate") or "").strip()[:40] or None
+        block = _pbu.usage_block(
+            runtime=runtime, restate=restate,
+            facts_loader=lambda since, limit: _ls_call(
+                "query_usage_facts", since=since, runtime=runtime, limit_events=limit),
+        )
+        if block is not None:
+            result["priceBook"] = block
+    except Exception:
+        pass
+    return result
 
 
 def _try_local_store_token_velocity():
@@ -2165,6 +2235,7 @@ def api_usage():
     if is_local_store_read_enabled():
         fast = _try_local_store_usage(runtime=_rt)
         if fast is not None:
+            _attach_price_book(fast, _rt)
             return jsonify(_apply_oss_24h_cap(fast))
 
     now = _time.time()
