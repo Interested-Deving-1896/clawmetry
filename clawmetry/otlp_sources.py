@@ -297,14 +297,17 @@ def write_events(store, events: Optional[list]) -> dict:
                     counts["events"] += 1
                 except Exception:
                     log.warning("otlp events: row rejected", exc_info=True)
+        flush_failed = False
         if counts["events"] or replacements:
             # Flush before replacing: a span replacing a log copy that is
             # still in the ring would update nothing.
             try:
                 store._flush_now()
             except Exception:
+                flush_failed = True
                 log.warning("otlp events: flush failed", exc_info=True)
         for ev in replacements:
             if replace_payload(store, ev):
                 counts["events_replaced_by_trace"] += 1
+        counts["events_flush_failed"] = flush_failed
     return counts

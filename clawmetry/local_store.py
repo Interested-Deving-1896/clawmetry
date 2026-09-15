@@ -10212,7 +10212,13 @@ class LocalStore(ProjectsMixin, TrailStoreMixin):
         # daemon check sees no daemon rows yet and lets the events through.
         from clawmetry import otlp_sources as _otlp_sources
         counts = _otlp_sources.write_events(self, events)
-        result = {"records": written}
+        result = {
+            "records": written,
+            "records_rejected": rejected,
+            "records_duplicate_in_batch": dup_in_batch,
+            "records_already_stored": already_stored,
+            "records_failed": failed,
+        }
         result.update(counts)
         return result
 
