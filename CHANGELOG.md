@@ -1,5 +1,10 @@
 ## Unreleased
 
+### Fixed: Guard listed Claude Code sessions with Codex selected (2026-09-15)
+- **Why:** the Guard tab ignored the runtime switcher. With Codex selected it listed every running claude_code session and "$23.72 at risk across 1 flagged session" from one of them, locally and on the hosted dashboard.
+- **What:** the tab passes `?runtime=` from the switcher; `/api/guard/sessions` filters its rows (the live-probe rows included) before counting flagged sessions and spend at risk, so the headline describes only what is listed. An empty scoped list names the runtime ("No Codex sessions running right now."). The daemon's `guardSessions` snapshot slice still carries every runtime; the hosted interceptor already filters it by `?runtime=` and recomputes the totals.
+- **Verified:** `tests/test_cloud_guard_signals_slices.py` (route, builder and loader).
+
 ### Changed: Sessions sits next to Agents in the navigation (2026-09-15)
 - **What:** the Sessions item moved from above the Monitoring label to directly under Agents (Home, Agents, Sessions, Activity, Cost, Models, Context usage). It is still the page the dashboard opens on and keeps the default highlight; the tab id and deep links are unchanged.
 - **Verified:** `tests/test_beginner_nav_phase_a.py` and `tests/test_trail_tab_template.py` pin the new order.
