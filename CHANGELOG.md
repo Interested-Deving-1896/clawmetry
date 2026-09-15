@@ -1,7 +1,16 @@
 ## Unreleased
 
 ### Release: enterprise readiness, batch 3 (2026-09-15)
-- **Carries:** #5950 (fleet install for shared hosts and virtual desktops, refs #5942) and #5965 (LiteLLM gateway spend by team, person and key, refs #5940). Their entries follow. Changes that merge before this release are listed here with their entries before it merges.
+- **Carries:** #5950 (fleet install for shared hosts and virtual desktops, refs #5942), #5965 (LiteLLM gateway spend by team, person and key, refs #5940), #5957 (the dashboard's first load no longer times out its own requests, refs #5935) and #5967 (SECURITY.md: the DPA is not available and the sub-processor list is published; documentation only). Their entries follow.
+
+### Fixed: the dashboard's first load timed out its own requests (2026-09-14)
+- **Why:** on a cold start the console showed `Initial load failed timeout`, `System health load failed timeout` and `loadCrons failed timeout`, and the tiles those requests feed rendered empty, which reads as missing data (#5935). Measured in a headless browser against a scratch install with a seeded store: one page load sent 103 API requests in its first 10 s against the browser's six connections per origin, and those requests spent a combined 34-66 s waiting in the browser's own queue while the server answered most of them in milliseconds. On a machine with OpenClaw installed, `/api/agents` and `/api/inventory` each ran `openclaw doctor --json` synchronously, holding two connections for 7-15 s.
+- **What:** startup loads Overview's widgets only when Overview is the landing screen, and opening Overview loads system health and tasks at once. No Crons / Memory prefetch; the Flow tool prefetch waits for Flow or Overview. Duplicates removed, and every `/api/overview` caller shares one in-flight request through one helper with one 15 s budget. OpenClaw doctor findings are served stale-while-revalidate (`CLAWMETRY_OPENCLAW_DOCTOR_TTL`, default 300 s, `0` restores a run on every read); before the first run finishes they are absent, never "no findings".
+- **Honest states:** slow usage no longer draws `$0.00` and `0` tokens into the Overview tiles, including a runtime-scoped view; they stay on "still loading" (or keep the last real answer) until the refresh retries. System health and Crons failures read as sentences instead of `Failed to load: timeout`.
+- **Measured after:** same scenario, 42 requests in the first 10 s (was 103), 2.1 s of browser queue time in the first 12 s (was 34.2 s), `/api/agents` 0.18 s (was 6.9 s), zero console errors, and Overview opens with real tiles.
+- **Verified:** `tests/test_cold_load_boot_js.{js,py}` (behaviour checks against shipped app.js, including a guard that discovers every `.js` and `.html` file and fails on any direct `/api/overview` request outside the shared helper) and `tests/test_openclaw_doctor_cache.py`, all red against the previous code.
+- **Not changed:** the hosted dashboard serves these screens from the encrypted snapshot and was not affected. With the daemon writing continuously, the Sessions list and `/api/inventory` are still slow on the server; that is store contention, not startup fan-out.
+- **Refs:** #5935.
 
 ### Added: fleet install for shared hosts and virtual desktops (2026-09-14)
 - **Why:** on a shared Linux host a `systemd --user` collector stops when the user logs out unless linger is on, and nothing said so. On a multi-session Windows host an administrator had no way to register the collector for every user who signs in. There were no Intune or Ansible recipes.
