@@ -380,7 +380,9 @@ def _run(body, *, fns=(), els=None, fetch_json=None):
         "Object.keys(els).forEach(function (k) { els[k].style = {};"
         " els[k].getContext = function () { return _ctx; }; });",
         "var document = {getElementById: function (id) { return els[id] || null; },"
-        " body: {}};",
+        " body: {}, createElement: function () { var o = {innerHTML: ''};"
+        " Object.defineProperty(o, 'textContent', {set: function (v) {"
+        " o.innerHTML = escHtml(v); }}); return o; }};",
         "function getComputedStyle() { return {getPropertyValue: function () { return ''; }}; }",
         "function fetch() { return Promise.resolve({ok: true, status: 200,"
         " json: function () { return Promise.resolve(%s); }}); }"
@@ -563,7 +565,8 @@ def test_the_team_and_cache_cards_label_their_costs():
                             cost_basis_surfaces.by_team_entries(7))
     els = {"usage-by-team-title": {}, "usage-by-team-card": {},
            "usage-by-team-content": {"innerHTML": ""}}
-    got = _run_async("loadUsageByTeam()", ("loadUsageByTeam",), els, team)
+    got = _run_async("loadUsageByTeam()",
+                     ("costCardText", "_e", "loadUsageByTeam"), els, team)
     html = got["usage-by-team-content"]
     assert _badges(html.split("</thead>")[0]) == ["published rates"]
     assert "$1.50" in html
