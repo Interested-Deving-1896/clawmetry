@@ -31746,14 +31746,20 @@ async function _loadSelfReportsPanel(sessionId) {
 function loadGuardSessions() {
   var el = document.getElementById('guard-sessions-body');
   if (!el) return;
-  fetch('/api/guard/sessions').then(function (r) { return r.json(); }).then(function (d) {
+  // Scoped to the runtime switcher: with Codex selected, a claude_code
+  // session must not be listed (or counted in the at-risk line).
+  var rt = (typeof _cmRuntimeFilter === 'function') ? _cmRuntimeFilter() : 'all';
+  var url = '/api/guard/sessions' + (rt && rt !== 'all' ? '?runtime=' + encodeURIComponent(rt) : '');
+  fetch(url).then(function (r) { return r.json(); }).then(function (d) {
     var rows = (d && d.sessions) || [];
     if (!rows.length) {
       // `available: false` is "could not read the list" (the hosted dashboard
       // before the node's snapshot carries it), not "nothing is running".
       var emptyText = (d && d.available === false && d.reason)
         ? d.reason
-        : 'No sessions running right now.';
+        : (rt && rt !== 'all'
+           ? 'No ' + ((typeof _cmRuntimeLabel === 'function') ? _cmRuntimeLabel(rt) : rt) + ' sessions running right now.'
+           : 'No sessions running right now.');
       el.innerHTML = '<div class="empty-state">' + guardEsc(emptyText) + '</div>';
       guardSetBadge(0);
       return;
