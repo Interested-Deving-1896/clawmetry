@@ -1,7 +1,12 @@
 ## Unreleased
 
 ### Release: enterprise readiness, batch 3 (2026-09-15)
-- **Carries:** #5950 (fleet install for shared hosts and virtual desktops, refs #5942), #5965 (LiteLLM gateway spend by team, person and key, refs #5940), #5957 (the dashboard's first load no longer times out its own requests, refs #5935), #5996 (the hosted Cost Optimizer shows evidence-backed experiments, refs #5934; hosted rendering lands with clawmetry-cloud#2450 after this pin) and #5967 (SECURITY.md: the DPA is not available and the sub-processor list is published; documentation only). Their entries follow.
+- **Carries:** #5950 (fleet install for shared hosts and virtual desktops, refs #5942), #5965 (LiteLLM gateway spend by team, person and key, refs #5940), #5957 (the dashboard's first load no longer times out its own requests, refs #5935), #5996 (the hosted Cost Optimizer shows evidence-backed experiments, refs #5934; hosted rendering lands with clawmetry-cloud#2450 after this pin) #5967 (SECURITY.md: the DPA is not available and the sub-processor list is published; documentation only) and #6007 (Compliance tab shell, refs clawmetry-pro#250; the evaluation ships in clawmetry-pro 0.7.29). Any other change merged before this release carries its own entry below. Their entries follow.
+
+### Added: a Compliance tab with an honest locked state (2026-09-15)
+- **What:** with the Compliance Pack, the Compliance tab (Advanced section of the navigation) shows every NIST AI RMF, SOC 2, OWASP LLM 2026, OWASP Agentic 2026 and MITRE ATLAS control with its evidence state for a date range (exercised, configured, gap or unknown; never "effective" without evidence), the MITRE ATLAS replay stages linked to it, a printable evidence report (`GET /api/compliance/report`, script-free HTML) and the evidence bundle. Without the pack the tab shows an upgrade prompt, and on the hosted dashboard it explains that evaluation runs on the agent's machine and makes no requests.
+- **Refused, not shown:** a report that claims a state without the evidence behind it is rejected with the reasons listed.
+- **Refs:** clawmetry-pro#250.
 
 ### Fixed: the hosted Cost Optimizer showed no experiments (2026-09-15)
 - **Why:** after #5951 the renderer hides recommendations that cite no evidence. The cloud interceptor sent only hardcoded ones and a "40-70%" claim, so app.clawmetry.com showed nothing (#5934).
