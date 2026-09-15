@@ -158,6 +158,7 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/context_windows.py` | medium | Context-window sizing across every runtime ClawMetry ingests. |
 | `clawmetry/cost_basis.py` | medium | What kind of money a cost figure is. |
 | `clawmetry/cost_optimizer_advice.py` | medium | Cost Optimizer advice: observed provider routes, experiments, and cost basis. |
+| `clawmetry/cost_optimizer_snapshot.py` | small | Cost Optimizer slice for the hosted dashboard (AC-OBS-CEA-023.9). |
 | `clawmetry/cost_windows.py` | medium | One definition of "today", "this week" and "this month" for every cost surface. |
 | `clawmetry/cursor_connector.py` | medium | Opt-in pull of Cursor cloud-agent usage, with the operator's own key. |
 | `clawmetry/daemon_registration.py` | medium | one place that knows how to make the sync daemon survive a reboot/logoff/crash, on every OS. |
