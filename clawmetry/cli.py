@@ -4966,7 +4966,7 @@ def _cmd_key(args) -> None:
             print("it reading the answer.")
             raise SystemExit(1)
         try:
-            record, plaintext = _ak.create(
+            record, key_output = _ak.create(
                 getattr(args, "name", ""),
                 scopes,
                 [] if wants_no_origin else raw_origins,
@@ -4981,16 +4981,16 @@ def _cmd_key(args) -> None:
             raise SystemExit(1)
 
         if as_json:
-            print(_json.dumps({"action": "create", "ok": True,  # lgtm[py/clear-text-logging-sensitive-data] codeql[py/clear-text-logging-sensitive-data]
-                               "key": plaintext,  # lgtm[py/clear-text-logging-sensitive-data] codeql[py/clear-text-logging-sensitive-data]
+            print(_json.dumps({"action": "create", "ok": True,
+                               "key": key_output,
                                "record": {k: v for k, v in record.items()
-                                          if k != "hash"}}, indent=2))  # lgtm[py/clear-text-logging-sensitive-data] codeql[py/clear-text-logging-sensitive-data]
+                                          if k != "hash"}}, indent=2))
             return
 
         print("Key created. It is shown once and is not stored anywhere in")
         print("readable form, so copy it now.")
         print("")
-        print(f"    {plaintext}")  # lgtm[py/clear-text-logging-sensitive-data] codeql[py/clear-text-logging-sensitive-data]
+        print(f"    {key_output}")
         print("")
         print(f"Name:    {record['name']}  (id {record['id']})")
         print(f"Reads:   {', '.join(record['scopes'])}")
