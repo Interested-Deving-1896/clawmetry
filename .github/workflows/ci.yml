@@ -784,6 +784,7 @@ jobs:
             tests/test_e2e_real_openclaw_pipeline.py \
             tests/test_onboarding_ingest_status.py \
             tests/test_duckdb_fastpath_v3_invariants.py \
+            tests/test_price_book_usage_store.py \
             tests/test_query_events_keys_first.py \
             tests/test_cost_scan_slim_events.py \
             tests/test_moat_cloud_roundtrip_e2e.py \

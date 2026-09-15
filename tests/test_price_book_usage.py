@@ -8,7 +8,7 @@ AC-OBS-CEA-024.13 test_history_is_not_silently_repriced, test_restatement_is_exp
 AC-OBS-CEA-024.14 test_ambiguous_entry_stays_unknown, test_ambiguous_usage_stays_unknown_even_if_an_engine_prices_it, test_without_an_engine_no_contract_amount_is_invented, test_the_24h_cap_keeps_the_reasons_for_today
 AC-OBS-CEA-024.15 test_book_endpoint_shows_timeline_and_rejections_as_sentences, test_screen_is_a_reachable_tab
 AC-OBS-CEA-024.16 test_problems_are_sentences_next_to_their_field, test_save_needs_confirmation_and_an_unchanged_book, test_save_reports_version_and_effective_time, test_entries_route_checks_saves_and_refuses_cross_origin
-AC-OBS-CEA-024.17 test_usage_facts_are_read_not_priced, test_nothing_off_the_machine_values_usage
+AC-OBS-CEA-024.17 test_nothing_off_the_machine_values_usage (the store half is tests/test_price_book_usage_store.py)
 
 Every time in these tests is fixed, so no assertion depends on when or where
 the suite runs: usage is observed at noon UTC, which is the same local
@@ -21,7 +21,6 @@ import json
 import os
 import re
 import sys
-import time
 from datetime import datetime, timezone
 
 import pytest
@@ -396,59 +395,6 @@ def test_entries_route_checks_saves_and_refuses_cross_origin(client):
 
 
 # ── AC-OBS-CEA-024.17: the fact is stored once, the valuation is read ───────
-
-
-@pytest.fixture()
-def store(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAWMETRY_LOCAL_STORE_PATH", str(tmp_path / "events.duckdb"))
-    monkeypatch.setenv("CLAWMETRY_LOCAL_FLUSH_SECS", "0.05")
-    import clawmetry.local_store as ls
-    importlib.reload(ls)
-    return ls.get_store()
-
-
-def _ev(ev_id, et, ts, data, model=None, cost=None, sid="claude_code:s1"):
-    ev = {"id": ev_id, "node_id": "n1", "agent_type": "openclaw", "agent_id": "main",
-          "session_id": sid, "event_type": et, "ts": ts, "data": data}
-    if model:
-        ev["model"] = model
-    if cost is not None:
-        ev["cost_usd"] = cost
-    return ev
-
-
-def test_usage_facts_are_read_not_priced(store, engine):
-    usage = {"input_tokens": 1_000_000, "output_tokens": 0, "cache_read_input_tokens": 0,
-             "cache_creation_input_tokens": 0}
-    events = [
-        _ev("e1", "assistant", "2026-09-10T16:00:00.100Z",
-            {"message": {"role": "assistant", "model": SONNET, "usage": usage}}, model=SONNET, cost=3.0),
-        # The slim sibling of the same turn: counted once, not twice.
-        _ev("e2", "model.completed", "2026-09-10T16:00:00.300Z",
-            {"promptCache": {"lastCallUsage": {"input": 1_000_000, "output": 0}}}, model=SONNET, cost=3.0),
-        _ev("e3", "message", "2026-09-10T16:05:00Z",
-            {"provider": "azure-openai", "deployment": "prod-chat", "endpoint_host": "contoso.openai.azure.com",
-             "usage": {"input_tokens": 200, "output_tokens": 50}}, model="gpt-4o", sid="s2"),
-    ]
-    for ev in events:
-        store.ingest(ev)
-    store._flush_now()
-    deadline = time.monotonic() + 3
-    while store._fetch("SELECT COUNT(*) FROM events", [])[0][0] < 3 and time.monotonic() < deadline:
-        time.sleep(0.02)
-    facts = store.query_usage_facts(since="2026-09-01T00:00:00")
-    assert [f["request_id"] for f in facts] == ["e1", "e3"]
-    assert facts[0]["model"] == SONNET and facts[0]["input_tokens"] == 1_000_000
-    assert facts[1]["deployment"] == "prod-chat" and facts[1]["resource"] == "contoso.openai.azure.com"
-    assert all("cost_usd" not in f for f in facts)
-    assert store.query_usage_facts(since="2026-09-01T00:00:00", runtime="claude_code")[0]["request_id"] == "e1"
-
-    _save_v1_then_v2()
-    stored_before = store._fetch("SELECT id, cost_usd, data FROM events ORDER BY id", [])
-    block = pbu.build_block(facts, now=NOW_LOCAL)
-    assert _month(block)["contract_usd"] == pytest.approx(2.0)
-    assert store._fetch("SELECT id, cost_usd, data FROM events ORDER BY id", []) == stored_before
-    assert "query_usage_facts" in open(os.path.join(_REPO, "routes", "local_query.py")).read()
 
 
 def test_nothing_off_the_machine_values_usage():
