@@ -134,6 +134,7 @@ from routes.selfconfig import bp_selfconfig
 from routes.agents import bp_agents
 from routes.inventory import bp_inventory
 from routes.govern import bp_govern
+from routes.projects import bp_projects
 from routes.assets import bp_assets
 from routes.reasoning import bp_reasoning
 from routes.plugins import bp_plugins
@@ -6262,6 +6263,7 @@ def detect_config(args=None):
     app.register_blueprint(bp_agents)
     app.register_blueprint(bp_inventory)
     app.register_blueprint(bp_govern)
+    app.register_blueprint(bp_projects)
     if not _pro_loaded:
         app.register_blueprint(bp_assets)
     app.register_blueprint(bp_reasoning)
@@ -6991,14 +6993,11 @@ DASHBOARD_HTML = r"""
          UNCHANGED; only icons, ordering and section labels moved. The
          Approvals/Alerts/Notifications adjacency (founder request
          2026-07-29) is preserved inside Govern. #}
-      <div class="left-nav-item active" data-tab="transcripts" onclick="switchTab('transcripts')" data-i18n-title="nav.session_replay_tooltip" title="Every session, newest first. Open one to see what it was asked, what it did, and how it ended">
-        <span class="left-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
-        <span class="left-nav-label" data-i18n="nav.session_replay">Sessions</span>
-      </div>
-
       {# Session-first IA (Trail, 2026-09): the product opens on the decision
          trail. Sessions is the landing item; the KPI board (Home) and the
-         other raw-signal views sit under a "Monitoring" label. data-tab ids
+         other raw-signal views sit under a "Monitoring" label. Sessions
+         lives there too, directly under Agents (founder request
+         2026-09-15), and still carries the default highlight. data-tab ids
          are unchanged; only order, labels and grouping moved. #}
       <div class="left-nav-section-label" data-i18n="nav.section_monitoring">Monitoring</div>
       <div class="left-nav-item" data-tab="overview" onclick="switchTab('overview')" data-i18n-title="nav.home_tooltip" title="Is everything OK, at a glance">
@@ -7010,6 +7009,10 @@ DASHBOARD_HTML = r"""
       <div class="left-nav-item" data-tab="inventory" onclick="switchTab('inventory')" data-i18n-title="nav.inventory_tooltip" title="Every agent on this machine: what it runs, what it costs, is it alive, who owns it">
         <span class="left-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg></span>
         <span class="left-nav-label" data-i18n="nav.inventory">Agents</span>
+      </div>
+      <div class="left-nav-item active" data-tab="transcripts" onclick="switchTab('transcripts')" data-i18n-title="nav.session_replay_tooltip" title="Every session, newest first. Open one to see what it was asked, what it did, and how it ended">
+        <span class="left-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+        <span class="left-nav-label" data-i18n="nav.session_replay">Sessions</span>
       </div>
       <div class="left-nav-item" data-tab="brain" onclick="switchTab('brain')" data-i18n-title="nav.activity_tooltip" title="What your agents are doing right now, step by step">
         <span class="left-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>

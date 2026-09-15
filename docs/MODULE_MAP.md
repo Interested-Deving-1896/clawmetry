@@ -4,7 +4,7 @@
 > `python3 scripts/gen_module_map.py` (CI fails on drift via
 > `tests/test_module_map_drift.py`).
 
-265 modules, 85 Flask blueprints. `CLAUDE.md` carries a short curated table of the ones you reach for most often; this is the whole list.
+268 modules, 85 Flask blueprints. `CLAUDE.md` carries a short curated table of the ones you reach for most often; this is the whole list.
 
 Size bands are deliberately coarse so this file does not churn on every PR: **small** is under 200 lines, **medium** under 1k, **large** under 5k, **huge** is 5k and up.
 
@@ -72,6 +72,7 @@ One module per feature, each owning one or more Flask blueprints. New endpoints 
 | `routes/plugins.py` | medium | `bp_plugins` | `/api/plugins` | Plugin registry: unified view of installed plugins (#692). |
 | `routes/policy.py` | medium | `bp_policy` | `/api/approvals`, `/api/approvals-audit`, `/api/policy`, `/api/tool-policy` | tool-policy + sandbox + exec-approval audit (PRD P1-1). |
 | `routes/pricing.py` | small | `bp_pricing` | `/api/pricing` | the price book API (REQ-OBS-CEA-024, issue #5936). |
+| `routes/projects.py` | medium | `bp_projects` | `/api/projects` | project attribution and per-project budgets (REQ-OBS-PRJ-001). |
 | `routes/public_api.py` | medium | `bp_public_api` | `/api/q` | the keyed, cross-origin read API custom UIs use. |
 | `routes/quality.py` | medium | `bp_quality` | `/api/quality` | the Quality tab endpoint. |
 | `routes/readiness.py` | small | `bp_readiness` | `/api/repo-readiness` | ``bp_readiness`` — repo AI-readiness. |
@@ -169,6 +170,7 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/delegated_usage.py` | medium | Usage for work a runtime handed to another vendor's agent. |
 | `clawmetry/detector_behaviour.py` | medium | Is this agent doing something it does not normally do? |
 | `clawmetry/detector_calibration.py` | medium | How a detector decides what "too many" means, for THIS runtime and THIS team. |
+| `clawmetry/detector_injection.py` | small | the ``prompt_injection`` Guard detector. |
 | `clawmetry/detector_money.py` | small | What a finding costs, and therefore what to look at first. |
 | `clawmetry/detector_payload.py` | medium | What a tool call SENT, and what it CARRIED. |
 | `clawmetry/detector_surface.py` | medium | What a tool call actually touched, and what a finding may repeat back. |
@@ -217,6 +219,7 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/lifecycle_coverage.py` | medium | Which lifecycle facts each runtime can put on a session's trail. |
 | `clawmetry/local_server.py` | medium | HTTP query server hosted INSIDE the sync daemon process. |
 | `clawmetry/local_store.py` | huge | Local DuckDB event store — Phase 1 of the local-first refactor (#964). |
+| `clawmetry/local_store_projects.py` | medium | ProjectsMixin for LocalStore (REQ-OBS-PRJ-001). |
 | `clawmetry/mcp_install.py` | medium | Register the ClawMetry MCP server with each runtime's MCP configuration (WO-59, REQ-SELF-001). |
 | `clawmetry/mcp_server.py` | medium | ClawMetry MCP server — exposes local telemetry as MCP tools (stdio transport). |
 | `clawmetry/narrator.py` | small | LLM-narrated alert enrichment (issue #1412, Feature C). |
@@ -237,6 +240,8 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/pr_provenance_cli.py` | medium | ``clawmetry trace report``: agent-session provenance for a change. |
 | `clawmetry/price_book.py` | medium | Price book contract: negotiated rates, Azure OpenAI aliases, effective dates. |
 | `clawmetry/process_control.py` | large | host-side process control for runaway agents. |
+| `clawmetry/project_attribution.py` | medium | Project attribution and per-project budget arithmetic (REQ-OBS-PRJ-001). |
+| `clawmetry/prompt_injection.py` | medium | injection signatures and the untrusted-content signal. |
 | `clawmetry/provenance.py` | medium | Every number says how it was obtained. |
 | `clawmetry/providers_pricing.py` | medium | ClawMetry provider detection and pricing table. |
 | `clawmetry/proxy.py` | large | ClawMetry Proxy — opt-in enforcement layer between OpenClaw and LLM providers. |

@@ -361,6 +361,66 @@
       "text": "Where this path is described to a customer, the description shall state which runtimes it covers and that records arrive unencrypted."
     },
     {
+      "id": "AC-OBS-PRJ-001.1",
+      "doc": "Project attribution and per-project budgets: burn against budget",
+      "doc_id": "e4d8425a-c610-42bd-b63d-e4d600c9e58e",
+      "text": "The system shall attribute each session's spend to a project derived from where the session ran or from an operator assignment, and shall report for each project the source it came from and a confidence. A project or tenant name carried inside an agent's own activity shall not determine attribution."
+    },
+    {
+      "id": "AC-OBS-PRJ-001.2",
+      "doc": "Project attribution and per-project budgets: burn against budget",
+      "doc_id": "e4d8425a-c610-42bd-b63d-e4d600c9e58e",
+      "text": "Sessions that ran in two different repositories shall be reported as two projects even when the repositories share a directory name, and shall be combined only by an explicit operator assignment."
+    },
+    {
+      "id": "AC-OBS-PRJ-001.3",
+      "doc": "Project attribution and per-project budgets: burn against budget",
+      "doc_id": "e4d8425a-c610-42bd-b63d-e4d600c9e58e",
+      "text": "Spend from sessions whose working directory is unknown shall be reported in a visible unassigned group, with its amount and session count, rather than dropped or attributed to a default project."
+    },
+    {
+      "id": "AC-OBS-PRJ-001.4",
+      "doc": "Project attribution and per-project budgets: burn against budget",
+      "doc_id": "e4d8425a-c610-42bd-b63d-e4d600c9e58e",
+      "text": "Attribution shall be derived when read rather than stored on activity records, so an assignment applies to history already collected. Each assignment shall carry the period it is effective for, who made it, when and why, and a correction shall be recorded as a new assignment that supersedes the earlier one without erasing it."
+    },
+    {
+      "id": "AC-OBS-PRJ-001.5",
+      "doc": "Project attribution and per-project budgets: burn against budget",
+      "doc_id": "e4d8425a-c610-42bd-b63d-e4d600c9e58e",
+      "text": "Project figures the system publishes shall identify a project by a label and an opaque identifier, and shall not include the full local path it was derived from."
+    },
+    {
+      "id": "AC-OBS-PRJ-001.6",
+      "doc": "Project attribution and per-project budgets: burn against budget",
+      "doc_id": "e4d8425a-c610-42bd-b63d-e4d600c9e58e",
+      "text": "A project budget shall declare its amount, period, timezone, currency and the financial basis of the spend it is measured against. The system shall refuse a budget whose currency or timezone it cannot honour rather than silently substituting another."
+    },
+    {
+      "id": "AC-OBS-PRJ-001.7",
+      "doc": "Project attribution and per-project budgets: burn against budget",
+      "doc_id": "e4d8425a-c610-42bd-b63d-e4d600c9e58e",
+      "text": "Spend shall count toward the budget period in which it occurred, on the budget's own timezone, so a session running across a period boundary is split between the two periods and a record that arrives late counts in the period it occurred in."
+    },
+    {
+      "id": "AC-OBS-PRJ-001.8",
+      "doc": "Project attribution and per-project budgets: burn against budget",
+      "doc_id": "e4d8425a-c610-42bd-b63d-e4d600c9e58e",
+      "text": "When a project's spend in a period reaches 50%, 80% or 100% of its budget, the system shall record an alert once per threshold per period, deliver it to the operator, and state that the alert is a notification that does not stop or reverse any charge."
+    },
+    {
+      "id": "AC-OBS-PRJ-001.9",
+      "doc": "Project attribution and per-project budgets: burn against budget",
+      "doc_id": "e4d8425a-c610-42bd-b63d-e4d600c9e58e",
+      "text": "The budget status shall report spend for each day of the current period next to the budget, so burn can be compared against it."
+    },
+    {
+      "id": "AC-OBS-PRJ-001.10",
+      "doc": "Project attribution and per-project budgets: burn against budget",
+      "doc_id": "e4d8425a-c610-42bd-b63d-e4d600c9e58e",
+      "text": "The per-project export shall include assigned, unassigned and unpriced amounts and a completeness figure. Usage that carries tokens but no price shall be counted as unpriced, never as zero cost."
+    },
+    {
       "id": "AC-OBS-CEA-001.1",
       "doc": "Cost and Efficiency Analytics",
       "doc_id": "43d6b27c-0e37-45dc-9fdd-df4200844c29",
@@ -1649,6 +1709,72 @@
       "doc": "LiteLLM gateway usage: spend by team and user, labelled and never double counted",
       "doc_id": "9511c826-af04-4dcf-978b-90803f27fb04",
       "text": "A real LiteLLM proxy at a pinned version, with two teams and two virtual keys backed by its own database, shall be exercised in continuous integration, and the per-team spend the system reports shall agree with LiteLLM's own spend log for the same requests, with any residual printed."
+    },
+    {
+      "id": "AC-GOV-PIJ-001.1",
+      "doc": "Guard Prompt Injection: a detector, and untrusted content raises the pre-tool risk tier",
+      "doc_id": "e87935d1-27e0-415f-a5f8-24bdf70accbc",
+      "text": "When a tool result in a session contains text matching an injection signature, the system shall raise a `prompt_injection` finding that names the matched signature identifiers and the tool whose output carried the text, and shall not repeat the matched text."
+    },
+    {
+      "id": "AC-GOV-PIJ-001.2",
+      "doc": "Guard Prompt Injection: a detector, and untrusted content raises the pre-tool risk tier",
+      "doc_id": "e87935d1-27e0-415f-a5f8-24bdf70accbc",
+      "text": "When a user-sourced message matches an injection signature, the system shall raise the finding with the source identified as a user message and at a lower severity than a tool-result match, unless a high-risk tool call followed it in the same turn."
+    },
+    {
+      "id": "AC-GOV-PIJ-001.3",
+      "doc": "Guard Prompt Injection: a detector, and untrusted content raises the pre-tool risk tier",
+      "doc_id": "e87935d1-27e0-415f-a5f8-24bdf70accbc",
+      "text": "When a tool call rated high or critical risk follows the matched content in the same turn, the system shall raise the finding at critical severity and name that call's tool."
+    },
+    {
+      "id": "AC-GOV-PIJ-001.4",
+      "doc": "Guard Prompt Injection: a detector, and untrusted content raises the pre-tool risk tier",
+      "doc_id": "e87935d1-27e0-415f-a5f8-24bdf70accbc",
+      "text": "The system shall offer `prompt_injection` to Guard policies like every other finding kind, and the finding shall carry its framework references (OWASP LLM01:2026, OWASP ASI01, MITRE ATLAS AML.T0051.000 and AML.T0051.001) under the mapping contract."
+    },
+    {
+      "id": "AC-GOV-PIJ-001.5",
+      "doc": "Guard Prompt Injection: a detector, and untrusted content raises the pre-tool risk tier",
+      "doc_id": "e87935d1-27e0-415f-a5f8-24bdf70accbc",
+      "text": "When signature text appears as source code or a regular expression rather than prose, the system shall not raise a finding for it."
+    },
+    {
+      "id": "AC-GOV-PIJ-001.6",
+      "doc": "Guard Prompt Injection: a detector, and untrusted content raises the pre-tool risk tier",
+      "doc_id": "e87935d1-27e0-415f-a5f8-24bdf70accbc",
+      "text": "The system shall publish the detector's recall and precision on pinned public prompt-injection samples and its firing rate on real transcripts, and continuous integration shall fail when the pinned recall falls below the published figure."
+    },
+    {
+      "id": "AC-GOV-PIJ-002.1",
+      "doc": "Guard Prompt Injection: a detector, and untrusted content raises the pre-tool risk tier",
+      "doc_id": "e87935d1-27e0-415f-a5f8-24bdf70accbc",
+      "text": "When the Claude Code pre-tool gate rates a high-risk tool call and a tool result from an untrusted source entered the same turn before it, the system shall rate the call critical and shall say why in the risk reasons."
+    },
+    {
+      "id": "AC-GOV-PIJ-002.2",
+      "doc": "Guard Prompt Injection: a detector, and untrusted content raises the pre-tool risk tier",
+      "doc_id": "e87935d1-27e0-415f-a5f8-24bdf70accbc",
+      "text": "When content earlier in the same turn matched an injection signature, the system shall rate a tool call of medium risk or above as critical."
+    },
+    {
+      "id": "AC-GOV-PIJ-002.3",
+      "doc": "Guard Prompt Injection: a detector, and untrusted content raises the pre-tool risk tier",
+      "doc_id": "e87935d1-27e0-415f-a5f8-24bdf70accbc",
+      "text": "The system shall leave a low-risk call's tier unchanged, shall leave a medium-risk call's tier unchanged unless content in the turn matched an injection signature, and a new user prompt shall end the turn so earlier content no longer raises the tier."
+    },
+    {
+      "id": "AC-GOV-PIJ-002.4",
+      "doc": "Guard Prompt Injection: a detector, and untrusted content raises the pre-tool risk tier",
+      "doc_id": "e87935d1-27e0-415f-a5f8-24bdf70accbc",
+      "text": "When the turn cannot be read, the system shall rate the call exactly as it would without this signal and shall never block a call because the context was unavailable."
+    },
+    {
+      "id": "AC-GOV-PIJ-002.5",
+      "doc": "Guard Prompt Injection: a detector, and untrusted content raises the pre-tool risk tier",
+      "doc_id": "e87935d1-27e0-415f-a5f8-24bdf70accbc",
+      "text": "The context the gate hook sends to the local receiver shall carry tool names, counts and signature identifiers only, never tool output."
     }
   ]
 }
