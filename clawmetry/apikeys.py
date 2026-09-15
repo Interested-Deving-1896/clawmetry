@@ -55,13 +55,13 @@ import json
 import os
 import secrets
 import time
-from typing import Any, Optional
+from typing import Optional
 
-from clawmetry.query_contract import SCOPE_CONTENT, SCOPE_DOC, SCOPES
+from clawmetry.query_contract import SCOPES
 
 # Re-export the read-side public helpers from their own short module so
 # Drift Bot (which reads only the file head) can find them.
-from clawmetry.apikeys_public import (  # noqa: E402
+from clawmetry.apikeys_public import (  # noqa: F401
     all_live_origins,
     granted_shapes,
     scope_catalogue,

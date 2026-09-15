@@ -44,8 +44,12 @@ def scope_catalogue() -> list:
     Derived from the query contract, so a method added there shows up
     here with no second list to update.
     """
-    from clawmetry.apikeys import SCOPE_CONTENT, SCOPE_DOC, SCOPES
-    from clawmetry.query_contract import live_methods_by_scope
+    from clawmetry.query_contract import (
+        SCOPE_CONTENT,
+        SCOPE_DOC,
+        SCOPES,
+        live_methods_by_scope,
+    )
 
     return [
         {
