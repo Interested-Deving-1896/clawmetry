@@ -315,7 +315,11 @@ def _build_block(facts, *, now, restate, book, truncated):
                     if day and day >= windows_by[w]:
                         rw = restatement["windows"][w]
                         rw["events"] += n
-                        if r.get("amount") is not None and r.get("original_amount") is not None:
+                        # One basis per figure: only usage the restated book
+                        # prices at a contract rate is summed, beside what
+                        # that same usage was originally reported as.
+                        if r.get("priced_from") == "contract" and r.get("amount") is not None \
+                                and r.get("original_amount") is not None:
                             _add(rw, "restated_usd", r["amount"])
                             _add(rw, "original_usd", r["original_amount"])
 

@@ -39,7 +39,6 @@ NOW_LOCAL = datetime(2026, 9, 12, 12, 0)            # the Usage "now" (local, na
 V1_AT = datetime(2026, 9, 10, 8, 0, tzinfo=timezone.utc)
 V2_AT = datetime(2026, 9, 10, 14, 0, tzinfo=timezone.utc)
 BEFORE_EDIT = "2026-09-10T11:00:00Z"                 # under version 1
-AFTER_EDIT = "2026-09-10T13:30:00Z"                  # also noon-ish; see below
 LATER = "2026-09-10T16:00:00Z"                        # under version 2
 SONNET = "claude-sonnet-4-5"
 
@@ -195,8 +194,12 @@ def test_history_is_not_silently_repriced(engine):
 
 def test_restatement_is_explicit_and_beside_the_original(engine):
     _, v2 = _save_v1_then_v2()
-    block = pbu.build_block([_fact(BEFORE_EDIT)], now=NOW_LOCAL, restate="current")
+    # An uncovered model rides along: its published-rate value must not be
+    # summed into a figure labelled contract.
+    uncovered = _fact(BEFORE_EDIT, model="gpt-4o", rid="u")
+    block = pbu.build_block([_fact(BEFORE_EDIT), uncovered], now=NOW_LOCAL, restate="current")
     assert _month(block)["contract_usd"] == pytest.approx(1.0)       # the original, unchanged
+    assert _month(block)["published_usd"] == pytest.approx(2.5)
     rs = block["restatement"]["windows"]["month"]
     assert block["restatement"]["against"] == v2
     assert rs["restated_usd"] == pytest.approx(2.0)

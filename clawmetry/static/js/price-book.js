@@ -34,6 +34,10 @@
     if (Math.abs(n) >= 0.01) return (n < 0 ? '-$' : '$') + Math.abs(n).toFixed(2);
     return n > 0 ? '<$0.01' : (n < 0 ? '>-$0.01' : '$0.00');
   }
+  function calls(n) {
+    n = Number(n) || 0;
+    return n + (n === 1 ? ' model call' : ' model calls');
+  }
   function when(iso) {
     if (!iso) return '';
     var d = new Date(iso);
@@ -451,16 +455,16 @@
         return;
       }
       html += '<tr><td>' + r[1] + '</td><td>' + figure(pbk, 'windows.' + r[0] + '.contract_usd', t.contract_usd, r[1] + ' at your contract rate')
-        + '<div style="font-size:11px;color:var(--text-muted);">' + (t.covered_events || 0) + ' of ' + (t.events || 0) + ' model calls covered</div></td>'
+        + '<div style="font-size:11px;color:var(--text-muted);">' + (t.covered_events || 0) + ' of ' + calls(t.events) + ' covered</div></td>'
         + '<td>' + figure(pbk, 'windows.' + r[0] + '.covered_published_usd', t.covered_published_usd, r[1] + ', covered usage at published rates') + '</td>'
         + '<td>' + figure(pbk, 'windows.' + r[0] + '.published_usd', t.published_usd, r[1] + ', uncovered usage at published rates') + '</td>'
-        + '<td>' + (t.unknown_events ? '<strong>' + t.unknown_events + '</strong> model calls' : '<span style="color:var(--text-muted);">none</span>') + '</td></tr>';
+        + '<td>' + (t.unknown_events ? '<strong>' + calls(t.unknown_events) + '</strong>' : '<span style="color:var(--text-muted);">none</span>') + '</td></tr>';
     });
     html += '</tbody></table></div>';
     if (pbk.unknown && pbk.unknown.length) {
       html += '<div style="margin-top:10px;font-size:12px;color:var(--text-secondary);"><strong>Why some usage '
         + (data.capped_at_24h ? 'today' : 'this month') + ' could not be priced:</strong><ul style="margin:4px 0 0 18px;padding:0;">'
-        + pbk.unknown.map(function (u) { return '<li>' + esc(u.reason) + ' (' + u.events + ' model calls)</li>'; }).join('') + '</ul></div>';
+        + pbk.unknown.map(function (u) { return '<li>' + esc(u.reason) + ' (' + calls(u.events) + ')</li>'; }).join('') + '</ul></div>';
     }
     if (pbk.truncated) {
       html += '<div style="margin-top:8px;font-size:12px;color:var(--text-muted);">Only the most recent model calls were read, so these figures may be incomplete.</div>';
@@ -503,6 +507,10 @@
       + '<table class="usage-table"><thead><tr><th></th><th>Restated</th><th>As reported</th><th>Difference</th></tr></thead><tbody>';
     [['today', 'Today'], ['week', 'This week'], ['month', 'This month']].forEach(function (r) {
       var t = (rs.windows || {})[r[0]] || {};
+      if (t.withheld) {
+        html += '<tr><td>' + r[1] + '</td><td colspan="3" style="color:var(--text-muted);">Held back on this plan.</td></tr>';
+        return;
+      }
       html += '<tr><td>' + r[1] + '</td><td>' + figure(pbk, 'restatement.windows.' + r[0] + '.restated_usd', t.restated_usd, r[1] + ' restated')
         + '</td><td>' + esc(money(t.original_usd)) + '</td><td>' + esc(t.delta_usd == null ? 'not available' : money(t.delta_usd)) + '</td></tr>';
     });
