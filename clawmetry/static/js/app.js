@@ -4757,7 +4757,7 @@ function _cmRtRecentlyActive() {
 // plan includes usage, it does not make it free (REQ-OBS-CEA-025.4).
 function _cmHeroCostChip(value, entry, onPlan) {
   var included = !!onPlan && Number(value) !== 0;
-  return '💸 <strong style="color:var(--text-primary);">'
+  return '<strong style="color:var(--text-primary);">'
     + window.cmCostFigure(value, entry, { noBadge: true, label: 'Cost today' }) + '</strong>'
     + (entry ? ' ' + window.cmProv.badge(entry, { label: 'Cost today' }) : '')
     + (included ? ' <span style="color:#22c55e;">included in your plan, not an extra bill</span>' : '');
@@ -4860,6 +4860,9 @@ function _renderOverviewHero() {
                            : ((typeof ov.sessionCount === 'number') ? ov.sessionCount : null));
   // Never assert 'free' from a number we have not actually read.
   var _onPlan = /oauth/i.test((document.getElementById('cost-trend') || {}).textContent || '');
+  // Never assert 'free' (or 'included') from a number we have not read, and
+  // never from the tile's text: only from the value loadMiniWidgets rendered.
+  var free = _costKnown && (_costVal === 0 || _onPlan);
   var say = window._cmLastAgentSay;
   var sayText = say && say.text ? String(say.text).replace(/\s+/g, ' ').trim() : '';
   if (sayText.length > 90) sayText = sayText.slice(0, 90) + '…';
@@ -4877,7 +4880,7 @@ function _renderOverviewHero() {
   // Show nothing rather than a placeholder: an unlabelled '$0.00' next to
   // live sessions reads as a real reading, not as 'still loading'.
   // A plan includes usage; it does not make it free (REQ-OBS-CEA-025.4).
-  if (_costKnown) stats.push(_cmHeroCostChip(_costVal, window._cmCostTodayEntry || null, _onPlan));
+  if (_costKnown) stats.push('💸 ' + _cmHeroCostChip(_costVal, window._cmCostTodayEntry || null, free && _onPlan));
   // Efficiency chip (design spec §1a): grade next to cost answers "what did it
   // cost me, and is that reasonable?" in one read. Renders only when the
   // daemon slice is fresh for the CURRENT runtime filter and passes the trust
