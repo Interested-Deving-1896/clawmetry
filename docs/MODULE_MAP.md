@@ -190,6 +190,7 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/fleet_install.py` | medium | register the collector for shared and virtual desktops (multi-session Windows hosts, pooled images, shared Linux hosts). |
 | `clawmetry/flow_trace.py` | medium | Flow trace assembly for the Harness Engineering tab (REQ-HB-006). |
 | `clawmetry/framework_map.py` | medium | which published framework items a Guard finding is relevant to. |
+| `clawmetry/gateway_litellm.py` | medium | LiteLLM proxy telemetry: recognise it, and turn a proxied request into one gateway usage record (REQ-OBS-GWY-001, issue #5940). |
 | `clawmetry/gateway_protocol.py` | small | the single source of the OpenClaw gateway WebSocket protocol range every connect frame must advertise. |
 | `clawmetry/gateway_tap.py` | medium | live OpenClaw gateway WebSocket subscriber. |
 | `clawmetry/git_config_exec.py` | small | Which git config settings make git execute a program. |

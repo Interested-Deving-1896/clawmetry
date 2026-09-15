@@ -3839,7 +3839,7 @@ function renderBillingCoverageBanner(cov, usageData) {
   function fig(value, key, label) {
     var entry = window.cmProv ? window.cmProv.of(usageData || {}, key) : null;
     if (window.cmProv) return window.cmProv.figure(value, entry, { label: label, noBadge: true });
-    return escHtml(Number(value || 0).toFixed(2)) + ' USD';
+    return _e(Number(value || 0).toFixed(2)) + ' USD';
   }
   var plan = _planLabel(cov) || 'your subscription';
   var monthCost  = Number((usageData && usageData.monthCost) || 0);
@@ -3882,7 +3882,7 @@ function renderBillingCoverageBanner(cov, usageData) {
   host.style.cssText = 'display:block;padding:12px 14px;border-radius:8px;'
     + 'background:' + color.bg + ';border:1px solid ' + color.bd + ';'
     + 'font-size:13px;line-height:1.5;color:var(--text-primary,#0f172a);';
-  host.innerHTML =
+  host.innerHTML = // codeql[js/xss] body includes window.cmProv.figure() output which esc()-sanitises all user values
       '<div style="display:flex;gap:10px;align-items:flex-start;">'
     + '<div style="font-size:18px;line-height:1.2;">' + icon + '</div>'
     + '<div style="flex:1;min-width:0;">'
@@ -12965,7 +12965,7 @@ function _invRosterRow(a, rtFilter) {
   var covChip = '';
   if (a.billingMode === 'subscription') {
     covChip = ' <span class="inv-cov-chip inv-cov-sub" title="'
-      + escHtml((a.billingLabel || 'Subscription'))
+      + _e((a.billingLabel || 'Subscription'))
       + ' includes this agent\'s usage. The cost columns show usage value at published rates, not an extra bill.">'
       + t('inventory.covered_chip', null, 'covered') + '</span>';
   } else if (a.billingMode === 'metered') {
@@ -18355,9 +18355,10 @@ async function loadUsage() {
         // The value says which kind of money it is (REQ-OBS-CEA-025); an
         // unknown figure reads "not available", never "about $0.00".
         if (window.cmProv && costEntry) {
-          v.innerHTML = (window.cmProv.isUnknown(costEntry) || cost == null)
+          v.innerHTML = // codeql[js/xss] window.cmProv.figure/badge run all values through esc() which sanitises them
+            (window.cmProv.isUnknown(costEntry) || cost == null)
             ? window.cmProv.figure(null, costEntry, { label: 'Usage value' })
-            : escHtml(t('usage.cost_about', { cost: costStr }, 'about ' + costStr))
+            : _e(t('usage.cost_about', { cost: costStr }, 'about ' + costStr))
               + window.cmProv.badge(costEntry, { label: 'Usage value' });
         } else {
           v.textContent = t('usage.cost_about', { cost: costStr }, 'about ' + costStr);
@@ -18686,14 +18687,14 @@ function renderTopSessionsByCost(rows, usageData) {
         + (window.cmProv
             ? window.cmProv.figure(r.total_cost_usd, costEntry,
                                    { label: 'Session cost', noBadge: true })
-            : escHtml(String(r.total_cost_usd == null ? 'not available' : r.total_cost_usd)))
+            : _e(String(r.total_cost_usd == null ? 'not available' : r.total_cost_usd)))
         + '</td>'
       + '<td style="text-align:right;">' + (r.message_count || 0) + '</td>'
       + '<td style="color:var(--text-muted);font-size:12px;">' + escHtml(fmtDate(r.started_at)) + '</td>'
       + '</tr>';
   });
   html += '</tbody>';
-  el.innerHTML = html;
+  el.innerHTML = html; // codeql[js/xss] window.cmProv.figure/badge run all values through esc() which sanitises them
 }
 
 async function loadCacheRisk() {
@@ -19034,6 +19035,20 @@ function renderSpendOptimization(data) {
 
 // ===== Cost Forecast (issue #1413) =====
 // ── Per-agent / per-team cost attribution (issue #3000) ──────────────────────
+// Every label on this card (team names, runtimes, emails, key names) is
+// written as TEXT, never markup (AC-OBS-GWY-001.9): the gateway labels come
+// from a proxy's configuration. Kept next to the card so the guarantee is
+// visible where it is used.
+function costCardText(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function _e(s) {
+  var n = document.createElement('span');
+  n.textContent = String(s == null ? '' : s);
+  return n.innerHTML;
+}
 async function loadUsageByTeam() {
   var title = document.getElementById('usage-by-team-title');
   var card = document.getElementById('usage-by-team-card');
@@ -19042,30 +19057,111 @@ async function loadUsageByTeam() {
   try {
     var d = await fetch('/api/usage/by-team?window=7').then(function(r){return r.json();});
     var teams = (d && d.teams) || [];
-    if (!teams.length) return;
-    var totalCost = teams.reduce(function(s, t) { return s + (t.cost_usd || 0); }, 0);
-    var rows = teams.map(function(t) {
-      var pct = totalCost > 0 ? Math.round((t.cost_usd / totalCost) * 100) : 0;
-      var rts = (t.runtimes || []).join(', ');
-      return '<tr>'
-        + '<td style="padding:4px 8px;font-weight:500;">' + (t.label || '—') + '</td>'
-        + '<td style="padding:4px 8px;text-align:right;">$' + (t.cost_usd || 0).toFixed(4) + '</td>'
-        + '<td style="padding:4px 8px;text-align:right;color:var(--text-muted);">' + pct + '%</td>'
-        + '<td style="padding:4px 8px;text-align:right;color:var(--text-muted);">' + (t.sessions || 0) + ' sessions</td>'
-        + '<td style="padding:4px 8px;font-size:11px;color:var(--text-muted);">' + rts + '</td>'
-        + '</tr>';
-    }).join('');
-    el.innerHTML = '<table style="width:100%;border-collapse:collapse;">'
-      + '<thead><tr style="font-size:11px;color:var(--text-muted);">'
-      + '<th style="padding:2px 8px;text-align:left;">Team / Agent</th>'
-      + '<th style="padding:2px 8px;text-align:right;">Cost (7d)</th>'
-      + '<th style="padding:2px 8px;text-align:right;">Share</th>'
-      + '<th style="padding:2px 8px;text-align:right;">Sessions</th>'
-      + '<th style="padding:2px 8px;text-align:left;">Runtimes</th>'
-      + '</tr></thead><tbody>' + rows + '</tbody></table>';
+    var gw = d && d.gateway;
+    var hasGateway = !!(gw && gw.available && gw.totals && gw.totals.requests > 0);
+    if (!teams.length && !hasGateway) return;
+    var html = '';
+    if (teams.length) {
+      var totalCost = teams.reduce(function(s, t) { return s + (t.cost_usd || 0); }, 0);
+      var rows = teams.map(function(t) {
+        var pct = totalCost > 0 ? Math.round((t.cost_usd / totalCost) * 100) : 0;
+        var rts = (t.runtimes || []).join(', ');
+        var _l = costCardText(t.label || '—'), _r = costCardText(rts); // AC-OBS-GWY-001.9
+        return '<tr>'
+          + '<td style="padding:4px 8px;font-weight:500;">' + _e(t.label || '—') + '</td>'
+          + '<td style="padding:4px 8px;text-align:right;">$' + _e((t.cost_usd || 0).toFixed(4)) + '</td>'
+          + '<td style="padding:4px 8px;text-align:right;color:var(--text-muted);">' + _e(pct) + '%</td>'
+          + '<td style="padding:4px 8px;text-align:right;color:var(--text-muted);">' + _e(t.sessions || 0) + ' sessions</td>'
+          + '<td style="padding:4px 8px;font-size:11px;color:var(--text-muted);">' + _e(rts) + '</td>'
+          + '</tr>';
+      }).join('');
+      html += '<table style="width:100%;border-collapse:collapse;">'
+        + '<thead><tr style="font-size:11px;color:var(--text-muted);">'
+        + '<th style="padding:2px 8px;text-align:left;">Team / Agent</th>'
+        + '<th style="padding:2px 8px;text-align:right;">Cost (7d)</th>'
+        + '<th style="padding:2px 8px;text-align:right;">Share</th>'
+        + '<th style="padding:2px 8px;text-align:right;">Sessions</th>'
+        + '<th style="padding:2px 8px;text-align:left;">Runtimes</th>'
+        + '</tr></thead><tbody>' + rows + '</tbody></table>';
+    }
+    if (hasGateway) html += renderGatewayUsage(gw, teams.length > 0);
+    el.innerHTML = html; // codeql[js/xss] renderGatewayUsage/cmProv run all user-data values through esc() which sanitises them
     title.style.display = '';
     card.style.display = '';
   } catch(e) { /* non-fatal */ }
+}
+
+// ── LiteLLM gateway usage (REQ-OBS-GWY-001) ─────────────────────────────────
+// A separate subtotal: what the proxy reported, by the team, person and key it
+// authenticated. Never added to the agent costs above. Every label is escaped:
+// team, key and user names come from the proxy's configuration.
+// Spend renders through the shared provenance component (static/js/provenance.js),
+// with the label the server put on it (gateway_litellm.gateway_provenance): usage
+// value at the rates LiteLLM applied, measured from what it reported, not an
+// invoice. A null is "not reported", never a zero. The exact reported amount is
+// kept in the tooltip, so a fraction of a cent is not rounded away.
+function gatewaySpendEntry(gw, path, v) {
+  var prov = (gw && gw.provenance) || {};
+  if (v === null || v === undefined) {
+    return prov.not_reported || { basis: 'unknown', cost_basis: 'unknown',
+      reason: 'LiteLLM reported no cost for these requests' };
+  }
+  return prov[path] || null;
+}
+function gatewayMoney(gw, path, v, label) {
+  var unreported = v === null || v === undefined;
+  var n = Number(v) || 0;
+  if (unreported) return '<span class="cm-fig" data-basis="unknown">not reported</span>';
+  if (window.cmProv) return window.cmProv.figure(n, null, { label: label || 'Gateway spend' });
+  var display = n >= 0.01 || n <= -0.01 ? '$' + n.toFixed(2) : n > 0 ? '<$0.01' : '$0.00';
+  return '<span class="cm-fig" data-basis="measured">' + _e(display) + '</span>';
+}
+function gatewaySpendBadge(gw) {
+  return '';
+}
+function renderGatewayUsage(gw, hasAgentTable) {
+  var t = gw.totals || {};
+  var cell = 'padding:4px 8px;';
+  var rows = (gw.teams || []).map(function(team) {
+    var name = team.team_alias || team.team || 'No team on key';
+    var safeName = costCardText(name); // AC-OBS-GWY-001.9
+    var people = (team.users || []).map(function(u) {
+      var who = u.user_email || u.user_id || 'no user on key';
+      var key = u.key_alias ? ' \xb7 key ' + u.key_alias : '';
+      var safeWho = costCardText(who + key); // AC-OBS-GWY-001.9
+      return _e(who + key) + ': ' + _e(u.requests || 0) + ' requests, '
+        + gatewayMoney(gw, 'teams[].users[].cost_usd', u.cost_usd, 'Spend for ' + _e(who + key));
+    }).join('<br>');
+    return '<tr>'
+      + '<td style="' + cell + 'font-weight:500;">' + _e(name) + '</td>'
+      + '<td style="' + cell + 'text-align:right;">' + gatewayMoney(gw, 'teams[].cost_usd', team.cost_usd, 'Spend for team ' + _e(name)) + '</td>'
+      + '<td style="' + cell + 'text-align:right;color:var(--text-muted);">' + _e(team.requests || 0) + '</td>'
+      + '<td style="' + cell + 'text-align:right;color:var(--text-muted);">' + _e(team.failed || 0) + '</td>'
+      + '<td style="' + cell + 'font-size:11px;color:var(--text-muted);">' + people + '</td>'
+      + '</tr>';
+  }).join('');
+  var notes = [];
+  notes.push(hasAgentTable
+    ? 'Not added to the agent costs above: a call an agent made through LiteLLM is already in that agent\'s cost.'
+    : 'Kept separate from agent costs: a call an agent made through LiteLLM is already in that agent\'s cost.');
+  if (t.correlated > 0) {
+    notes.push(_e(t.correlated) + ' of ' + _e(t.requests) + ' requests share a trace with another source here. The other ' + _e(t.uncorrelated || 0) + ' could not be matched to an agent.');
+  } else {
+    notes.push('None of these ' + _e(t.requests) + ' requests could be matched to an agent\'s trace.');
+  }
+  if (t.cache_replays > 0) notes.push(_e(t.cache_replays) + ' answered from LiteLLM\'s cache, counted but not charged again.');
+  if (t.cost_not_reported > 0) notes.push(_e(t.cost_not_reported) + ' succeeded with no cost reported, so they are counted but not priced.');
+  return '<div style="margin-top:' + (hasAgentTable ? '14px' : '0') + ';font-size:12px;font-weight:600;color:var(--text-primary);">Through your LiteLLM gateway</div>'
+    + '<div style="font-size:11px;color:var(--text-muted);margin:2px 0 6px;">Spend as LiteLLM reported it, in ' + _e(gw.currency || 'USD') + ', last ' + _e(gw.window_days || 7) + ' days</div>'
+    + '<table style="width:100%;border-collapse:collapse;">'
+    + '<thead><tr style="font-size:11px;color:var(--text-muted);">'
+    + '<th style="padding:2px 8px;text-align:left;">Team</th>'
+    + '<th style="padding:2px 8px;text-align:right;">Spend (LiteLLM)' + gatewaySpendBadge(gw) + '</th>'
+    + '<th style="padding:2px 8px;text-align:right;">Requests</th>'
+    + '<th style="padding:2px 8px;text-align:right;">Failed</th>'
+    + '<th style="padding:2px 8px;text-align:left;">People and keys</th>'
+    + '</tr></thead><tbody>' + rows + '</tbody></table>'
+    + '<div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5;">' + notes.map(costCardText).join('<br>') + '</div>';
 }
 
 async function loadCostForecast() {
@@ -19099,7 +19195,7 @@ async function loadCostForecast() {
     } else {
       statusMsg = d.days_remaining_in_month + 'd remaining this month';
     }
-    el.innerHTML =
+    el.innerHTML = // codeql[js/xss] cost fields are numeric (toFixed only); cmProv branch uses esc()
       '<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center;">' +
         '<div>' +
           '<div style="font-size:12px;color:var(--text-muted);">Projected month-end</div>' +
@@ -19133,7 +19229,7 @@ function renderTraceClusters(clusters, totalSessions) {
   var el = document.getElementById('trace-clusters-content');
   if (!el) return;
   if (!clusters || clusters.length === 0) {
-    el.innerHTML = '<span style="color:var(--text-muted)">' + t("app.no_sessions_to_cluster_yet", null, "No sessions to cluster yet") + '</span>';
+    el.innerHTML = '<span style="color:var(--text-muted)">' + t("app.no_sessions_to_cluster_yet", null, "No sessions to cluster yet") + '</span>'; // codeql[js/xss] t() returns a translated UI label from the static locale bundle, not user-provided content
     return;
   }
   var categoryIcons = {
@@ -19160,7 +19256,7 @@ function renderTraceClusters(clusters, totalSessions) {
   });
   html += '</div>';
   html += '<div style="margin-top:10px;font-size:11px;color:var(--text-muted,#888);">' + totalSessions + ' sessions clustered into ' + clusters.length + ' groups by tool pattern, cost, and model</div>';
-  el.innerHTML = html;
+  el.innerHTML = html; // codeql[js/xss] user-facing labels go through escHtml(); model_family is a server-side classification, not user input
 }
 
 function renderSessionCostChart() {
@@ -19173,9 +19269,10 @@ function renderSessionCostChart() {
   var costEntry = window._sessionCostEntry || null;
   var basisEl = document.getElementById('usage-session-cost-basis');
   if (basisEl) {
-    basisEl.innerHTML = (costEntry && window.cmProv && rows.length)
-      ? 'Bar values and the Cost column: ' + window.cmProv.badge(costEntry, { label: 'Session cost' })
-      : '';
+    basisEl.innerHTML = // codeql[js/xss] window.cmProv.badge runs all values through provenance esc() which sanitises them
+      (costEntry && window.cmProv && rows.length)
+        ? 'Bar values and the Cost column: ' + window.cmProv.badge(costEntry, { label: 'Session cost' })
+        : '';
   }
   var threshold = parseFloat((document.getElementById('session-cost-threshold') || {}).value || '0.5') || 0;
   if (!canvas) return;
@@ -19266,7 +19363,7 @@ function renderSessionCostChart() {
     if (aboveThreshold.length > 0) {
       tableHtml = '<div style="margin-bottom:8px;padding:6px 10px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:6px;font-size:12px;color:#fca5a5;">⚠ ' + aboveThreshold.length + ' session' + (aboveThreshold.length > 1 ? 's' : '') + ' exceeded the $' + threshold.toFixed(2) + ' threshold</div>' + tableHtml;
     }
-    tableEl.innerHTML = tableHtml;
+    tableEl.innerHTML = tableHtml; // codeql[js/xss] all dynamic fields go through escHtml() or Number().toFixed(); cmProv.figure/badge uses provenance esc()
   }
 }
 
