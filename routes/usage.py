@@ -3130,7 +3130,37 @@ def api_usage_export():
     rows we project the per-day rollup via ``query_aggregates``; fall
     back to the legacy paths otherwise (OTLP ring → JSONL walker) so
     nothing regresses on a fresh install.
+
+    ``?by=project`` (REQ-OBS-PRJ-001) returns spend per project instead, with
+    a total row carrying assigned / derived / unassigned / unpriced figures
+    and completeness. ``?days=`` sets the window (default 30).
     """
+    by = (request.args.get("by") or "").strip().lower()
+    if by == "user":
+        return jsonify({
+            "error": "per-user export is not available yet",
+            "detail": ("Spend by user will come from agent principals, which do "
+                       "not carry a user yet. Export by project instead."),
+        }), 400
+    if by == "project":
+        from routes.projects import _store_call as _prj_call, project_usage_csv
+        if not is_local_store_read_enabled():
+            return jsonify({"error": "local store disabled"}), 400
+        try:
+            days = max(1, min(366, int(request.args.get("days", 30))))
+        except (TypeError, ValueError):
+            days = 30
+        data = _prj_call("query_project_usage", days=days)
+        if not isinstance(data, dict) or not data.get("available"):
+            return jsonify({"error": "project usage is unavailable on this machine"}), 503
+        response = make_response(project_usage_csv(data))
+        response.headers['Content-Type'] = 'text/csv'
+        response.headers['Content-Disposition'] = (
+            f'attachment; filename=clawmetry-project-usage-{datetime.now().strftime("%Y%m%d")}.csv')
+        return response
+    if by not in ("", "day"):
+        return jsonify({"error": "by must be one of day or project"}), 400
+
     import dashboard as _d
 
     try:
