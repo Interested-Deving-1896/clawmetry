@@ -430,7 +430,21 @@ def test_enterprise_image_ships_the_otlp_protobuf_dependency():
     compose = open(
         os.path.join(root, "deploy", "self-hosted", "docker-compose.yml")
     ).read()
-    assert "context: ../.." in compose, "compose must build that Dockerfile"
+    if "context: ../.." in compose:
+        return  # Compose builds the root Dockerfile checked above.
+    # Once a release pins Compose to the published image, that image is built
+    # from Dockerfile.release, so the dependency has to be installed there, and
+    # Compose must name the image by version and digest, not a floating tag.
+    release = open(
+        os.path.join(root, "deploy", "self-hosted", "Dockerfile.release")
+    ).read()
+    assert "[otel]" in release, (
+        "the published self-hosted image must install clawmetry[otel]"
+    )
+    import re as _re
+    assert _re.search(
+        r"image:\s*ghcr\.io/vivekchand/clawmetry:[0-9.]+@sha256:[0-9a-f]{64}", compose
+    ), "a published self-hosted image must be pinned by version and digest"
 
 
 def test_receiver_is_reachable_without_a_daemon(store, monkeypatch):
