@@ -130,6 +130,48 @@ REQUIRED_SPECS = [
 ]
 
 
+# Specs that are waived for dependabot PRs: these suites require product
+# code to be built and are not path-triggered by frontend or CI-requirements
+# bumps.  On a dependabot PR the gate still enforces any spec that DOES
+# report (a failing check is never skipped), but a spec that never posts is
+# treated as passed rather than hanging the gate for 60 min and timing out.
+#
+# The set is conservative: only the checks confirmed as 0/1 complete in the
+# real timeout log for a frontend dependabot PR (run 35051107922) are waived.
+# Syntax & Lint, API Tests, Cross-repo handoff, OSS golden path and
+# pip install matrix are NOT in this set -- they DID run and they are still
+# required.
+_DEPENDABOT_SKIP = frozenset([
+    "MOAT Keystone",
+    "E2E Browser Tests",
+    "MOAT Verifier",
+    "Entitlement API tests",
+    "Wheel install & assets",
+    "Store invariants",
+])
+
+
+def resolve_specs(pr_actor: str) -> list:
+    """Return the effective spec list for the given PR actor.
+
+    For dependabot PRs the heavy E2E suites are marked skip_if_unreported
+    because the CI workflow is path-filtered and those jobs simply do not run
+    on frontend/CI-requirements bumps.  The gate would otherwise poll for 60
+    minutes and time out, making every dependabot security update unmerge-able.
+
+    A check that posts a failing status is still caught regardless of this
+    flag -- only the "never posted" case is treated as skipped.
+    """
+    if pr_actor != "dependabot[bot]":
+        return REQUIRED_SPECS
+    return [
+        Spec(s.label, s.pattern, s.min_count, skip_if_unreported=True)
+        if s.label in _DEPENDABOT_SKIP
+        else s
+        for s in REQUIRED_SPECS
+    ]
+
+
 @dataclass
 class SpecResult:
     spec: Spec
@@ -332,8 +374,11 @@ def main():
     )
     args = ap.parse_args()
 
+    pr_actor = os.environ.get("PR_ACTOR", "")
+    specs = resolve_specs(pr_actor)
+
     if args.list:
-        for spec in REQUIRED_SPECS:
+        for spec in specs:
             legs = f" x{spec.min_count}" if spec.min_count > 1 else ""
             suffix = " [skip_if_unreported]" if spec.skip_if_unreported else ""
             print(f"{spec.label}{legs}: {spec.pattern}{suffix}")
@@ -348,8 +393,10 @@ def main():
         return 2
 
     sha = args.sha.strip()
-    print(f"E2E Gate: {len(REQUIRED_SPECS)} required checks on {sha[:12]}")
-    for spec in REQUIRED_SPECS:
+    if pr_actor == "dependabot[bot]":
+        print(f"E2E Gate: dependabot PR -- {len(_DEPENDABOT_SKIP)} heavy suites waived (skip_if_unreported)")
+    print(f"E2E Gate: {len(specs)} required checks on {sha[:12]}")
+    for spec in specs:
         legs = f" (x{spec.min_count})" if spec.min_count > 1 else ""
         print(f"  - {spec.label}{legs}")
     print()
@@ -370,7 +417,7 @@ def main():
             time.sleep(POLL_INTERVAL)
             continue
 
-        results = evaluate(REQUIRED_SPECS, runs)
+        results = evaluate(specs, runs)
 
         for res in results:
             line = f"{res.state}: {res.detail}"
