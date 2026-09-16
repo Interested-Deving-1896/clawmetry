@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 from flask import Flask
 
-from clawmetry import detectors, guard_checks, local_store, repo_scan, sync
+from clawmetry import detectors, guard_checks, repo_scan, sync
 from routes import guard
 
 
@@ -29,7 +29,15 @@ def server():
 
 
 @pytest.fixture
-def store(tmp_path, monkeypatch):
+def local_store():
+    # Other store integration tests replace this module in sys.modules. Resolve
+    # it at test time, just as the daemon does, so both use the same instance.
+    from clawmetry import local_store as current_store
+    return current_store
+
+
+@pytest.fixture
+def store(tmp_path, monkeypatch, local_store):
     monkeypatch.setattr(local_store, 'DB_PATH', tmp_path / 'guard.duckdb')
     s = local_store.LocalStore()
     yield s
@@ -74,7 +82,7 @@ def test_engine_override_wins_and_scope_is_node_wide():
     assert all(c['state'] == 'overridden' for c in data['checks'])
 
 
-def test_toggle_round_trips_and_survives_reopen(client, store):
+def test_toggle_round_trips_and_survives_reopen(client, store, local_store):
     # AC-GUX-002.1
     # AC-GUX-002.2
     response = client.post('/api/guard/checks/stuck_loop', json={'enabled': False})
@@ -97,6 +105,16 @@ def test_unknown_check_and_cross_site_write_are_rejected(client):
     assert client.post('/api/guard/checks/no_such_check', json={'enabled': False}).status_code == 400
     assert client.post('/api/guard/checks/stuck_loop', json={'enabled': False},
                        headers={'Origin': 'https://unrelated.example'}).status_code == 403
+
+
+def test_validation_failure_does_not_expose_exception_details(client, monkeypatch):
+    def invalid(*args):
+        raise ValueError('private implementation detail')
+
+    monkeypatch.setattr(guard_checks, 'validate', invalid)
+    response = client.post('/api/guard/checks/stuck_loop', json={'enabled': False})
+    assert response.status_code == 400
+    assert response.json == {'ok': False, 'message': 'Choose a known check and turn it on or off.'}
 
 
 def test_failed_write_does_not_claim_success(client, monkeypatch):
@@ -210,7 +228,7 @@ def test_browser_switch_waits_for_ack_and_hidden_views_do_not_fetch():
     assert result.returncode == 0, result.stderr
 
 
-def test_remote_change_requires_valid_seal_and_returns_confirmation(store, monkeypatch):
+def test_remote_change_requires_valid_seal_and_returns_confirmation(store, monkeypatch, local_store):
     monkeypatch.setattr(local_store, 'get_store', lambda *a, **kw: store)
     results = []
     monkeypatch.setattr(sync, '_post_process_control_result', lambda c, a, r: results.append(r))
@@ -232,7 +250,7 @@ def test_guard_views_hide_settings_and_keep_controls():
     # AC-GUX-003.3: all existing control hooks remain in live templates.
     from jinja2 import Environment, FileSystemLoader
     root = Path(__file__).resolve().parents[1]
-    env = Environment(loader=FileSystemLoader(str(root / 'clawmetry/templates')))
+    env = Environment(loader=FileSystemLoader(str(root / 'clawmetry/templates')), autoescape=True)
     html = env.get_template('tabs/guard.html').render()
     assert 'data-guard-panel="checks"' in html
     assert 'data-guard-panel="settings" hidden' in html

@@ -96,8 +96,8 @@ def api_guard_check_update(kind):
         return jsonify(ok=False, message="Choose on or off for this check."), 400
     try:
         validate(kind, body.get("enabled"))
-    except ValueError as exc:
-        return jsonify(ok=False, message=str(exc)), 400
+    except ValueError:
+        return jsonify(ok=False, message="Choose a known check and turn it on or off."), 400
     value = "true" if body["enabled"] else "false"
     _ls_write("set_guard_check", kind=kind, enabled=body["enabled"])
     saved = _ls_call("get_node_setting", key=PREFIX + kind)
