@@ -106,7 +106,9 @@
       check.enabled = next; check.effective_enabled = next; check.state = next ? 'on' : 'off';
       if (d.checks && d.checks.available) state.data = d.checks;
       state.data.enabled = state.data.checks.filter(function (c) { return c.effective_enabled === true; }).length;
-      say(check.title + (next ? ' is on. It will run on the next detection pass.' : ' is off. Existing findings and approvals are unchanged.'));
+      var confirmed = state.data.checks.find(function (c) { return c.kind === kind; });
+      say(confirmed && confirmed.state === 'overridden' ? 'Preference saved. This check is still turned off by an administrator on this node.' :
+        check.title + (next ? ' is on. It will run on the next detection pass.' : ' is off. Existing findings and approvals are unchanged.'));
     } catch (e) {
       say('Could not confirm the change. The last confirmed setting is still shown. Check your connection and try again.');
     } finally { delete state.saving[kind]; render(); }

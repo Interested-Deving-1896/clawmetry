@@ -258,6 +258,10 @@ def test_alert_review_groups_repeats_without_combining_sessions_or_resolution():
       if((elements['alerts-history-list'].innerHTML.match(/class="alerts-hist-row"/g)||[]).length!==1) throw Error('resolution filter failed');
       elements['guard-alert-search'].value='no such alert'; renderHistory();
       if(!elements['alerts-history-list'].innerHTML.includes('No recent alerts match')) throw Error('missing empty state');
+      elements['guard-alert-search'].value=''; elements['guard-alert-state'].value='all';
+      alertsState.history=[{...a,payload:{name:'daily_spend',actual_value:42,threshold_unit:'USD'}}];
+      renderHistory();
+      if(!elements['alerts-history-list'].innerHTML.includes('Observed: 42 USD')) throw Error('observed value lost');
     '''
     result = subprocess.run(['node', '-e', harness + renderer + exercise], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr

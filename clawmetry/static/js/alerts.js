@@ -563,12 +563,15 @@
         ? ` <span class="alerts-hist-count" title="${h._count} matching notifications">× ${h._count}</span>`
         : '';
       const rowTitle = hint ? ` title="${escape(hint)}"` : '';
+      const reason = payload.message || (typeof payload.actual_value === 'string' ? payload.actual_value : hint);
+      const observed = payload.actual_value != null && typeof payload.actual_value !== 'string'
+        ? `<span>Observed: ${escape(String(payload.actual_value))} ${escape(payload.threshold_unit || '')}</span>` : '';
       return `
         <div class="alerts-hist-row"${rowTitle}>
           <span class="${sev}">${dot}</span>
           <span class="alerts-hist-time">${formatTimeAgo(h._latestFiredAt)}</span>
           <span class="alerts-hist-text"><b>${escape(title)}</b>${countBadge}
-            <span>${escape(payload.message || hint || String(payload.actual_value ?? ''))} ${escape(payload.threshold_unit || '')}</span>
+            <span>${escape(reason || hint)}</span>${observed}
             <small>${escape(payload.session_id || h.session_id || payload.node_id || h.node_id || 'This node')}${h.resolved_at ? ' · Resolved' : ''}</small></span>
         </div>
       `;

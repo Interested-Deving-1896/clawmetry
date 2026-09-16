@@ -32262,7 +32262,8 @@ function loadGuardSessions() {
               '</h4><p>' + guardEsc(finding.detail || 'Open this session to review the matching activity.') + '</p>' +
               (finding.since ? '<small>First seen ' + guardEsc(guardAgo(finding.since)) + '</small>' : '') + '</div>';
           }).join('') + '<footer><span>' + (inc && Number(inc.spend_at_risk_usd) > 0 ? guardMoney(inc.spend_at_risk_usd) + ' estimated at risk' : 'Detected activity, not a blocked action') +
-          '</span><div>' + control + '</div></footer></article>');
+          '</span><div><button class="btn btn-xs" data-sid="' + guardEsc(s.session_id) +
+          '" onclick="openTrail(this.dataset.sid)">View session</button> ' + control + '</div></footer></article>');
       }
 
       html += '<tr><td title="' + guardEsc(s.session_id) + '">' +
