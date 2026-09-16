@@ -1354,7 +1354,6 @@ def _otlp_receive(signal, process):
                 "OTLP/JSON (application/json); gzip is accepted with "
                 "Content-Encoding: gzip."
             ),
-            "detail": str(e),
         }), 400
     if not isinstance(result, dict):
         result = _oi.new_result(signal)

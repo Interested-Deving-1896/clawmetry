@@ -108,7 +108,7 @@ def authenticate(headers) -> tuple:
         )
     record = apikeys.verify(presented)
     if not record:
-        logger.warning("ingest: rejected key %s", apikeys.redact(presented))
+        logger.warning("ingest: rejected key %s", apikeys.redact(presented).replace("\n", "").replace("\r", ""))
         return None, _err(
             "unauthorized",
             "That ingest key is not valid on this ClawMetry. It may have "
