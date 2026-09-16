@@ -7297,24 +7297,16 @@ DASHBOARD_HTML = r"""
       </div>
 
       <div class="left-nav-section-label" data-i18n="nav.section_govern">Govern</div>
-      <div class="left-nav-item" data-tab="approvals" onclick="switchTab('approvals')" data-i18n-title="nav.approvals_tooltip" title="Cloud-mediated approval queue">
-        <span class="left-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
-        <span class="left-nav-label" data-i18n="nav.approvals">Approvals</span>
-        <span id="nav-approvals-badge" class="left-nav-badge" style="display:none;">0</span>
-      </div>
       <div class="left-nav-item" data-tab="guard" onclick="switchTab('guard')" data-i18n-title="nav.guard_tooltip" title="See what is running, detect agents that go off track, and stop them">
         <span class="left-nav-icon" aria-hidden="true">&#128737;</span>
         <span class="left-nav-label" data-i18n="nav.guard">Guard</span>
         <span id="nav-guard-badge" class="left-nav-badge" style="display:none;">0</span>
+        <span id="nav-approvals-badge" class="left-nav-badge" style="display:none;" title="Pending approvals">0</span>
+        <span id="nav-alerts-badge" class="left-nav-badge" style="display:none;" title="Recent alerts">0</span>
       </div>
       <div class="left-nav-item" data-tab="signals" onclick="switchTab('signals')" data-i18n-title="nav.signals_tooltip" title="What people and agents say about a run: frustration, praise, refusals, giving up">
         <span class="left-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="13" y2="13"/></svg></span>
         <span class="left-nav-label" data-i18n="nav.signals">Signals</span>
-      </div>
-      <div class="left-nav-item" data-tab="alerts" onclick="switchTab('alerts')" data-i18n-title="nav.alerts_tooltip" title="Get notified when something goes wrong with your agents">
-        <span class="left-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
-        <span class="left-nav-label" data-i18n="nav.alerts">Alerts</span>
-        <span id="nav-alerts-badge" class="left-nav-badge" style="display:none;">0</span>
       </div>
       {# Notifications sits directly under its two consumers (Approvals,
          Alerts) - founder request 2026-07-29: buried in the Advanced drawer,
@@ -7538,6 +7530,7 @@ DASHBOARD_HTML = r"""
      window.cmMoney / cmProvBadge exist by the time a tab paints. -->
 <script src="{{ url_for('static', filename='js/provenance.js', v=version) }}"></script>
 <script src="{{ url_for('static', filename='js/app.js', v=version) }}"></script>
+<script src="{{ url_for('static', filename='js/guard-checks.js', v=version) }}"></script>
 </div> <!-- end zoom-wrapper -->
 
 {# position:fixed overlays must live OUTSIDE #zoom-wrapper: its zoom
