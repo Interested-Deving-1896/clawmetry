@@ -1277,6 +1277,7 @@ async function ackAllAlerts() {
 function visibilitySetInterval(fn, ms) {
   return setInterval(function() {
     if (typeof document !== 'undefined' && document.hidden) return;
+    if (window.cmFirstRun && window.cmFirstRun.active) return;
     try { fn(); } catch (e) {}
   }, ms);
 }
@@ -20397,7 +20398,10 @@ async function loadTranscripts() {
     try { _rtFilter = (_cmRuntimeFilter && _cmRuntimeFilter()) || ''; } catch (_e) {}
     var _tUrl = '/api/transcripts' +
       (_rtFilter && _rtFilter !== 'all' ? '?runtime=' + encodeURIComponent(_rtFilter) : '');
-    var data = await fetch(_tUrl).then(r => r.json());
+    var data = await fetch(_tUrl).then(function (r) {
+      if (!r.ok) throw new Error('transcripts unavailable');
+      return r.json();
+    });
     var html = '';
     // ChatGPT-style row: derived title on top (first user prompt, when the
     // daemon shipped one in the snapshot), with the full session id demoted
@@ -20555,8 +20559,10 @@ async function loadTranscripts() {
         history.replaceState(null, '', window.location.pathname + window.location.search);
       }
     } catch (e) {}
+    return data.store_available !== false;
   } catch(e) {
     document.getElementById('transcript-list').innerHTML = '<div style="padding:16px;color:#666;">' + t("app.failed_to_load_transcripts", null, "Failed to load transcripts") + '</div>';
+    return false;
   }
 }
 
@@ -22513,6 +22519,9 @@ async function _cmSyncTick() {
 async function cmSyncInit() {
   // Cloud mode keeps its existing cm-sync-bar (Phase 2 promotes this component).
   if (window.CLOUD_MODE) return;
+  // First-install preparation owns progress now; do not start a second
+  // progress poller behind its screen.
+  if (window.cmFirstRun) return;
   // #1937: the banner describes CLOUD-side sync work. Don't show it when
   //   * the user opted out (CLAWMETRY_NO_CLOUD=1 or ~/.clawmetry/nocloud), or
   //   * the user never connected (no config.json -> nothing to sync).
@@ -29220,6 +29229,10 @@ var BOOT_HARD_TIMEOUT_MS = 8000;
 var _bootFinished = false;
 function _safeFinishBoot() {
   if (_bootFinished) return;
+  if (window.cmFirstRun && window.cmFirstRun.checking) {
+    window.cmFirstRun.checked.then(_safeFinishBoot);
+    return;
+  }
   _bootFinished = true;
   finishBootOverlay();
 }
