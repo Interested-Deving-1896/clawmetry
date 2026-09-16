@@ -139,6 +139,8 @@ from routes.assets import bp_assets
 from routes.reasoning import bp_reasoning
 from routes.plugins import bp_plugins
 from routes.local_query import bp_local_query
+from routes.public_api import bp_public_api
+from routes.apikeys_admin import bp_apikeys_admin
 from routes.update_check import bp_update_check, start_update_check_thread
 from routes.workspaces import bp_workspaces
 from routes.bootstrap import bp_bootstrap
@@ -4897,7 +4899,9 @@ def _otel_to_row(span, resource_attrs):
     if output_val is None:
         output_val = _assemble_indexed("gen_ai.completion")
 
-    return {
+    # AC-OBS-OTG-001.9: the operator's content profile, applied before the
+    # row reaches the store (clawmetry/otlp_content.py).
+    return _otlp_minimise_span_row({
         "span_id": _hex(span.span_id),
         "trace_id": _hex(span.trace_id),
         "parent_span_id": _hex(span.parent_span_id) or None,
@@ -4926,7 +4930,7 @@ def _otel_to_row(span, resource_attrs):
         "attributes": attrs,
         "events": events,
         "links": links,
-    }
+    })
 
 
 def _ingest_litellm_span(span, attrs, resource_attrs, store, gateway_records, received_at):
@@ -5372,6 +5376,31 @@ _OTLP_TOOL_RESULT_EVENTS = frozenset(
 # an ``events`` row of the same suffix, fields copied by name, never
 # invented. Free text (``prompt`` / ``response``) is capped and tagged.
 _OTLP_TEXT_CAP = 4000
+
+
+def _otlp_minimise_span_row(row):
+    """Apply ``CLAWMETRY_OTLP_CONTENT`` to one received span row (REQ-OBS-OTG-001)."""
+    try:
+        from clawmetry import otlp_content as _oc
+        return _oc.minimise_span_row(row)
+    except Exception:
+        return row
+
+
+def _otlp_log_tool_event_id(session_id, record_id, attrs, phase):
+    """The event id for a tool record received as a log, and its call id.
+
+    A record carrying a call id takes the id a trace span of the same call
+    takes too (clawmetry/otlp_sources.py), so the two cannot both be stored.
+    """
+    try:
+        from clawmetry import otlp_sources as _src
+        cid = _src.call_id_from(attrs)
+        if cid:
+            return _src.call_event_id(session_id, cid, phase), cid
+    except Exception:
+        pass
+    return "otlp:" + record_id, None
 
 
 def _otlp_typed_event_data(prof, suffix, attrs, pick):
@@ -5921,7 +5950,8 @@ def _process_otlp_logs(pb_data, content_encoding=None, content_type=None):
                         # branch (tool NAMES only) still works untouched.
                         args = {"_otlp_args_unknown": record_id}
                     ev = dict(ev_common)
-                    ev["id"] = "otlp:" + record_id
+                    ev["id"], _call_id = _otlp_log_tool_event_id(
+                        session_id, record_id, attrs, "call")
                     ev["event_type"] = "tool_call"
                     ev["data"] = {
                         "tool": str(tool_name),
@@ -5929,13 +5959,16 @@ def _process_otlp_logs(pb_data, content_encoding=None, content_type=None):
                         "args": args,
                         "decision": decision,
                         "source": _f(attrs, "source", "tool.source"),
+                        "call_id": _call_id,
                         "_otlp": True,
+                        "_otlp_signal": "log",
                     }
                     out_events.append(ev)
                 elif suffix in _OTLP_TOOL_RESULT_EVENTS and tool_name:
                     err_text = _f(attrs, "error", "error.message") or ""
                     ev = dict(ev_common)
-                    ev["id"] = "otlp:" + record_id
+                    ev["id"], _call_id = _otlp_log_tool_event_id(
+                        session_id, record_id, attrs, "result")
                     ev["event_type"] = "tool_result"
                     ev["data"] = {
                         "tool": str(tool_name),
@@ -5943,7 +5976,9 @@ def _process_otlp_logs(pb_data, content_encoding=None, content_type=None):
                         "is_error": (success is False) or bool(err_text),
                         "error": err_text,
                         "duration_ms": dur_val,
+                        "call_id": _call_id,
                         "_otlp": True,
+                        "_otlp_signal": "log",
                     }
                     out_events.append(ev)
                 elif _prof is not None and suffix in (_prof.typed_events or {}):
@@ -6458,6 +6493,17 @@ def detect_config(args=None):
     app.register_blueprint(bp_reasoning)
     app.register_blueprint(bp_plugins)
     app.register_blueprint(bp_local_query)
+    # The keyed, cross-origin read API custom UIs are built on
+    # (docs/BUILD_YOUR_OWN_UI.md). Unlike every other blueprint here it
+    # does NOT trust loopback: it authenticates every request against a
+    # scoped key and echoes a CORS header only for an origin that key
+    # named. See routes/public_api.py for why that inversion matters.
+    app.register_blueprint(bp_public_api)
+    # Creating and revoking the keys that surface uses. Deliberately a
+    # separate blueprint behind the dashboard's own gate: a page holding a
+    # read key must never be able to list this node's keys or mint a wider
+    # one. See routes/apikeys_admin.py.
+    app.register_blueprint(bp_apikeys_admin)
     # ClawMetry Enterprise self-hosted server mode: one process serves the
     # dashboard AND the ingest API the node daemons push to. Gated hard on
     # SELF_HOSTED=true — never registered for normal local/cloud installs.
@@ -8055,6 +8101,14 @@ def _check_auth():
         # else fall through to the standard token check below
     if request.path.startswith("/api/nodes"):
         return  # Fleet API uses its own X-Fleet-Key authentication
+    if request.path.startswith("/api/q/"):
+        # The public query API authenticates itself (routes/public_api.py):
+        # every request needs a scoped `cmk_` key and loopback earns
+        # nothing. Returning here means it is not ALSO gated on the
+        # gateway token, which is what lets a custom UI reach a ClawMetry
+        # that is not on the caller's own machine. It is a stricter gate
+        # than this one, not a hole in it.
+        return
     # Self-hosted server routes authenticate the caller themselves (node token
     # or admin Basic auth). Behind a container port every caller is
     # non-loopback, so the gateway-token rule below refused them even with
