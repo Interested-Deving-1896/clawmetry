@@ -49,8 +49,8 @@
   <section data-guard-panel="attention" hidden>
     <div class="guard-review-intro"><h3>What needs your attention?</h3><p>Approvals ask for a decision. Findings explain what a check noticed.</p></div>
     <div class="guard-review-links">
-      <button onclick="switchTab('approvals')"><strong>Review approvals</strong><span id="guard-approval-summary">Requests waiting for your permission or answer</span></button>
-      <button onclick="switchTab('alerts')"><strong>Review alerts</strong><span>Notifications from your alert rules</span></button>
+      <button data-guard-destination="approvals" onclick="switchTab('approvals')"><strong>Review approvals</strong><span id="guard-approval-summary">Requests waiting for your permission or answer</span></button>
+      <button data-guard-destination="alerts" onclick="switchTab('alerts')"><strong>Review alerts</strong><span>Notifications from your alert rules</span></button>
     </div>
   <div id="guard-enforce-banner" class="banner banner-info" style="display:none;">
     <span id="guard-enforce-text"></span>
