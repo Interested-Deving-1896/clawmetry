@@ -39,7 +39,9 @@ def local_store():
 @pytest.fixture
 def store(tmp_path, monkeypatch, local_store):
     monkeypatch.setattr(local_store, 'DB_PATH', tmp_path / 'guard.duckdb')
+    monkeypatch.setattr(local_store, '_daemon_registered', lambda: False)
     s = local_store.LocalStore()
+    s.mark_writer_owner()
     yield s
     s.stop()
 
