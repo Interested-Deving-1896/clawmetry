@@ -10695,6 +10695,7 @@ CHANNEL_STATUS_CACHE_TTL_SEC = 3600
 # clawmetry-cloud/routes/alerts.py:_enqueue_alert_rule_change and the
 # approvals enqueue path.
 _PENDING_ACTIONS = frozenset({
+    "guard_check_update",
     "channel_config_upsert",
     "channel_test",
     "alert_rule_upsert",
@@ -10948,6 +10949,9 @@ def _dispatch_pending_action(config: dict, action: dict) -> None:
             atype,
         )
         return
+    if atype == "guard_check_update":
+        _action_guard_check(config, action)
+        return
     if atype == "channel_config_upsert":
         _action_channel_config_upsert(config, action)
         return
@@ -10994,6 +10998,30 @@ def _dispatch_pending_action(config: dict, action: dict) -> None:
     if atype in ("kill_session", "pause_session", "resume_session"):
         _action_process_control(config, action)
         return
+
+
+def _action_guard_check(config: dict, action: dict) -> None:
+    """Apply a sealed operator preference and return the node's confirmation."""
+    result = {"ok": False, "applied": False}
+    try:
+        from clawmetry import guard_checks, local_store
+        created = float(action.get("created_at") or 0)
+        if not 0 <= time.time() - created <= 600:
+            raise ValueError("Guard setting request expired")
+        body = decrypt_payload(action.get("sealed"), config.get("encryption_key"))
+        if not isinstance(body, dict):
+            raise ValueError("Guard setting request unreadable")
+        kind, enabled = body.get("kind"), body.get("enabled")
+        guard_checks.validate(kind, enabled)
+        store = local_store.get_store()
+        store.set_guard_check(kind, enabled, requested_at_ms=int(created * 1000))
+        saved = store.get_node_setting(guard_checks.PREFIX + kind)
+        applied = saved == ("true" if enabled else "false")
+        result = {"ok": applied, "applied": applied, "kind": kind,
+                  "enabled": saved == "true", "checks": store.query_guard_checks()}
+    except Exception as exc:
+        log.warning("Guard setting request failed: %s", type(exc).__name__)
+    _post_process_control_result(config, action, result)
 
 
 def _action_process_control(config: dict, action: dict) -> None:
@@ -21313,7 +21341,10 @@ def _emit_stuck_signals(store, state: dict) -> int:
     session stops being stuck (we simply stop re-emitting). Returns the count of
     sessions detected as stuck this tick. Never raises into the daemon loop."""
     try:
-        stuck = _detect_stuck_sessions(store)
+        from clawmetry.guard_checks import PREFIX
+        get_setting = getattr(store, "get_node_setting", None)
+        off = callable(get_setting) and get_setting(PREFIX + "stuck_loop") == "false"
+        stuck = [] if off else _detect_stuck_sessions(store)
     except Exception as e:  # noqa: BLE001
         log.warning("stuck-detect: detector errored: %s", e)
         # Detector errored — do NOT touch _LATEST_STUCK here: leaving the old
@@ -21716,7 +21747,7 @@ def _repo_scan_stamp(workspace: str) -> tuple:
 
 
 def _workspace_incidents(state: dict, cwd: str, session_id: str,
-                         runtime: str, now: float) -> list:
+                         runtime: str, now: float, disabled=None) -> list:
     """Workspace findings for ``cwd``, scanned once per (cwd, file stamp).
 
     Returns incidents in ``detectors.run_all`` shape, re-stamped with THIS
@@ -21739,7 +21770,7 @@ def _workspace_incidents(state: dict, cwd: str, session_id: str,
         memo = {}
         state["repo_scan_memo"] = memo
 
-    stamp = _repo_scan_stamp(root)
+    stamp = (_repo_scan_stamp(root), tuple(sorted(disabled or ())))
     entry = memo.get(root)
     if isinstance(entry, dict) and entry.get("stamp") == stamp:
         entry["ts"] = now
@@ -21747,7 +21778,8 @@ def _workspace_incidents(state: dict, cwd: str, session_id: str,
     else:
         try:
             from clawmetry import repo_scan as _rs
-            findings = _rs.scan_workspace(root) or []
+            findings = (_rs.scan_workspace(root, disabled=disabled)
+                        if disabled else _rs.scan_workspace(root)) or []
         except Exception as e:  # noqa: BLE001 — a scan must never stop ingest
             log.debug("repo-scan: %s failed: %s", root, e)
             findings = []
@@ -22359,6 +22391,14 @@ def _emit_detector_incidents(store, state: dict) -> int:
         log.warning("detectors: import failed: %s", e)
         return 0
 
+    from clawmetry import guard_checks as _checks
+    try:
+        _check_settings = store.list_node_settings()
+        disabled = _checks.disabled_kinds(_check_settings)
+    except Exception as exc:
+        log.warning("Guard check settings unavailable: %s", exc)
+        disabled = set()
+
     candidates = _candidate_active_sessions(store)
     if not candidates:
         return 0
@@ -22432,7 +22472,8 @@ def _emit_detector_incidents(store, state: dict) -> int:
 
         try:
             incidents = _det.run_all(events, sid, runtime, facts=facts,
-                                     thresholds=thresholds, steps=steps) or []
+                                     thresholds=thresholds, steps=steps,
+                                     **({"disabled": disabled} if disabled else {})) or []
         except Exception as e:  # noqa: BLE001
             log.warning("detectors: run_all errored for %s: %s", sid, e)
             incidents = []
@@ -22469,7 +22510,8 @@ def _emit_detector_incidents(store, state: dict) -> int:
         # critical" rule, written about runaway agents, cannot start pausing
         # sessions over a property of a checkout.
         workspace = _workspace_incidents(
-            state, facts.get("cwd") or "", sid, runtime or "unknown", now)
+            state, facts.get("cwd") or "", sid, runtime or "unknown", now,
+            **({"disabled": disabled} if disabled else {}))
         if workspace:
             all_incidents.extend(workspace)
         incidents = list(incidents) + workspace
@@ -22601,7 +22643,8 @@ def _emit_detector_incidents(store, state: dict) -> int:
     # step? One pass per tick over every session's write actions, after the
     # per-session pass, so its incidents reach the same policy pass below.
     try:
-        all_incidents.extend(_emit_fleet_incidents(store, state, fleet_fps, now))
+        if "coordinated_action" not in disabled:
+            all_incidents.extend(_emit_fleet_incidents(store, state, fleet_fps, now))
     except Exception as e:  # noqa: BLE001
         log.warning("detectors: fleet pass failed: %s", e)
 
@@ -22614,6 +22657,10 @@ def _emit_detector_incidents(store, state: dict) -> int:
     except Exception as e:  # noqa: BLE001
         log.warning("guard: policy pass failed: %s", e)
 
+    try:
+        store.set_node_setting(_checks.LAST_PASS_KEY, int(time.time() * 1000))
+    except Exception as exc:
+        log.debug("Guard check pass timestamp unavailable: %s", exc)
     return emitted
 
 
@@ -24119,10 +24166,12 @@ def sync_system_snapshot(config: dict, state: dict, paths: dict) -> int:
     # FLYWHEEL section 1). Rows carry the control verdict computed here; the
     # cloud relays a click to this daemon, which re-resolves before acting.
     _guard_sessions_slice: dict = {}
+    _guard_checks_slice: dict = {}
     try:
         from clawmetry import local_store as _ls_guard
         _guard_store = _ls_guard.get_store()
         if _guard_store is not None:
+            _guard_checks_slice = _guard_store.query_guard_checks()
             from routes.guard import build_guard_sessions_body as _bgsb
 
             def _guard_call(method, **kw):
@@ -24202,6 +24251,7 @@ def sync_system_snapshot(config: dict, state: dict, paths: dict) -> int:
         # The /api/guard/sessions body (running sessions, incidents, control
         # verdicts) plus generated_at, for the hosted Guard tab.
         "guardSessions": _guard_sessions_slice,
+        "guardChecks": _guard_checks_slice,
         # WO-62 Signal shifts: issues opened when a rate left its band.
         "signalIssues": _signal_issues_slice,
         # WO-62 Briefs: saved questions with a schedule and a channel, read-only

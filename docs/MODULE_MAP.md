@@ -204,6 +204,7 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/git_config_exec.py` | small | Which git config settings make git execute a program. |
 | `clawmetry/git_outcomes.py` | medium | Read a repository and say whether the agent's work shipped (REQ-OBS-CEA-022). |
 | `clawmetry/guard_actuator.py` | medium | Guard actuator — the ONE path from a decision to a process. |
+| `clawmetry/guard_checks.py` | small | Guard's operator-facing catalogue and durable, node-wide preferences. |
 | `clawmetry/harness_bench.py` | medium | Harness Engineering bench: pure scoring math, no I/O. |
 | `clawmetry/harness_templates.py` | medium | Per-harness custom-tab template registry. |
 | `clawmetry/hook_ownership.py` | medium | Ownership-aware editing of a shared hooks array. |
