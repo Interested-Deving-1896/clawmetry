@@ -4,7 +4,7 @@
 > `python3 scripts/gen_module_map.py` (CI fails on drift via
 > `tests/test_module_map_drift.py`).
 
-275 modules, 84 Flask blueprints. `CLAUDE.md` carries a short curated table of the ones you reach for most often; this is the whole list.
+281 modules, 86 Flask blueprints. `CLAUDE.md` carries a short curated table of the ones you reach for most often; this is the whole list.
 
 Size bands are deliberately coarse so this file does not churn on every PR: **small** is under 200 lines, **medium** under 1k, **large** under 5k, **huge** is 5k and up.
 
@@ -30,6 +30,7 @@ One module per feature, each owning one or more Flask blueprints. New endpoints 
 | `routes/agentops.py` | small | `bp_agentops` | `/api/agentops`, `/api/ground-truth` | the AgentOps scorecard and the ground-truth endpoint. |
 | `routes/agents.py` | medium | `bp_agents` | `/api/agents` | Multi-agent adapter endpoints. |
 | `routes/alerts.py` | large | `bp_alerts`, `bp_budget` | `/api/_harness`, `/api/agents`, `/api/alert-channels`, `/api/alerts`, `/api/budget`, `/api/emergency-stop` | Budget + Alerts endpoints. |
+| `routes/apikeys_admin.py` | small | `bp_apikeys_admin` | `/api/apikeys` | create, list and revoke the node's API keys. |
 | `routes/approval_routing.py` | small | `bp_approval_routing` | `/a`, `/a/decide`, `/api/approvals` | OSS stub after the impl moved to clawmetry-pro. |
 | `routes/assets.py` | small | `bp_assets` | `/api/assets` | OSS asset registry API. |
 | `routes/attention.py` | medium | `bp_attention` | `/api/attention`, `/api/hooks` | "which of my agents needs me right now". |
@@ -61,7 +62,7 @@ One module per feature, each owning one or more Flask blueprints. New endpoints 
 | `routes/insights.py` | medium | `bp_insights` | `/api/insights`, `/insights` | Weekly Insights Digest endpoints. |
 | `routes/inventory.py` | medium | `bp_inventory` | `/api/inventory` | Agent Inventory tab API. |
 | `routes/local_query.py` | large | `bp_local_query` | `/__local_query__`, `/api/local` | coherent local query API over the DuckDB store. |
-| `routes/meta.py` | large | `bp_auth`, `bp_cloud_relay`, `bp_gateway`, `bp_otel`, `bp_otlp_traces`, `bp_version`, `bp_version_impact` | `/.well-known/security.txt`, `/api/anon-auth-fail-ping`, `/api/auth`, `/api/cloud`, `/api/export`, `/api/gw`, `/api/install-age`, `/api/otel`, `/api/otel-status`, `/api/update`, `/api/version`, `/api/version-impact`, `/auth`, `/v1/logs`, `/v1/metrics`, `/v1/traces` | Auth / gateway / OTLP / version / version-impact. |
+| `routes/meta.py` | large | `bp_auth`, `bp_cloud_relay`, `bp_gateway`, `bp_otel`, `bp_otlp_traces`, `bp_version`, `bp_version_impact` | `/.well-known/security.txt`, `/api/anon-auth-fail-ping`, `/api/auth`, `/api/cloud`, `/api/export`, `/api/gw`, `/api/install-age`, `/api/otel`, `/api/otel-status`, `/api/setup-prompt`, `/api/update`, `/api/version`, `/api/version-impact`, `/auth`, `/v1/logs`, `/v1/metrics`, `/v1/traces` | Auth / gateway / OTLP / version / version-impact. |
 | `routes/nemoclaw.py` | small | `bp_nemoclaw` | `/api/nemoclaw` | OSS stub after the impl moved to clawmetry-pro. |
 | `routes/onboarding.py` | medium | `bp_onboarding` | `/api/account`, `/api/onboarding` | the first-run onboarding gate state machine. |
 | `routes/org_analytics.py` | small | `bp_org_analytics` | `/api/org-analytics` | OSS stub after the impl lives in clawmetry-pro. |
@@ -72,6 +73,7 @@ One module per feature, each owning one or more Flask blueprints. New endpoints 
 | `routes/policy.py` | medium | `bp_policy` | `/api/approvals`, `/api/approvals-audit`, `/api/policy`, `/api/tool-policy` | tool-policy + sandbox + exec-approval audit (PRD P1-1). |
 | `routes/pricing.py` | medium | `bp_pricing` | `/api/pricing` | the price book API (REQ-OBS-CEA-024, issue #5936). |
 | `routes/projects.py` | medium | `bp_projects` | `/api/projects` | project attribution and per-project budgets (REQ-OBS-PRJ-001). |
+| `routes/public_api.py` | medium | `bp_public_api` | `/api/q` | the keyed, cross-origin read API custom UIs use. |
 | `routes/quality.py` | medium | `bp_quality` | `/api/quality` | the Quality tab endpoint. |
 | `routes/readiness.py` | small | `bp_readiness` | `/api/repo-readiness` | ``bp_readiness`` — repo AI-readiness. |
 | `routes/reasoning.py` | medium | `bp_reasoning` | `/api/reasoning` | Reasoning chain viewer endpoint. |
@@ -141,6 +143,8 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/_paywall_events.py` | large | In-process rolling store for ``POST /api/paywall/event`` client beacons. |
 | `clawmetry/agentops_metrics.py` | medium | AgentOps window metrics: latency, handoffs, guardrails, review, ground truth. |
 | `clawmetry/alert_evaluator.py` | large | Local alert-rule evaluator — pure logic, no I/O (PRD #779 PR-D part 2). |
+| `clawmetry/apikeys.py` | medium | scoped, revocable read keys for custom UIs. |
+| `clawmetry/apikeys_public.py` | small | read-side helpers for the keyed public API. |
 | `clawmetry/approval_events.py` | small | The public seam between approvals and whoever delivers them. |
 | `clawmetry/approvals.py` | large | cloud-mediated approval policy engine. |
 | `clawmetry/attention_hook.py` | small | the `clawmetry hook attention` client. |
@@ -206,6 +210,7 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/hooks.py` | medium | Hook lifecycle manager — install manifest and atomic install/uninstall API. |
 | `clawmetry/hooks_claude_code.py` | large | Claude Code hooks → ClawMetry: pre-execution approval gate + phone pushes. |
 | `clawmetry/incident_alerts.py` | medium | deliver a detector incident to a human. |
+| `clawmetry/ingest_auth.py` | medium | the gate in front of the ingest surfaces. |
 | `clawmetry/ingest_contract.py` | medium | the declared ingest/1 contract registry. |
 | `clawmetry/injected_context.py` | small | Tell what a human typed apart from context a harness injects as a user turn. |
 | `clawmetry/insights.py` | medium | Weekly Insights Digest — LLM-over-DuckDB summary of the last 7 days. |
@@ -273,6 +278,7 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/selfhosted.py` | medium | clawmetry.selfhosted — ClawMetry Enterprise single-tenant server mode. |
 | `clawmetry/session_context.py` | medium | Inputs & context: what the agent was actually given, per session. |
 | `clawmetry/session_titles.py` | medium | ChatGPT-style session titles from the first real user prompt. |
+| `clawmetry/setup_prompt.py` | small | the copy-paste prompt you hand your agent. |
 | `clawmetry/siem.py` | small | OSS delegating shim after the impl moved to clawmetry-pro. |
 | `clawmetry/signal_shifts.py` | medium | Signal shifts (WO-62): notice when a behaviour-signal rate moves, explain what moved it, and open an issue the operator can resolve or ignore. |
 | `clawmetry/span_reconstruct.py` | medium | Runtime-agnostic span reconstruction for family runtimes (Agent Graph WS-A). |
