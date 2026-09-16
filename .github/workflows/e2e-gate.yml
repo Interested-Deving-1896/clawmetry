@@ -25,12 +25,6 @@ name: E2E Gate (required)
 #   - Store invariants (property-based)
 #   - Drift Bot  [skip_if_unreported: only enforced when 8090 App posts]
 #
-# Dependabot PRs: MOAT Keystone, E2E Browser Tests, MOAT Verifier, Entitlement
-# API tests, Wheel install, and Store invariants are waived (skip_if_unreported)
-# because the CI workflow is path-filtered and those jobs do not trigger on
-# frontend/CI-requirements bumps. Syntax & Lint, API Tests, Cross-repo handoff,
-# OSS golden path, and pip install matrix remain required.
-#
 # Tracking: vivekchand/clawmetry#4029 (C6)
 #
 # This workflow intentionally runs on pull_request only -- not on push events.
@@ -79,8 +73,8 @@ jobs:
           COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           REPO: ${{ github.repository }}
           MAX_WAIT: "3600"
-          # Used by resolve_specs() to waive heavy E2E suites that are
-          # path-filtered and never run on frontend/deps-only PRs.
+          # Pass the PR author so the gate can waive heavy E2E checks that
+          # never run on dependabot frontend/deps bumps (path-filtered out).
           PR_ACTOR: ${{ github.event.pull_request.user.login }}
         run: python3 scripts/e2e_gate.py
 
@@ -88,7 +82,6 @@ jobs:
         if: always()
         env:
           COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          PR_ACTOR: ${{ github.event.pull_request.user.login }}
         run: |
           {
             echo "## E2E Gate"
