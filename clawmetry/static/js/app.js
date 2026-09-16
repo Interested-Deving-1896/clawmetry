@@ -31922,7 +31922,7 @@ function guardAgo(ts) {
 }
 
 function loadGuardTab() {
-  if (typeof guardLoadWorkspace === "function") { guardLoadWorkspace(); return; }
+  if (typeof guardLoadWorkspace === "function") { guardLoadWorkspace(); loadGuardInventory(); return; }
   loadGuardSessions();
   loadGuardPolicies();
   loadGuardActions();
