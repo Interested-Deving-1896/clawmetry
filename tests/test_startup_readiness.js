@@ -139,5 +139,12 @@ function harness(responses, cloud = false) {
   assert.equal(h.window.cmFirstRun.active, false);
   h = harness([{ sessionCount: 2 }], true); await h.start();
   assert.equal(h.element('first-run').hidden, true, 'older populated snapshots bypass preparation');
+  for (const gate of ['_cmKeyNeeded', 'CM_SUPPORT_VIEW']) {
+    h = harness([null], true); h.window[gate] = true;
+    h.listeners.DOMContentLoaded(); await drain();
+    assert.equal(h.snaps(), 0, 'do not poll snapshots before cloud data can be unlocked');
+    assert.equal(h.window.cmFirstRun.active, false, 'never cover the secret-key prompt or support view');
+    assert.equal(h.window.cmFirstRun.checking, false);
+  }
   console.log('PASS: first-run readiness, polling, recovery, cloud and empty states');
 })().catch(error => { console.error(error); process.exitCode = 1; });

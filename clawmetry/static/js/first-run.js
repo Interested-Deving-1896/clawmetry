@@ -182,6 +182,9 @@
   function start(onboarding) {
     if (started) return;
     started = true;
+    // The cloud key prompt reloads after unlocking. Let that prerequisite
+    // finish before waiting for a snapshot; support view has no data key.
+    if (window.CLOUD_MODE && (window._cmKeyNeeded || window.CM_SUPPORT_VIEW)) { checked(); return; }
     if (!el('') || (!window.CLOUD_MODE && (!onboarding || onboarding.required || ['ci', 'env_skip', 'error'].indexOf(onboarding.source) !== -1))) { checked(); return; }
     el('continue').addEventListener('click', function () { close(true); });
     el('retry').addEventListener('click', run);
