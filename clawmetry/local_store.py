@@ -19135,6 +19135,29 @@ class LocalStore(ProjectsMixin, TrailStoreMixin):
             _READ_CACHE[key] = (now, rows)
         return rows
 
+    def query_startup_status(self) -> dict[str, Any]:
+        """Cheap readiness probe, without scanning or counting event history.
+
+        Daemon diagnostic events are not evidence of useful agent activity.
+        A session row also counts: some runtimes import metadata before events.
+        Exceptions propagate so an unreadable store never looks empty.
+        """
+        from clawmetry.startup import read_progress
+
+        progress = read_progress(self)
+        rows = self._fetch(
+            "SELECT EXISTS(SELECT 1 FROM sessions WHERE agent_type != 'daemon' LIMIT 1) OR "
+            "EXISTS(SELECT 1 FROM events WHERE agent_type != 'daemon' LIMIT 1)",
+            [],
+        )
+        has_data = bool(rows and rows[0][0])
+        return {
+            **progress,
+            "available": True,
+            "has_data": has_data,
+            "initialized": bool(progress.get("initialized")) or (not progress and has_data),
+        }
+
     def health(self) -> dict[str, Any]:
         """Snapshot of store state — for the /local/health endpoint and the
         dashboard footer."""
