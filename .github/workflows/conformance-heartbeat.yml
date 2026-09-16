@@ -151,11 +151,7 @@ jobs:
       - name: Install from PyPI and smoke the CLI
         shell: bash
         run: |
-          # Bootstrap pip from the hash-pinned set rather than resolving the
-          # latest release at job start. The install of `clawmetry` below is
-          # deliberately NOT pinned: this job exists to prove the published
-          # wheel installs, so pinning it would test nothing.
-          python -m pip install --require-hashes -r .github/requirements/pip-bootstrap.txt
+          python -m pip install --upgrade pip
           python -m pip install --no-cache-dir clawmetry
           python -c "import clawmetry, clawmetry.cli; print('import ok')"
           clawmetry --version

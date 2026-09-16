@@ -110,7 +110,9 @@ jobs:
           # latest release at job start. The two installs below stay unpinned
           # on purpose -- `head/requirements.txt` is the PR's own checkout,
           # which is the thing under test.
-          python -m pip install --require-hashes -r .github/requirements/pip-bootstrap.txt
+          # `head/` prefix: this job checks the repo out into head/ and base/,
+          # never at the workspace root, so the set lives under head/ too.
+          python -m pip install --require-hashes -r head/.github/requirements/pip-bootstrap.txt
           pip install -r head/requirements.txt
           pip install duckdb requests
 
