@@ -27,7 +27,8 @@
     "AC-OBS-",
     "AC-RSO-",
     "AC-GOV-",
-    "AC-OGV-"
+    "AC-OGV-",
+    "AC-GUX-"
   ],
   "external_prefixes": {
     "AC-CLOUD-": "clawmetry-cloud",
@@ -1961,6 +1962,72 @@
       "doc": "Guard Prompt Injection: a detector, and untrusted content raises the pre-tool risk tier",
       "doc_id": "e87935d1-27e0-415f-a5f8-24bdf70accbc",
       "text": "The context the gate hook sends to the local receiver shall carry tool names, counts and signature identifiers only, never tool output."
+    },
+    {
+      "id": "AC-GUX-001.1",
+      "doc": "Guard coverage and review UX",
+      "doc_id": "327e83bf-8714-4b52-8c40-788d1520c828",
+      "text": "When Guard opens, the system shall present a check catalogue grouped by Run progress, Access and changes, Silent failures, Prompt injection, Workspace risks and Across sessions, with totals derived from the shipped registry."
+    },
+    {
+      "id": "AC-GUX-001.2",
+      "doc": "Guard coverage and review UX",
+      "doc_id": "327e83bf-8714-4b52-8c40-788d1520c828",
+      "text": "When viewing a check, the system shall explain the behavior it detects, its scope, and the distinction between enabled, disabled, unavailable and awaiting confirmation."
+    },
+    {
+      "id": "AC-GUX-001.3",
+      "doc": "Guard coverage and review UX",
+      "doc_id": "327e83bf-8714-4b52-8c40-788d1520c828",
+      "text": "When node state is unavailable or stale, the system shall state that limitation rather than claim protection is active."
+    },
+    {
+      "id": "AC-GUX-002.1",
+      "doc": "Guard coverage and review UX",
+      "doc_id": "327e83bf-8714-4b52-8c40-788d1520c828",
+      "text": "When a check is disabled and the node confirms the change, the system shall skip that check on subsequent detection passes, including session, workspace and cross-session checks."
+    },
+    {
+      "id": "AC-GUX-002.2",
+      "doc": "Guard coverage and review UX",
+      "doc_id": "327e83bf-8714-4b52-8c40-788d1520c828",
+      "text": "When settings change, the system shall persist them across restart, retain prior findings and approvals, and explain that automatic responses depending on that check will no longer receive new findings."
+    },
+    {
+      "id": "AC-GUX-002.3",
+      "doc": "Guard coverage and review UX",
+      "doc_id": "327e83bf-8714-4b52-8c40-788d1520c828",
+      "text": "When a setting cannot be saved, the system shall retain the confirmed state and show an actionable error; a queued cloud request shall remain visibly pending until acknowledged."
+    },
+    {
+      "id": "AC-GUX-002.4",
+      "doc": "Guard coverage and review UX",
+      "doc_id": "327e83bf-8714-4b52-8c40-788d1520c828",
+      "text": "When an administrator disables the detection engine on the node, the system shall disclose that override and shall not imply a per-check toggle overrides it."
+    },
+    {
+      "id": "AC-GUX-003.1",
+      "doc": "Guard coverage and review UX",
+      "doc_id": "327e83bf-8714-4b52-8c40-788d1520c828",
+      "text": "When reviewing Guard, the system shall separate pending approvals, current findings and completed activity, with settings progressively disclosed."
+    },
+    {
+      "id": "AC-GUX-003.2",
+      "doc": "Guard coverage and review UX",
+      "doc_id": "327e83bf-8714-4b52-8c40-788d1520c828",
+      "text": "When reviewing an item, the system shall show the affected agent or session, the plain-language reason and supported next action; existing decision and process-control confirmation rules shall remain effective."
+    },
+    {
+      "id": "AC-GUX-003.3",
+      "doc": "Guard coverage and review UX",
+      "doc_id": "327e83bf-8714-4b52-8c40-788d1520c828",
+      "text": "When following existing Guard, Alerts or Approvals links, the system shall preserve access to those functions and explain their relationship in a shared navigation context."
+    },
+    {
+      "id": "AC-GUX-003.4",
+      "doc": "Guard coverage and review UX",
+      "doc_id": "327e83bf-8714-4b52-8c40-788d1520c828",
+      "text": "When changing runtime filters, the system shall scope activity to the selected runtime or explicitly identify node-wide settings. Hidden views shall not add background polling."
     }
   ]
 }

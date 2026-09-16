@@ -1099,6 +1099,8 @@ _DAEMON_METHODS = frozenset({
     "get_node_setting",
     "set_node_setting",
     "list_node_settings",
+    "query_guard_checks",
+    "set_guard_check",
     # Agent identity: one principal per AGENT (node + runtime + agent_id),
     # derived from sessions and overlaid with the agent_meta labels above.
     # Read-only; the daemon owns the writer, and ownership writes reuse

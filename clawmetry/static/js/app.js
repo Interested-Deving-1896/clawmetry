@@ -2168,7 +2168,8 @@ function switchTab(name) {
   try { _cmApplyRuntimeScopeNote(name); } catch (e) {}
   var tabs = document.querySelectorAll('.nav-tab');
   tabs.forEach(function(t) { if (t.getAttribute('onclick') && t.getAttribute('onclick').indexOf("'" + name + "'") !== -1) t.classList.add('active'); });
-  var leftItems = document.querySelectorAll('.left-nav-item[data-tab="' + name + '"]');
+  var navName = (name === "approvals" || name === "alerts") ? "guard" : name;
+  var leftItems = document.querySelectorAll('.left-nav-item[data-tab="' + navName + '"]');
   leftItems.forEach(function(t) { t.classList.add('active'); });
   // Phase A beginner IA: if the selected tab lives inside a collapsed drawer
   // (Developer / Advanced), reveal that drawer so the active item is visible.
@@ -31919,6 +31920,7 @@ function guardAgo(ts) {
 }
 
 function loadGuardTab() {
+  if (typeof guardLoadWorkspace === "function") { guardLoadWorkspace(); return; }
   loadGuardSessions();
   loadGuardPolicies();
   loadGuardActions();
@@ -32130,6 +32132,7 @@ function loadGuardSessions() {
       return;
     }
     var flagged = 0;
+    var findingCards = [];
     var atRisk = document.getElementById('guard-at-risk');
     if (atRisk) {
       var total = Number(d && d.spend_at_risk_usd) || 0;
@@ -32251,6 +32254,18 @@ function loadGuardSessions() {
         }
       }
 
+      if ((inc || ws) && !exited) {
+        var findings = [inc, ws].filter(Boolean);
+        findingCards.push('<article class="guard-finding"><header><strong>' + guardEsc((s.title || s.session_id || '').slice(0, 80)) +
+          '</strong><span>' + guardEsc(s.runtime) + '</span></header>' + findings.map(function (finding) {
+            return '<div class="guard-finding-evidence"><h4>' + guardEsc(finding.title || GUARD_KIND_LABEL[finding.kind] || finding.kind) +
+              '</h4><p>' + guardEsc(finding.detail || 'Open this session to review the matching activity.') + '</p>' +
+              (finding.since ? '<small>First seen ' + guardEsc(guardAgo(finding.since)) + '</small>' : '') + '</div>';
+          }).join('') + '<footer><span>' + (inc && Number(inc.spend_at_risk_usd) > 0 ? guardMoney(inc.spend_at_risk_usd) + ' estimated at risk' : 'Detected activity, not a blocked action') +
+          '</span><div><button class="btn btn-xs" data-sid="' + guardEsc(s.session_id) +
+          '" onclick="openTrail(this.dataset.sid)">View session</button> ' + control + '</div></footer></article>');
+      }
+
       html += '<tr><td title="' + guardEsc(s.session_id) + '">' +
         guardEsc((s.title || s.session_id || '').slice(0, 48)) + '</td>' +
         '<td>' + guardEsc(s.runtime) + '</td>' +
@@ -32263,7 +32278,9 @@ function loadGuardSessions() {
         '<td>' + control + '</td></tr>';
     });
     html += '</tbody></table>';
-    el.innerHTML = html;
+    el.innerHTML = (findingCards.length ? findingCards.join('') :
+      '<div class="empty-state">No findings on the listed running sessions.</div>') +
+      '<details class="guard-section-details"><summary>All ' + rows.length + ' listed sessions and controls</summary><div style="overflow-x:auto">' + html + '</div></details>';
     guardSetBadge(flagged);
   }).catch(function () {
     el.innerHTML = '<div class="empty-state">Could not load sessions.</div>';
