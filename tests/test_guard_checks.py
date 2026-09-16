@@ -178,6 +178,7 @@ def test_browser_switch_waits_for_ack_and_hidden_views_do_not_fetch():
       global.document = {getElementById(id) {return elements[id] ||= {innerHTML:'',textContent:''};},
         querySelectorAll() {return [];}, addEventListener(n,f) {events[n]=f;}};
       global.guardEsc = s => String(s); global.guardAgo = () => 'just now';
+      global.sessionStorage = {data:{},getItem(k){return this.data[k]||null;},setItem(k,v){this.data[k]=v;}};
       global.confirm = () => true;
       for (const name of ['loadGuardSessions','guardLoadApprovalSummary','loadGuardActions',
           'loadGuardSelfReports','loadGuardPolicies','loadGuardNondeterminism']) global[name]=()=>hits.push(name);
@@ -197,8 +198,14 @@ def test_browser_switch_waits_for_ack_and_hidden_views_do_not_fetch():
         let list=elements['guard-check-list'].innerHTML;
         if(!list.includes('Awaiting node') || !list.includes('aria-checked="true" data-check="stuck_loop" disabled')) throw Error('queued write claimed saved');
         if(!elements['guard-check-message'].textContent.includes('not confirmed')) throw Error('missing pending message');
+        RELOAD_SCRIPT
+        guardShowView('checks'); await settle();
+        if(!elements['guard-check-list'].innerHTML.includes('Awaiting node')) throw Error('reload lost pending change');
+        const before=hits.length; await click();
+        if(hits.length!==before) throw Error('pending change could be queued twice');
       })().catch(e=>{console.error(e);process.exitCode=1;});
     '''
+    exercise = exercise.replace('RELOAD_SCRIPT', '(0,eval)(' + json.dumps(script) + ');')
     result = subprocess.run(['node', '-e', harness + script + exercise], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
 

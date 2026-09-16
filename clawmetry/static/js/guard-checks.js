@@ -2,6 +2,17 @@
 (function () {
   'use strict';
   var state = {view: 'checks', family: 'progress', data: null, loading: null, saving: {}, pending: {}};
+  var pendingKey = 'cm-guard-pending-' + (window.CLOUD_NODE_ID || 'local') + '-' + (window.CLOUD_TOKEN || '').slice(0, 16);
+  try {
+    var saved = JSON.parse(window.sessionStorage.getItem(pendingKey) || '{}');
+    Object.keys(saved).forEach(function (kind) {
+      var p = saved[kind];
+      if (p && typeof p.next === 'boolean' && Number.isFinite(p.at) && Date.now() - p.at < 600000) state.pending[kind] = p;
+    });
+  } catch (e) { /* Storage may be unavailable in a private browser. */ }
+  function savePending() {
+    try { window.sessionStorage.setItem(pendingKey, JSON.stringify(state.pending)); } catch (e) {}
+  }
   function esc(value) { return guardEsc(value); }
   function byId(id) { return document.getElementById(id); }
   function say(message) { var el = byId('guard-check-message'); if (el) el.textContent = message; }
@@ -77,7 +88,9 @@
           delete state.pending[kind]; say('The node did not confirm the change in time. Review its current setting before trying again.');
         }
       });
+      savePending();
       state.data = d; render();
+      if (Object.keys(state.pending).length) say('A change is awaiting your node. The last confirmed setting is still shown. Refresh when the node is connected.');
     }).catch(function () {
       if (state.data) { state.data.available = false; render(); }
       byId('guard-check-summary').textContent = 'Could not read check settings. Make sure this node is connected, then refresh.';
@@ -87,9 +100,11 @@
 
   async function changeCheck(kind) {
     var check = state.data && state.data.checks.find(function (c) { return c.kind === kind; });
-    if (!check || state.saving[kind]) return;
+    if (!check || state.saving[kind] || state.pending[kind]) return;
     var next = !check.enabled;
     if (!next && !window.confirm('Turn off ' + check.title + '? This stops new findings and automatic responses that depend on this check. Existing findings and approvals stay in place.')) return;
+    // A reload while the request is in flight must not forget a queued write.
+    state.pending[kind] = {next: next, at: Date.now()}; savePending();
     state.saving[kind] = true; say('Saving this setting on your node...'); render();
     try {
       var r = await fetch('/api/guard/checks/' + encodeURIComponent(kind), {
@@ -97,11 +112,13 @@
       });
       var d = await r.json();
       if (d.pending) {
-        state.pending[kind] = {next: next, at: Date.now()};
         say('Your node has not confirmed this change yet. Its last confirmed setting is still shown. Refresh when the node is connected.');
         return;
       }
-      if (!r.ok || !d.ok || d.applied !== true || d.kind !== kind || d.enabled !== next) throw new Error('not saved');
+      if (!r.ok || !d.ok || d.applied !== true || d.kind !== kind || d.enabled !== next) {
+        delete state.pending[kind]; savePending(); throw new Error('not saved');
+      }
+      delete state.pending[kind]; savePending();
       // A node-confirmed reply is newer than the cached cloud snapshot.
       check.enabled = next; check.effective_enabled = next; check.state = next ? 'on' : 'off';
       if (d.checks && d.checks.available) state.data = d.checks;
@@ -110,7 +127,7 @@
       say(confirmed && confirmed.state === 'overridden' ? 'Preference saved. This check is still turned off by an administrator on this node.' :
         check.title + (next ? ' is on. It will run on the next detection pass.' : ' is off. Existing findings and approvals are unchanged.'));
     } catch (e) {
-      say('Could not confirm the change. The last confirmed setting is still shown. Check your connection and try again.');
+      say('Could not confirm the change. The last confirmed setting is still shown. Refresh to check your node\'s current setting.');
     } finally { delete state.saving[kind]; render(); }
   }
 
