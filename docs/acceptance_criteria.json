@@ -1961,6 +1961,42 @@
       "doc": "Guard Prompt Injection: a detector, and untrusted content raises the pre-tool risk tier",
       "doc_id": "e87935d1-27e0-415f-a5f8-24bdf70accbc",
       "text": "The context the gate hook sends to the local receiver shall carry tool names, counts and signature identifiers only, never tool output."
+    },
+    {
+      "id": "AC-OBS-FRP-001.1",
+      "doc": "First installation prepares useful data before showing the dashboard",
+      "doc_id": "c11e8f26-d19d-4a5d-ac10-7e1e99188a18",
+      "text": "When a first installation is collecting its initial activity, the system shall show preparation instead of empty dashboard panels, and shall open automatically after collection is ready."
+    },
+    {
+      "id": "AC-OBS-FRP-001.2",
+      "doc": "First installation prepares useful data before showing the dashboard",
+      "doc_id": "c11e8f26-d19d-4a5d-ac10-7e1e99188a18",
+      "text": "When an established installation is reopened or its collector restarts, the system shall not impose a first-install wait."
+    },
+    {
+      "id": "AC-OBS-FRP-001.3",
+      "doc": "First installation prepares useful data before showing the dashboard",
+      "doc_id": "c11e8f26-d19d-4a5d-ac10-7e1e99188a18",
+      "text": "When collection finishes without agent activity, the system shall explain that a first task is needed and allow the user to open the dashboard."
+    },
+    {
+      "id": "AC-OBS-FRP-001.4",
+      "doc": "First installation prepares useful data before showing the dashboard",
+      "doc_id": "c11e8f26-d19d-4a5d-ac10-7e1e99188a18",
+      "text": "When readiness cannot be confirmed within three minutes, the system shall stop the loading animation and offer working retry and open-dashboard actions without exposing raw errors."
+    },
+    {
+      "id": "AC-OBS-FRP-001.5",
+      "doc": "First installation prepares useful data before showing the dashboard",
+      "doc_id": "c11e8f26-d19d-4a5d-ac10-7e1e99188a18",
+      "text": "When the page is hidden or preparation has finished, the system shall stop preparation polling; concurrent checks shall share a single in-flight request."
+    },
+    {
+      "id": "AC-OBS-FRP-001.6",
+      "doc": "First installation prepares useful data before showing the dashboard",
+      "doc_id": "c11e8f26-d19d-4a5d-ac10-7e1e99188a18",
+      "text": "When opened on the hosted dashboard, the system shall derive readiness from the selected machine's decrypted snapshot, and shall not read the cloud host's local store."
     }
   ]
 }

@@ -1516,6 +1516,9 @@ _sync_progress_started_at: str | None = None
 # never records a terminal state). The banner is a fresh-install affordance; a
 # daemon restart resets this to False so the initial sync shows again.
 _sync_progress_done: bool = False
+# Set only after the daemon acquires its writer. Tests and CLI imports that
+# use the legacy progress-file helper must not open a user's real database.
+_startup_store = None
 
 
 def _record_sync_progress(
@@ -1527,6 +1530,12 @@ def _record_sync_progress(
     # "running" updates that would otherwise re-trigger the banner indefinitely.
     if _sync_progress_done and status != "complete":
         return
+    if _startup_store is not None:
+        try:
+            from clawmetry.startup import record_progress
+            record_progress(_startup_store, phase, done, total, status == "complete")
+        except Exception as exc:
+            log.warning("Could not persist dashboard readiness: %s", exc)
     try:
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         now = datetime.now(timezone.utc).isoformat()
@@ -1583,6 +1592,11 @@ def _build_first_run() -> dict:
         "status": None,
         "updated_at": None,
     }
+    if _startup_store is not None:
+        try:
+            out["readiness"] = _startup_store.query_startup_status()
+        except Exception as exc:
+            log.warning("Could not snapshot dashboard readiness: %s", exc)
     try:
         if SYNC_PROGRESS_FILE.exists():
             p = json.loads(SYNC_PROGRESS_FILE.read_text())
@@ -25080,7 +25094,9 @@ def run_daemon() -> None:
     #    "pre-checkpoint flush failed") doesn't name the offending PID.
     try:
         from clawmetry import local_store as _ls_warmup
-        _ls_warmup.get_store(read_only=False)
+        global _startup_store
+        _startup_store = _ls_warmup.get_store(read_only=False)
+        _record_sync_progress("discovering", 0)
         log.info("local_store writer warm-up: owned (intra-process RO upgrades will share this handle)")
     except Exception as _ws_e:
         _msg = str(_ws_e)
@@ -25186,6 +25202,7 @@ def run_daemon() -> None:
     except Exception as e:
         log.warning(f"  Session metadata error: {e}")
     try:
+        _record_sync_progress("runtime_history", 0)
         fr = sync_family_runtimes(config, state, paths)
         fr += sync_vm_usage_log(config, state, paths)
         if fr:
@@ -25281,17 +25298,21 @@ def run_daemon() -> None:
     # Same rationale as the per-tick checkpoint inside the main loop: never
     # commit an offset to disk while the events it represents are still in
     # volatile ring memory. INSERT OR IGNORE makes any replay a no-op.
+    _startup_flushed = False
     try:
         from clawmetry import local_store as _ls
+        _record_sync_progress("preparing", 0)
         _ls.get_store().flush()
+        _startup_flushed = True
     except Exception as _flush_e:
         log.warning(
             "startup pre-checkpoint local-store flush failed (continuing): %s",
             _flush_e,
         )
     save_state(state)
+    if _startup_flushed:
+        _record_sync_progress("complete", 0, 0, status="complete")
     send_heartbeat(config)
-    _record_sync_progress("complete", 0, 0, status="complete")
     log.info("Recent sync complete — Brain feed should show current activity")
 
     # Validate stored log offsets on startup — prevents silent gaps
