@@ -1261,6 +1261,18 @@
       "text": "When either value is missing or unrecognised, the system shall leave that stored value unchanged and serve the trial response unchanged, exactly as for the deployment."
     },
     {
+      "id": "AC-OGV-AIH-004.1",
+      "doc": "An Account Remembers That It Installed, and That It Uninstalled",
+      "doc_id": "d30b15cc-50e3-4858-bd6b-05b772341332",
+      "text": "When a person uninstalls, the install shall send one install-lifecycle ping with the uninstall event, under the same opt-out rules as every other lifecycle ping."
+    },
+    {
+      "id": "AC-OGV-AIH-004.2",
+      "doc": "An Account Remembers That It Installed, and That It Uninstalled",
+      "doc_id": "d30b15cc-50e3-4858-bd6b-05b772341332",
+      "text": "When the ping cannot be sent, the uninstall shall complete exactly as it does today."
+    },
+    {
       "id": "AC-RSO-CCT-001.1",
       "doc": "Claude Code Native Telemetry: One-Command OTel Wiring + Full Signal Mapping",
       "doc_id": "a4bd3c7e-8bb9-4b80-92c7-d74dbe0fd504",
