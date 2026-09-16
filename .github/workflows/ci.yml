@@ -1688,8 +1688,10 @@ jobs:
           pip install -e . pyyaml httpx
       - name: Check kill-switch
         id: gate
+        env:
+          EVALS_GATE: ${{ vars.CLAWMETRY_EVALS_GATE }}
         run: |
-          if [ "${{ vars.CLAWMETRY_EVALS_GATE }}" = "off" ]; then
+          if [ "$EVALS_GATE" = "off" ]; then
             echo "::warning::eval gate SKIPPED -- CLAWMETRY_EVALS_GATE repo var set to 'off'"
             echo "skip=1" >> "$GITHUB_OUTPUT"
           else
