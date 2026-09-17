@@ -91,7 +91,10 @@ jobs:
           python3 -c "import sys, clawmetry.cli; print('clawmetry.cli imports on', sys.version.split()[0])"
 
       - name: Install ruff (fast linter)
-        run: pip install ruff
+        # ci-lint-ruff.txt is the hash-pinned set for this step: a bare
+        # `pip install ruff` linted with whatever the index served that
+        # minute. ruff declares no dependencies, so the file is one name.
+        run: pip install --require-hashes -r .github/requirements/ci-lint-ruff.txt
       # `W503` is a flake8 code that ruff does not implement, so ruff exited
       # with "invalid value 'W503' for '--ignore <RULE_CODE>'" on every run
       # since this step was added. `|| true` swallowed the usage error, so the
@@ -168,7 +171,12 @@ jobs:
         # Flask test client (paywall funnel telemetry + the gate's free
         # escape) cannot even be COLLECTED without it, and a collection
         # error fails the whole step, not just that file.
-        run: pip install pytest pyyaml requests flask
+        #
+        # ci-lint-verify.txt is the hash-pinned set carrying those four and
+        # their closure, resolved for 3.9. It is deliberately NOT ci-tests.txt,
+        # which is resolved for 3.11 and pins releases that cannot install
+        # here; see that file's header for the boundary.
+        run: pip install --require-hashes -r .github/requirements/ci-lint-verify.txt
 
       # A malformed workflow fails at STARTUP, before any step runs, and shows
       # up named after its own file path. c6-schedule-heal.yml carried two such
