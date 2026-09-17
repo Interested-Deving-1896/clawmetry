@@ -747,7 +747,28 @@ jobs:
       # fail_on_unmatched_files is deliberately true: a missing installer
       # must keep the release draft rather than publish a "latest" whose
       # download links 404 (seen live on v0.12.674, 2026-08-10).
+      #
+      # zizmor superfluous-actions, analysed and accepted. The audit fires
+      # because the runner does ship `gh`, and `gh release upload` + `gh
+      # release edit --draft=false --latest` covers most of what this step
+      # does. What it does not cover is the one flag the comment above is
+      # about. `fail_on_unmatched_files` makes "a glob matched nothing" an
+      # error BEFORE anything publishes; `gh release upload` has no
+      # equivalent, so a shell rewrite would rest on an unmatched glob being
+      # passed through literally and `gh` happening to reject it — a shell
+      # behaviour, not a declared contract, and one `nullglob` silently
+      # inverts. Getting that subtly wrong publishes a "latest" release whose
+      # download links 404, which is precisely the v0.12.674 incident, and it
+      # is invisible to CI because it only reproduces on a real tag push.
+      #
+      # The supply-chain control that actually governs a third-party action
+      # here is the pin, and this one is pinned to a full commit SHA rather
+      # than a tag. The audit is Informational and is about the runner
+      # already providing the functionality, not about this action being
+      # unpinned or untrusted. The job's `contents: write` is unchanged
+      # either way — declaring this grants nothing and moves no scope.
       - name: Attach to release and publish
+        # zizmor: ignore[superfluous-actions]
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           draft: false
