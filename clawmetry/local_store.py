@@ -2342,6 +2342,44 @@ _DDL = [
     """,
     "CREATE INDEX IF NOT EXISTS idx_self_reports_ts ON agent_self_reports(ts DESC)",
     "CREATE INDEX IF NOT EXISTS idx_self_reports_session ON agent_self_reports(session_id, ts)",
+    # ── Agent supply chain inventory (#5947, REQ-GOV-SCI-001) ───────────
+    # What each agent runtime loads from disk: MCP servers, skills, plugins,
+    # instruction files, hook and settings files. One row per component,
+    # keyed by clawmetry/agent_inventory.component_id. ``readers`` and
+    # ``details`` are JSON. ``last_change`` is baseline/new/changed/removed;
+    # ``changed_at`` is 0 for a baseline row. Written only by the daemon's
+    # inventory pass. Additive: CREATE TABLE IF NOT EXISTS, no version bump.
+    """
+    CREATE TABLE IF NOT EXISTS agent_components (
+        component_id   VARCHAR PRIMARY KEY,
+        kind           VARCHAR NOT NULL,
+        name           VARCHAR NOT NULL,
+        scope          VARCHAR NOT NULL,
+        workspace      VARCHAR NOT NULL DEFAULT '',
+        source         VARCHAR NOT NULL DEFAULT '',
+        readers        VARCHAR NOT NULL DEFAULT '[]',
+        version        VARCHAR NOT NULL DEFAULT '',
+        content_hash   VARCHAR NOT NULL,
+        previous_hash  VARCHAR NOT NULL DEFAULT '',
+        status         VARCHAR NOT NULL DEFAULT 'present',
+        last_change    VARCHAR NOT NULL DEFAULT 'baseline',
+        first_seen     BIGINT NOT NULL,
+        last_seen      BIGINT NOT NULL,
+        changed_at     BIGINT NOT NULL DEFAULT 0,
+        change_count   INTEGER NOT NULL DEFAULT 0,
+        details        VARCHAR NOT NULL DEFAULT '{}'
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_agent_components_scope ON agent_components(scope, workspace)",
+    # A scope (the home configuration, or one working directory) that has
+    # been inventoried at least once. Its first pass is a silent baseline.
+    """
+    CREATE TABLE IF NOT EXISTS agent_component_scopes (
+        scope_key   VARCHAR PRIMARY KEY,
+        first_seen  BIGINT NOT NULL,
+        last_scan   BIGINT NOT NULL
+    )
+    """,
 ]
 
 
@@ -7394,6 +7432,118 @@ class LocalStore(ProjectsMixin, TrailStoreMixin):
                 "updated_at": int(r[5] or 0),
             })
         return out
+
+    # ── Agent supply chain inventory (#5947) ─────────────────────────────
+    _AGENT_COMPONENT_COLS = (
+        "component_id", "kind", "name", "scope", "workspace", "source",
+        "readers", "version", "content_hash", "previous_hash", "status",
+        "last_change", "first_seen", "last_seen", "changed_at", "change_count",
+        "details")
+
+    def _agent_component_dicts(self, rows) -> list:
+        out = []
+        for r in rows or []:
+            d = dict(zip(self._AGENT_COMPONENT_COLS, r))
+            for key, empty in (("readers", []), ("details", {})):
+                try:
+                    d[key] = json.loads(d.get(key) or "") if d.get(key) else empty
+                except Exception:
+                    d[key] = empty
+            for key in ("first_seen", "last_seen", "changed_at", "change_count"):
+                d[key] = int(d.get(key) or 0)
+            out.append(d)
+        return out
+
+    def record_agent_inventory(self, scope_key: str, scope: str, workspace: str,
+                               components: list, now_ms: int = 0,
+                               unreadable_sources=None, complete=None) -> dict:
+        """Diff one scope's fresh inventory against what is stored and write it.
+
+        Returns ``{"baseline": bool, "changes": [...], "written": n}``. The
+        first pass of a scope is a baseline: rows are written, no change is
+        reported (clawmetry/agent_inventory.diff_inventory). Rows from a source
+        the collection could not read are kept, not removed; both arguments
+        default to what an ``agent_inventory.Collection`` carries. Never raises.
+        """
+        if unreadable_sources is None:
+            unreadable_sources = list(getattr(components, "unreadable", ()) or ())
+        if complete is None:
+            complete = bool(getattr(components, "complete", True))
+        out: dict = {"baseline": False, "changes": [], "written": 0}
+        try:
+            from clawmetry import agent_inventory as _inv
+            key = str(scope_key or "")[:1024]
+            if not key:
+                return out
+            now_ms = int(now_ms or time.time() * 1000)
+            cols = ", ".join(self._AGENT_COMPONENT_COLS)
+            with self._write_lock:
+                seen = self._conn.execute(
+                    "SELECT 1 FROM agent_component_scopes WHERE scope_key = ?",
+                    [key]).fetchone()
+                baseline = seen is None
+                prev = self._agent_component_dicts(self._conn.execute(
+                    f"SELECT {cols} FROM agent_components "
+                    "WHERE scope = ? AND workspace = ?",
+                    [str(scope or ""), str(workspace or "")]).fetchall())
+                rows, changes = _inv.diff_inventory(
+                    prev, [c for c in (components or []) if isinstance(c, dict)],
+                    baseline=baseline, now_ms=now_ms,
+                    unreadable_sources=unreadable_sources, complete=complete)
+                marks = ", ".join("?" for _ in self._AGENT_COMPONENT_COLS)
+                for r in rows:
+                    self._conn.execute(
+                        f"INSERT OR REPLACE INTO agent_components ({cols}) "
+                        f"VALUES ({marks})",
+                        [r.get("component_id"), r.get("kind"), r.get("name"),
+                         r.get("scope"), r.get("workspace") or "",
+                         r.get("source") or "",
+                         json.dumps(list(r.get("readers") or [])),
+                         r.get("version") or "", r.get("content_hash") or "",
+                         r.get("previous_hash") or "", r.get("status") or "present",
+                         r.get("last_change") or "baseline",
+                         int(r.get("first_seen") or now_ms),
+                         int(r.get("last_seen") or now_ms),
+                         int(r.get("changed_at") or 0),
+                         int(r.get("change_count") or 0),
+                         json.dumps(r.get("details") or {}, default=str)])
+                self._conn.execute(
+                    "INSERT INTO agent_component_scopes (scope_key, first_seen, last_scan) "
+                    "VALUES (?, ?, ?) ON CONFLICT (scope_key) DO UPDATE "
+                    "SET last_scan = excluded.last_scan", [key, now_ms, now_ms])
+            out.update(baseline=baseline, changes=changes, written=len(rows))
+        except Exception as e:  # noqa: BLE001 - never stop the daemon tick
+            out["error"] = str(e)[:200]
+        return out
+
+    def query_agent_inventory(self, limit: int = 500, changed_since_ms: int = 0) -> dict:
+        """The stored inventory, recent changes first.
+
+        ``{"components": [...], "scopes": n, "last_scan": ms}``. With
+        ``changed_since_ms`` only rows changed at or after it. ``{}`` on error,
+        so a caller can tell "unreadable" from "nothing inventoried".
+        """
+        try:
+            lim = max(1, min(int(limit or 500), 2000))
+        except (TypeError, ValueError):
+            lim = 500
+        try:
+            since = max(0, int(changed_since_ms or 0))
+        except (TypeError, ValueError):
+            since = 0
+        try:
+            where, params = ("WHERE changed_at >= ? ", [since]) if since else ("", [])
+            rows = self._fetch(
+                "SELECT " + ", ".join(self._AGENT_COMPONENT_COLS) +
+                " FROM agent_components " + where +
+                "ORDER BY changed_at DESC, kind, name LIMIT ?", params + [lim])
+            scopes = self._fetch(
+                "SELECT COUNT(*), COALESCE(MAX(last_scan), 0) FROM agent_component_scopes", [])
+        except Exception:
+            return {}
+        n, last = (scopes[0] if scopes else (0, 0))
+        return {"components": self._agent_component_dicts(rows),
+                "scopes": int(n or 0), "last_scan": int(last or 0)}
 
     def query_policy_actions(self, limit: int = 50) -> list:
         """Recent policy decisions, newest first. ``[]`` on any error."""
@@ -12578,6 +12728,32 @@ class LocalStore(ProjectsMixin, TrailStoreMixin):
         return sorted(out.values(), key=lambda r: r["cost_usd"], reverse=True)
 
     # ── node settings (operator-set knobs both processes read) ──────────
+
+    def query_guard_checks(self) -> dict:
+        """Resolve check status in the daemon, whose environment runs them."""
+        from clawmetry.guard_checks import catalogue
+        try:
+            rows = self._fetch("SELECT key, value FROM node_settings", [])
+            return catalogue({str(r[0]): r[1] for r in rows})
+        except Exception:
+            logging.getLogger(__name__).warning("Guard check settings could not be read")
+            return catalogue()
+
+    def set_guard_check(self, kind: str, enabled: bool,
+                        requested_at_ms: int | None = None) -> None:
+        """Newest explicit choice wins, including duplicate relay deliveries."""
+        from clawmetry.guard_checks import PREFIX, validate
+        validate(kind, enabled)
+        stamp = int(time.time() * 1000) if requested_at_ms is None else int(requested_at_ms)
+        if stamp < 0 or stamp > int(time.time() * 1000) + 120000:
+            raise ValueError("Invalid Guard setting timestamp")
+        with self._write_lock:
+            self._conn.execute(
+                "INSERT INTO node_settings (key, value, updated_at) VALUES (?, ?, ?)"
+                " ON CONFLICT (key) DO UPDATE SET value=excluded.value,"
+                " updated_at=excluded.updated_at"
+                " WHERE excluded.updated_at >= node_settings.updated_at",
+                [PREFIX + kind, "true" if enabled else "false", stamp])
 
     def get_node_setting(self, key: str) -> str | None:
         """One setting's raw string value, or None when unset."""
@@ -18958,6 +19134,29 @@ class LocalStore(ProjectsMixin, TrailStoreMixin):
                     _READ_CACHE.pop(min(_READ_CACHE, key=lambda k: _READ_CACHE[k][0]), None)
             _READ_CACHE[key] = (now, rows)
         return rows
+
+    def query_startup_status(self) -> dict[str, Any]:
+        """Cheap readiness probe, without scanning or counting event history.
+
+        Daemon diagnostic events are not evidence of useful agent activity.
+        A session row also counts: some runtimes import metadata before events.
+        Exceptions propagate so an unreadable store never looks empty.
+        """
+        from clawmetry.startup import read_progress
+
+        progress = read_progress(self)
+        rows = self._fetch(
+            "SELECT EXISTS(SELECT 1 FROM sessions WHERE agent_type != 'daemon' LIMIT 1) OR "
+            "EXISTS(SELECT 1 FROM events WHERE agent_type != 'daemon' LIMIT 1)",
+            [],
+        )
+        has_data = bool(rows and rows[0][0])
+        return {
+            **progress,
+            "available": True,
+            "has_data": has_data,
+            "initialized": bool(progress.get("initialized")) or (not progress and has_data),
+        }
 
     def health(self) -> dict[str, Any]:
         """Snapshot of store state — for the /local/health endpoint and the

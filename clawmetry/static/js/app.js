@@ -1277,6 +1277,7 @@ async function ackAllAlerts() {
 function visibilitySetInterval(fn, ms) {
   return setInterval(function() {
     if (typeof document !== 'undefined' && document.hidden) return;
+    if (window.cmFirstRun && window.cmFirstRun.active) return;
     try { fn(); } catch (e) {}
   }, ms);
 }
@@ -2168,7 +2169,8 @@ function switchTab(name) {
   try { _cmApplyRuntimeScopeNote(name); } catch (e) {}
   var tabs = document.querySelectorAll('.nav-tab');
   tabs.forEach(function(t) { if (t.getAttribute('onclick') && t.getAttribute('onclick').indexOf("'" + name + "'") !== -1) t.classList.add('active'); });
-  var leftItems = document.querySelectorAll('.left-nav-item[data-tab="' + name + '"]');
+  var navName = (name === "approvals" || name === "alerts") ? "guard" : name;
+  var leftItems = document.querySelectorAll('.left-nav-item[data-tab="' + navName + '"]');
   leftItems.forEach(function(t) { t.classList.add('active'); });
   // Phase A beginner IA: if the selected tab lives inside a collapsed drawer
   // (Developer / Advanced), reveal that drawer so the active item is visible.
@@ -2201,6 +2203,10 @@ function switchTab(name) {
   if (name !== 'crons' && _cronAutoRefreshTimer) { clearInterval(_cronAutoRefreshTimer); _cronAutoRefreshTimer = null; }
   if (name === 'inventory') { if (typeof renderInventory === 'function') renderInventory(); }
   if (name === 'overview') loadAll();
+  // #5935: boot no longer opens the log and health streams on a screen that
+  // does not show them, so the screens that DO show them open them on entry.
+  // Both starters guard on their own handle, so this is idempotent.
+  if (_cmScreenWantsStreams(name)) _cmStartScreenStreams();
   // #5935: startup no longer preloads Overview's system health and tasks when
   // the page lands on another screen, so the first visit loads them here at
   // once instead of waiting for the next 10-30 s refresh tick. A load that
@@ -2656,7 +2662,22 @@ async function loadActivityToday() {
   var _rt = (typeof _cmRuntimeFilter === 'function') ? _cmRuntimeFilter() : 'all';
   var _q = (_rt && _rt !== 'all') ? ('?runtime=' + encodeURIComponent(_rt)) : '';
   var d = {};
-  try { d = await fetchJsonWithTimeout('/api/activity-today' + _q, 4000) || {}; } catch (e) { return; }
+  try {
+    d = await _cmTileFetch('/api/activity-today' + _q) || {};
+  } catch (e) {
+    // #5935: the strip used to hide itself here, which looks exactly like
+    // "nothing happened today". A failed read is not a quiet day: say so, and
+    // offer the retry, rather than leaving the zeros in the template markup
+    // to be mistaken for measurements.
+    strip.innerHTML = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--text-secondary);">'
+      + '<span>' + escapeHtml(t('app.activity_today_unreadable', null,
+          "Today's activity could not be read right now.")) + '</span>'
+      + '<button onclick="loadActivityToday()" style="background:transparent;border:1px solid var(--border-primary);'
+      + 'color:var(--text-secondary);border-radius:4px;padding:1px 8px;font-size:11px;cursor:pointer;">'
+      + escapeHtml(t('common.retry', null, 'Retry')) + '</button></div>';
+    strip.style.display = '';
+    return;
+  }
   var tool = d.tool_calls_today || 0, exec = d.exec_calls_today || 0,
       brow = d.browser_actions_today || 0, msgs = d.messages_today || 0,
       uniq = d.unique_tools_today || 0;
@@ -2673,7 +2694,7 @@ async function loadOutcomeTile() {
   var _ocRt = (typeof _cmRuntimeFilter === 'function') ? _cmRuntimeFilter() : 'all';
   var _ocQ = (_ocRt && _ocRt !== 'all') ? ('&runtime=' + encodeURIComponent(_ocRt)) : '';
   try {
-    var d = await fetchJsonWithTimeout('/api/outcomes?window=1d' + _ocQ, 3000);
+    var d = await _cmTileFetch('/api/outcomes?window=1d' + _ocQ);
     if (!d || d.total === 0) {
       summaryEl.textContent = t("app.no_completed_tasks_yet_today_outcomes_will_appear_", null, "No completed tasks yet today. Outcomes will appear once sessions finish.");
       return;
@@ -2693,7 +2714,14 @@ async function loadOutcomeTile() {
       return '<span style="' + color + '">' + p + '</span>';
     }).join('  ·  ');
   } catch (e) {
-    summaryEl.textContent = t("app.task_outcomes_unavailable_right_now", null, "Task outcomes unavailable right now.");
+    // #5935: never leave the template's "Loading task outcomes..." on screen
+    // for a read that has already failed — an unending spinner reads as a
+    // broken product. A sentence, and a way to ask again.
+    summaryEl.innerHTML = escapeHtml(t("app.task_outcomes_unavailable_right_now", null,
+        "Task outcomes could not be read right now."))
+      + ' <button onclick="loadOutcomeTile()" style="background:transparent;border:1px solid var(--border-primary);'
+      + 'color:var(--text-secondary);border-radius:4px;padding:1px 8px;font-size:11px;cursor:pointer;">'
+      + escapeHtml(t('common.retry', null, 'Retry')) + '</button>';
   }
 }
 
@@ -3801,6 +3829,51 @@ async function fetchJsonWithTimeout(url, timeoutMs) {
 var _CM_OVERVIEW_BUDGET_MS = 15000;
 function _cmFetchOverviewShared() {
   return fetchJsonWithTimeout('/api/overview', _CM_OVERVIEW_BUDGET_MS);
+}
+
+// #5935 (busy daemon): one small Overview tile, fetched so that a server which
+// is slow right now does not turn into a wrong answer on the screen.
+//
+// Measured on a scratch install whose daemon was writing while 12 readers
+// queried the store (240k events): opening Overview sent ~40 requests against
+// the browser's six connections per origin, and the store answered
+// /api/outcomes in 28.5 s and /api/activity-today in 9.3 s. The tiles asked
+// with 3 s and 4 s budgets, so both aborted on the client (3002 ms, 4003 ms)
+// while the answer was still on its way.
+//
+// Two budgets rather than one long one: the first is the normal case, and a
+// caller that loses it retries ONCE with the patience a busy store needs. The
+// shared in-flight dedup in fetchJsonWithTimeout means the retry cannot become
+// a second simultaneous request for the same URL.
+var _CM_TILE_BUDGET_MS = 8000;
+var _CM_TILE_RETRY_BUDGET_MS = 20000;
+async function _cmTileFetch(url) {
+  try {
+    return await fetchJsonWithTimeout(url, _CM_TILE_BUDGET_MS);
+  } catch (e) {
+    // Retry only a timeout/abort — a 404 or a 500 is an answer, and asking
+    // twice for it just burns another connection.
+    var slow = (e === 'timeout') || !!(e && (e.name === 'AbortError' || e.name === 'TimeoutError'));
+    if (!slow) throw e;
+    return await fetchJsonWithTimeout(url, _CM_TILE_RETRY_BUDGET_MS);
+  }
+}
+
+// #5935: the live log and health streams are EventSources that hold a
+// connection for as long as they are open — 2 of the browser's 6 per origin.
+// They used to open during boot on every screen, including the Sessions list
+// the dashboard lands on, which shows neither of them. Open them only for a
+// screen that renders them (Overview draws the health dots and the log
+// preview; the Logs tab draws the full stream), and let switchTab open them
+// when the user actually goes there.
+function _cmScreenWantsStreams(tab) {
+  return !tab || tab === 'overview' || tab === 'logs';
+}
+function _cmStartScreenStreams() {
+  if (!_cmScreenWantsStreams(_cmCurrentTab)) return false;
+  try { startLogStream(); } catch (e) {}
+  try { startHealthStream(); } catch (e) {}
+  return true;
 }
 
 // Same root cause as above — when the browser tab is hidden the 5 SSE are
@@ -5000,6 +5073,14 @@ async function loadAll() {
   try {
     // Runtime scope banner on first paint (showTab only fires on tab switch).
     try { _cmApplyRuntimeScopeNote('overview'); } catch (e) {}
+    // #5935: the two "Today" tiles ask for their own small endpoints, so they
+    // start HERE rather than after the shared /api/overview answer. They used
+    // to be queued behind it: with the daemon busy, /api/overview hit its own
+    // 15 s budget, loadAll fell into the catch below, and these two never ran
+    // at all — the outcome tile sat on the template's "Loading task
+    // outcomes..." for as long as the page stayed open.
+    if (typeof loadOutcomeTile === 'function') loadOutcomeTile().catch(function(e){console.warn('outcome tile failed',e)});
+    if (typeof loadActivityToday === 'function') loadActivityToday().catch(function(e){console.warn('activity today failed',e)});
     // Render overview quickly; do not block on heavy usage aggregation.
     // #5935: 15 s, not 3 s. On a tab switch this is the first /api/overview
     // caller, so its timer aborts the shared request. Measured with the daemon
@@ -5028,10 +5109,8 @@ async function loadAll() {
     if (typeof loadAutonomy === 'function') setTimeout(function(){ loadAutonomy().catch(function(e){console.warn('autonomy failed',e)}); }, 2600);
     if (typeof loadAnomalyPanel === 'function') setTimeout(function(){ loadAnomalyPanel().catch(function(e){console.warn('anomaly panel failed',e)}); }, 3600);
     if (typeof loadActivityHeatmap === 'function') setTimeout(function(){ loadActivityHeatmap().catch(function(e){console.warn('activity heatmap failed',e)}); }, 4500);
-    // Issue #1614 — outcome tile (Today: N tasks, X% success).
-    if (typeof loadOutcomeTile === 'function') setTimeout(function(){ loadOutcomeTile().catch(function(e){console.warn('outcome tile failed',e)}); }, 800);
-    // UI-coverage audit — today's activity counters strip.
-    if (typeof loadActivityToday === 'function') setTimeout(function(){ loadActivityToday().catch(function(e){console.warn('activity today failed',e)}); }, 900);
+    // (Issue #1614's outcome tile and the activity strip now start at the top
+    // of this function, before the shared /api/overview await — see #5935.)
     // Needs-you strip. First on the page, so it loads first — this is the
     // question people open the dashboard with.
     if (typeof loadNeedsYou === 'function') loadNeedsYou().catch(function(e){console.warn('needs-you failed',e)});
@@ -10728,8 +10807,9 @@ var LOOP_KIND_LABEL = {
   // Not the agent's behaviour: what was in the folder it was pointed at.
   // Mirrors clawmetry/repo_scan.py WORKSPACE_KINDS.
   repo_config_exec: 'This folder is set up to run a program',
-  agent_config_tamper: 'An agent hook config in this folder was changed',
-  package_manifest_exec: 'Installing this folder\'s dependencies runs its own code'
+  agent_config_tamper: 'An agent hook, settings or instruction file was changed',
+  package_manifest_exec: 'Installing this folder\'s dependencies runs its own code',
+  agent_component_change: 'An MCP server, skill or plugin this agent loads was added or changed'
 };
 
 // What ignoring this is estimated to cost. Blank when we do not know, because
@@ -20396,7 +20476,10 @@ async function loadTranscripts() {
     try { _rtFilter = (_cmRuntimeFilter && _cmRuntimeFilter()) || ''; } catch (_e) {}
     var _tUrl = '/api/transcripts' +
       (_rtFilter && _rtFilter !== 'all' ? '?runtime=' + encodeURIComponent(_rtFilter) : '');
-    var data = await fetch(_tUrl).then(r => r.json());
+    var data = await fetch(_tUrl).then(function (r) {
+      if (!r.ok) throw new Error('transcripts unavailable');
+      return r.json();
+    });
     var html = '';
     // ChatGPT-style row: derived title on top (first user prompt, when the
     // daemon shipped one in the snapshot), with the full session id demoted
@@ -20554,8 +20637,10 @@ async function loadTranscripts() {
         history.replaceState(null, '', window.location.pathname + window.location.search);
       }
     } catch (e) {}
+    return data.store_available !== false;
   } catch(e) {
     document.getElementById('transcript-list').innerHTML = '<div style="padding:16px;color:#666;">' + t("app.failed_to_load_transcripts", null, "Failed to load transcripts") + '</div>';
+    return false;
   }
 }
 
@@ -22512,6 +22597,9 @@ async function _cmSyncTick() {
 async function cmSyncInit() {
   // Cloud mode keeps its existing cm-sync-bar (Phase 2 promotes this component).
   if (window.CLOUD_MODE) return;
+  // First-install preparation owns progress now; do not start a second
+  // progress poller behind its screen.
+  if (window.cmFirstRun) return;
   // #1937: the banner describes CLOUD-side sync work. Don't show it when
   //   * the user opted out (CLAWMETRY_NO_CLOUD=1 or ~/.clawmetry/nocloud), or
   //   * the user never connected (no config.json -> nothing to sync).
@@ -27491,6 +27579,14 @@ function loadCostOptimizerData(isRefresh) {
     html += '</div>';
 
     // ══ SECTION 3: Local models, only for local traffic ══════════
+    // #5934: on the hosted dashboard this payload is the daemon's snapshot
+    // slice (`_source` "snapshot" / "snapshot.costOptimizer"), which by design
+    // carries no host state — llmfit model fit and whether Ollama is installed
+    // exist only on the computer itself. Printing "pip install llmfit" or a
+    // brew command to a reader on app.clawmetry.com asks them to install
+    // something on a machine they are not sitting at, so the hosted panel says
+    // where that advice lives instead of offering an install instruction.
+    var _coHosted = /^snapshot(\.|$)/.test(String(data._source || ''));
     var la = data.localAdvice || null;
     var _accelLabel = '';
     if (la && la.show) {
@@ -27513,7 +27609,7 @@ function loadCostOptimizerData(isRefresh) {
       if (sys.backend) html += '<span class="hw-card-chip green">' + escapeHtml(sys.backend) + '</span>';
       html += '</div>';
 
-      if (!data.ollamaInstalled) {
+      if (!_coHosted && !data.ollamaInstalled) {
         html += '<div class="co-ollama-prompt">';
         html += '<div style="font-size:13px;color:#a78bfa;font-weight:600;">Ollama is not installed on this machine</div>';
         html += '<div class="co-ollama-cmd">' + escapeHtml(_ollamaInstall) + '</div>';
@@ -27544,6 +27640,11 @@ function loadCostOptimizerData(isRefresh) {
           html += '</div>';
           html += '</div>';
         });
+      } else if (_coHosted) {
+        html += '<div class="cost-opt-local-fit-hosted" style="color:var(--text-muted);font-size:13px;padding:10px 0;">'
+          + escapeHtml(t('app.cost_opt_local_fit_on_device', null,
+              'Which local models fit this hardware is worked out on the computer itself, so that advice is only available in the dashboard running there.'))
+          + '</div>';
       } else {
         html += '<div style="color:var(--text-muted);font-size:13px;padding:10px 0;">llmfit is not available, so no model fit could be computed. Install it with: <code>pip install llmfit</code></div>';
       }
@@ -27557,7 +27658,12 @@ function loadCostOptimizerData(isRefresh) {
 
     body.innerHTML = html;
     document.getElementById('comp-modal-footer').textContent = t("app.auto_refreshing_last_updated", null, "Auto-refreshing - Last updated: ") + new Date().toLocaleTimeString()
-      + (_accelLabel ? ' - ' + (data.llmfitAvailable ? 'llmfit ✓' : 'no llmfit') + ' - ' + _accelLabel + ' backend' : '');
+      + (_accelLabel
+          // Hosted: llmfit never runs off the computer, so "no llmfit" would
+          // report a missing tool rather than a slice that is not shipped.
+          ? (_coHosted ? ' - ' + _accelLabel + ' backend'
+                       : ' - ' + (data.llmfitAvailable ? 'llmfit ✓' : 'no llmfit') + ' - ' + _accelLabel + ' backend')
+          : '');
   }).catch(function(e) {
     clearTimeout(timer);
     if (!isCompModalActive(expectedNodeId)) return;
@@ -29219,6 +29325,10 @@ var BOOT_HARD_TIMEOUT_MS = 8000;
 var _bootFinished = false;
 function _safeFinishBoot() {
   if (_bootFinished) return;
+  if (window.cmFirstRun && window.cmFirstRun.checking) {
+    window.cmFirstRun.checked.then(_safeFinishBoot);
+    return;
+  }
   _bootFinished = true;
   finishBootOverlay();
 }
@@ -29383,11 +29493,17 @@ async function bootDashboard() {
   try { loadSandboxStatus(); } catch (e) {}
 
   // Connect live streams last so they don't eat the waitress thread pool
-  // while the initial fetches are still in flight.
+  // while the initial fetches are still in flight — and only for a screen that
+  // shows them (#5935). Each is an EventSource holding one of the browser's
+  // six connections per origin for as long as it is open; opened on the
+  // Sessions landing screen, which renders neither, they took 2 of the 6 away
+  // from the requests the visible screen was waiting on. switchTab opens them
+  // when the user goes to Overview or Logs.
   setBootStep('streams', 'loading', 'Connecting live streams');
-  try { startLogStream(); } catch (e) {}
-  try { startHealthStream(); } catch (e) {}
-  setBootStep('streams', 'done', 'Live streams connected');
+  var _streamsOpened = _cmStartScreenStreams();
+  setBootStep('streams', 'done', _streamsOpened
+    ? 'Live streams connected'
+    : 'Live streams connect when you open a screen that shows them');
 
   // (#5935) No background prefetch of the Crons and Memory screens here any
   // more. Nothing outside those screens reads what they load, switchTab()
@@ -30399,9 +30515,19 @@ function loadAgentGraph() {
   var statsEl  = document.getElementById('agent-graph-stats');
   if (!statusEl) return;
   statusEl.style.display = 'block';
-  statusEl.textContent = 'Loading…';
   if (svgEl) svgEl.style.display = 'none';
   if (statsEl) statsEl.style.display = 'none';
+  // Same posture as the Guard inventory card above: /api/local/* is
+  // cloud-disabled and answers 410 Gone, and the browser logs that failure to
+  // the console before the .then() below ever sees it. On the hosted
+  // dashboard, say where the graph lives instead of asking a question this
+  // deployment cannot answer.
+  if (window.CLOUD_MODE) {
+    statusEl.textContent = t('app.agent_graph_local_only', null,
+      'The agent graph is built from your local data store, so it is only available on the dashboard running on your machine (http://localhost:8900).');
+    return;
+  }
+  statusEl.textContent = 'Loading…';
 
   var win   = parseInt((document.getElementById('agent-graph-window') || {}).value || '86400', 10);
   var now   = Math.floor(Date.now() / 1000);
@@ -31856,14 +31982,15 @@ var GUARD_KIND_LABEL = {
   // policy form makes you name them rather than folding them into "any
   // signal". Keys mirror clawmetry/repo_scan.py WORKSPACE_KINDS.
   repo_config_exec: 'Repo config runs a program',
-  agent_config_tamper: 'Agent hook config changed',
-  package_manifest_exec: 'Installing deps runs its code'
+  agent_config_tamper: 'Agent config or instructions changed',
+  package_manifest_exec: 'Installing deps runs its code',
+  agent_component_change: 'MCP server, skill or plugin changed'
 };
 
 // The workspace half of GUARD_KIND_LABEL, so a renderer can tell the two
 // questions apart without hard-coding kind strings a second time.
 var GUARD_WORKSPACE_KINDS = ['repo_config_exec', 'agent_config_tamper',
-                             'package_manifest_exec'];
+                             'package_manifest_exec', 'agent_component_change'];
 
 // The policy form's condition list, built from GUARD_KIND_LABEL rather than
 // re-typed. A hand-kept second copy is how a new kind ends up renderable but
@@ -31919,11 +32046,141 @@ function guardAgo(ts) {
 }
 
 function loadGuardTab() {
+  if (typeof guardLoadWorkspace === "function") { guardLoadWorkspace(); loadGuardInventory(); return; }
   loadGuardSessions();
   loadGuardPolicies();
   loadGuardActions();
   loadGuardNondeterminism();
+  loadGuardInventory();
   loadGuardSelfReports();
+}
+
+// ── What your agents load (#5947) ─────────────────────────────────────────
+// The supply-chain inventory: MCP servers, skills, plugins, instruction files
+// and hook files, from /api/guard/inventory (the daemon fills it). Loaded with
+// the tab and on Refresh only; it changes on a five-minute cadence, so it
+// never polls. Three different empty states, because "not scanned yet",
+// "could not read the store" and "found nothing" are different answers.
+var GUARD_COMPONENT_KIND_LABEL = {
+  mcp_server: 'MCP server',
+  skill: 'Skill',
+  plugin: 'Plugin',
+  instructions: 'Instructions',
+  hooks: 'Hooks and settings'
+};
+var GUARD_RUNTIME_LABEL = {
+  claude_code: 'Claude Code', codex: 'Codex', cursor: 'Cursor',
+  gemini_cli: 'Gemini CLI', opencode: 'opencode', openclaw: 'OpenClaw'
+};
+
+function guardInventoryStatus(c) {
+  var ago = c.changed_at ? guardAgo(new Date(Number(c.changed_at)).toISOString()) : '';
+  var hash = String(c.content_hash || '').slice(0, 12);
+  var was = String(c.previous_hash || '').slice(0, 12);
+  var title = 'Content hash ' + hash + (was ? ', was ' + was : '');
+  if (c.details && c.details.hash_complete === false) {
+    title += '. The hash covers the first 400 files only.';
+  }
+  if (c.recent && c.last_change === 'new') {
+    return '<span class="pill pill-warn" title="' + guardEsc(title) + '">Added ' + guardEsc(ago) + '</span>';
+  }
+  if (c.recent && c.last_change === 'changed') {
+    return '<span class="pill pill-warn" title="' + guardEsc(title) + '">Changed ' + guardEsc(ago) + '</span>';
+  }
+  if (c.recent && c.last_change === 'removed') {
+    return '<span class="pill" title="' + guardEsc(title) + '">Removed ' + guardEsc(ago) + '</span>';
+  }
+  return '<span class="muted" title="' + guardEsc(title) + '">Unchanged</span>';
+}
+
+// The inventory is collected by the daemon on the machine the agents run on
+// and lives in that machine's DuckDB. The hosted dashboard has no copy, so
+// cloud_route_policy classifies /api/guard/inventory as cloud-disabled and
+// answers 410 Gone deliberately: a passthrough would report "nothing
+// inventoried" for a node that has an inventory.
+//
+// Asking anyway is not free. The BROWSER logs a failed request as
+// "Failed to load resource: the server responded with a status of 410"
+// before any JS sees the Response, so handling the status in .then() renders
+// the right words and still leaves a console error behind. Measured in
+// Chromium: one console error per hosted Guard visit, which is exactly what
+// the cloud-contract deploy gate counts, and which held production on
+// 0.12.883 while 0.12.884 and 0.12.885 failed to promote.
+//
+// So on the hosted dashboard the card answers from what we already know,
+// without asking. The 410 branch below stays for any other deployment that
+// disables the route without setting CLOUD_MODE.
+var GUARD_INVENTORY_LOCAL_ONLY =
+  'The inventory is read from the store on the machine your agents run on, so it is shown on the dashboard running on that machine (http://localhost:8900).';
+
+function loadGuardInventory() {
+  var el = document.getElementById('guard-inventory-body');
+  if (!el) return;
+  var sum = document.getElementById('guard-inventory-summary');
+  if (sum) sum.textContent = '';
+  if (window.CLOUD_MODE) {
+    el.innerHTML = '<div class="empty-state">' + GUARD_INVENTORY_LOCAL_ONLY + '</div>';
+    return;
+  }
+  fetch('/api/guard/inventory').then(function (r) {
+    if (r.status === 410) return { _cloud_disabled: true };
+    // Anything else that is not OK is a real failure, not an expected state:
+    // let it reach the catch below so it is both shown and logged.
+    if (!r.ok) throw new Error('/api/guard/inventory answered ' + r.status);
+    return r.json();
+  }).then(function (d) {
+    if (d && d._cloud_disabled) {
+      el.innerHTML = '<div class="empty-state">' + GUARD_INVENTORY_LOCAL_ONLY + '</div>';
+      return;
+    }
+    if (!d || d.store_available === false) {
+      el.innerHTML = '<div class="empty-state">Could not read the inventory from the local store right now. Try Refresh in a moment.</div>';
+      return;
+    }
+    if (!d.scanned) {
+      el.innerHTML = '<div class="empty-state">Nothing inventoried yet. The ClawMetry daemon on the machine your agents run on records this within a few minutes of starting.</div>';
+      return;
+    }
+    var rows = (d.components || []).filter(function (c) {
+      return c.status !== 'removed' || c.recent;
+    });
+    if (!rows.length) {
+      el.innerHTML = '<div class="empty-state">No MCP servers, skills, plugins, instruction files or hook files were found for the runtimes ClawMetry reads.</div>';
+      return;
+    }
+    if (sum) {
+      var present = rows.filter(function (c) { return c.status !== 'removed'; }).length;
+      var hours = Math.max(1, Math.round((Number(d.window_secs) || 3600) / 3600));
+      sum.textContent = present + ' component' + (present === 1 ? '' : 's') +
+        (d.recent ? ', ' + d.recent + ' added, changed or removed in the last ' + (hours === 1 ? 'hour' : hours + ' hours') : '');
+    }
+    var html = '<table class="data-table"><thead><tr>' +
+      '<th>Component</th><th>Kind</th><th>Read by</th><th>Where</th><th>Version</th><th>First seen</th><th>Status</th>' +
+      '</tr></thead><tbody>';
+    rows.forEach(function (c) {
+      var readers = (c.readers || []).map(function (r) { return GUARD_RUNTIME_LABEL[r] || r; }).join(', ');
+      var where = c.scope === 'global'
+        ? 'This machine'
+        : String(c.workspace || '').split(/[\\/]/).filter(Boolean).pop() || 'Project';
+      var first = c.first_seen ? new Date(Number(c.first_seen)).toLocaleDateString() : '';
+      html += '<tr><td title="' + guardEsc(c.source || '') + '">' + guardEsc(c.name) + '</td>' +
+        '<td>' + guardEsc(GUARD_COMPONENT_KIND_LABEL[c.kind] || c.kind) + '</td>' +
+        '<td>' + guardEsc(readers) + '</td>' +
+        '<td title="' + guardEsc(c.source || '') + '">' + guardEsc(where) + '</td>' +
+        '<td>' + (c.version ? guardEsc(c.version) : '<span class="muted">not declared</span>') + '</td>' +
+        '<td>' + guardEsc(first) + '</td>' +
+        '<td>' + guardInventoryStatus(c) + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    el.innerHTML = html;
+  }).catch(function (err) {
+    // A genuine failure (a 500, a dropped connection, a body that is not
+    // JSON) is not an expected state. Say so in the card and leave it in the
+    // console for whoever is looking: only the deliberate "disabled on this
+    // deployment" answer above is quiet.
+    console.error('Guard inventory load failed', err);
+    el.innerHTML = '<div class="empty-state">Could not load the inventory.</div>';
+  });
 }
 
 // Honest status line for the second "rogue agent" failure mode (same input,
@@ -32130,6 +32387,7 @@ function loadGuardSessions() {
       return;
     }
     var flagged = 0;
+    var findingCards = [];
     var atRisk = document.getElementById('guard-at-risk');
     if (atRisk) {
       var total = Number(d && d.spend_at_risk_usd) || 0;
@@ -32251,6 +32509,18 @@ function loadGuardSessions() {
         }
       }
 
+      if ((inc || ws) && !exited) {
+        var findings = [inc, ws].filter(Boolean);
+        findingCards.push('<article class="guard-finding"><header><strong>' + guardEsc((s.title || s.session_id || '').slice(0, 80)) +
+          '</strong><span>' + guardEsc(s.runtime) + '</span></header>' + findings.map(function (finding) {
+            return '<div class="guard-finding-evidence"><h4>' + guardEsc(finding.title || GUARD_KIND_LABEL[finding.kind] || finding.kind) +
+              '</h4><p>' + guardEsc(finding.detail || 'Open this session to review the matching activity.') + '</p>' +
+              (finding.since ? '<small>First seen ' + guardEsc(guardAgo(finding.since)) + '</small>' : '') + '</div>';
+          }).join('') + '<footer><span>' + (inc && Number(inc.spend_at_risk_usd) > 0 ? guardMoney(inc.spend_at_risk_usd) + ' estimated at risk' : 'Detected activity, not a blocked action') +
+          '</span><div><button class="btn btn-xs" data-sid="' + guardEsc(s.session_id) +
+          '" onclick="openTrail(this.dataset.sid)">View session</button> ' + control + '</div></footer></article>');
+      }
+
       html += '<tr><td title="' + guardEsc(s.session_id) + '">' +
         guardEsc((s.title || s.session_id || '').slice(0, 48)) + '</td>' +
         '<td>' + guardEsc(s.runtime) + '</td>' +
@@ -32263,7 +32533,9 @@ function loadGuardSessions() {
         '<td>' + control + '</td></tr>';
     });
     html += '</tbody></table>';
-    el.innerHTML = html;
+    el.innerHTML = (findingCards.length ? findingCards.join('') :
+      '<div class="empty-state">No findings on the listed running sessions.</div>') +
+      '<details class="guard-section-details"><summary>All ' + rows.length + ' listed sessions and controls</summary><div style="overflow-x:auto">' + html + '</div></details>';
     guardSetBadge(flagged);
   }).catch(function () {
     el.innerHTML = '<div class="empty-state">Could not load sessions.</div>';

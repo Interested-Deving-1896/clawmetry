@@ -341,6 +341,8 @@
   "app.open_guard": "Apri Guard →",
   "guard.nondeterminism": "Dà sempre la stessa risposta?",
   "guard.nondeterminism_sub": "Un agente può sbagliare rispondendo in modo diverso ogni volta alla stessa richiesta. ClawMetry può misurarlo rieseguendo le sessioni fallite, ma solo se lo attivi: ogni riesecuzione avvia il tuo agente e ha un costo.",
+  "guard.inventory": "Cosa caricano i tuoi agenti",
+  "guard.inventory_sub": "Server MCP, skill, plugin e file di istruzioni che Claude Code, Codex, Cursor, Gemini CLI, opencode e OpenClaw leggono su questa macchina, per tutti i runtime insieme. Quando uno di questi viene aggiunto o modificato, le sessioni in esecuzione che lo caricano vengono segnalate. ClawMetry si limita a leggere questi file e non avvia mai un componente, quindi le descrizioni degli strumenti di un server MCP non vengono verificate.",
   "app.open_settings": "Apri Impostazioni →",
   "app.openshell_not_available_on_this_host": "openshell non disponibile su questo host",
   "app.optimizer": "Optimizer",
@@ -1540,5 +1542,17 @@
   "trail.commits": "Commit",
   "trail.prs": "Pull request",
   "evals.locked": "La valutazione delle sessioni è una funzione Pro.",
-  "trail.cov_unknown": "non ancora dichiarato"
+  "trail.cov_unknown": "non ancora dichiarato",
+  "security.apikeys_title": "Crea la tua vista personalizzata",
+  "security.apikeys_sub": "Concedi a una pagina, uno script o un agente di coding l'accesso in lettura ai dati agent di questa macchina, limitato esattamente a ciò che serve. Nulla qui può avviare, mettere in pausa o fermare un agente.",
+  "security.apikeys_new": "Nuova chiave",
+  "security.apikeys_name_label": "A cosa serve?",
+  "security.apikeys_origin_label": "Quale sito la userà?",
+  "security.apikeys_no_browser": "Questa chiave è per uno script o un server, non per una pagina web",
+  "security.apikeys_scope_label": "Cosa può leggere?",
+  "security.apikeys_create": "Crea chiave",
+  "security.apikeys_cancel": "Annulla",
+  "security.apikeys_reveal_title": "Copiala ora. Non verrà mostrata di nuovo.",
+  "security.apikeys_copy": "Copia",
+  "security.apikeys_done": "Fatto"
 }

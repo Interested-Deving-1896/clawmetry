@@ -91,7 +91,10 @@ jobs:
           python3 -c "import sys, clawmetry.cli; print('clawmetry.cli imports on', sys.version.split()[0])"
 
       - name: Install ruff (fast linter)
-        run: pip install ruff
+        # ci-lint-ruff.txt is the hash-pinned set for this step: a bare
+        # `pip install ruff` linted with whatever the index served that
+        # minute. ruff declares no dependencies, so the file is one name.
+        run: pip install --require-hashes -r .github/requirements/ci-lint-ruff.txt
       # `W503` is a flake8 code that ruff does not implement, so ruff exited
       # with "invalid value 'W503' for '--ignore <RULE_CODE>'" on every run
       # since this step was added. `|| true` swallowed the usage error, so the
@@ -168,7 +171,12 @@ jobs:
         # Flask test client (paywall funnel telemetry + the gate's free
         # escape) cannot even be COLLECTED without it, and a collection
         # error fails the whole step, not just that file.
-        run: pip install pytest pyyaml requests flask
+        #
+        # ci-lint-verify.txt is the hash-pinned set carrying those four and
+        # their closure, resolved for 3.9. It is deliberately NOT ci-tests.txt,
+        # which is resolved for 3.11 and pins releases that cannot install
+        # here; see that file's header for the boundary.
+        run: pip install --require-hashes -r .github/requirements/ci-lint-verify.txt
 
       # A malformed workflow fails at STARTUP, before any step runs, and shows
       # up named after its own file path. c6-schedule-heal.yml carried two such
@@ -186,6 +194,15 @@ jobs:
       # #5744 fixed again here.
       - name: Workflow integrity (dead steps, unreachable triggers, input injection)
         run: python3 -m pytest tests/test_ci_workflow_invocations_are_real.py -q
+
+      # The 3.9 pip bootstrap pin cannot follow Dependabot past 26.0.1: 26.1
+      # moved pip's Requires-Python to >=3.10, which the release canary's 3.9
+      # cell cannot install. That refusal was a comment in the pin file and
+      # nothing else, and the proposed bump went green on every PR check --
+      # release-canary.yml does not run on pull requests, so the break lands
+      # after the merge, on the release path. Checked here, where PRs look.
+      - name: py3.9 pip bootstrap pin still installs on 3.9
+        run: python3 -m pytest tests/test_pip_bootstrap_py39_pin.py -q
 
       # #5739: the field-failure filer could open and refresh an issue but
       # never close one, so a signature that stopped occurring left its issue
@@ -438,6 +455,19 @@ jobs:
       - name: Dashboard cold load boot
         run: python3 -m pytest tests/test_cold_load_boot_js.py -q
 
+      - name: First-install preparation UI
+        run: python3 -m pytest tests/test_startup_readiness.py -q
+
+      # Hosted cards must not REQUEST local-only data (#6060). A route that
+      # cloud_route_policy disables answers 410 Gone by design, and the browser
+      # logs that failure before any JS sees the Response, so handling the
+      # status in .then() still leaves a console error the cloud-contract
+      # deploy gate counts. One such request (the Guard inventory card) failed
+      # three assertions in that gate and blocked every deploy after 0.12.883.
+      # Node-based, named explicitly because this job runs FILE LISTS.
+      - name: Hosted local-only cards issue no request
+        run: python3 -m pytest tests/test_guard_inventory_hosted_js.py -q
+
       # Trail page + session-first landing: the live HTML must include
       # tabs/trail.html (Jinja render, not a template grep), the default
       # active page must be the Sessions list, and every Trail string must
@@ -661,6 +691,12 @@ jobs:
       - name: Every sign-in tells the account whether it is cloud or self-hosted
         run: python3 -m pytest tests/test_account_deployment_report.py tests/test_connect_provisioning_order.py tests/test_connect_otp_skip.py tests/test_cloud_cta_oauth.py -q
 
+      # REQ-OGV-AIH-004: the install registry counted arrivals and never
+      # departures, so a purged machine left an account reading "never
+      # installed" and it was emailed install instructions.
+      - name: An uninstall reports itself
+        run: python3 -m pytest tests/test_uninstall_reports_itself.py -q
+
       - name: The sync cycle isolates every ingest call
         run: python3 -m pytest tests/test_sync_cycle_fault_isolation.py -q
 
@@ -789,6 +825,7 @@ jobs:
             tests/test_moat_regression_1129.py \
             tests/test_e2e_real_openclaw_pipeline.py \
             tests/test_onboarding_ingest_status.py \
+            tests/test_startup_readiness.py \
             tests/test_duckdb_fastpath_v3_invariants.py \
             tests/test_price_book_usage_store.py \
             tests/test_query_events_keys_first.py \
@@ -874,6 +911,8 @@ jobs:
             tests/test_openclaw_doctor_cache.py \
             tests/test_repo_scan_daemon_wiring.py \
             tests/test_guard_workspace_kinds.py \
+            tests/test_agent_supply_chain_inventory.py \
+            tests/test_guard_checks.py \
             tests/test_tool_risk.py \
             tests/test_no_shadowed_module_functions.py \
             tests/test_hooks_claude_code.py \
@@ -1682,8 +1721,10 @@ jobs:
           pip install -e . pyyaml httpx
       - name: Check kill-switch
         id: gate
+        env:
+          EVALS_GATE: ${{ vars.CLAWMETRY_EVALS_GATE }}
         run: |
-          if [ "${{ vars.CLAWMETRY_EVALS_GATE }}" = "off" ]; then
+          if [ "$EVALS_GATE" = "off" ]; then
             echo "::warning::eval gate SKIPPED -- CLAWMETRY_EVALS_GATE repo var set to 'off'"
             echo "skip=1" >> "$GITHUB_OUTPUT"
           else
