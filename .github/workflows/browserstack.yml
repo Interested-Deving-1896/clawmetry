@@ -31,7 +31,13 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install flask pytest pytest-playwright requests browserstack-sdk
+        # Hash-pinned: the names that used to sit on this line are now in
+        # .github/requirements/browserstack.txt with the sha256 of every
+        # distribution PyPI publishes for them, and --require-hashes refuses
+        # anything that is not one of them. This job holds the BrowserStack
+        # credentials, so what it installs should not be whatever the index
+        # happens to serve that minute.
+        run: pip install --require-hashes -r .github/requirements/browserstack.txt
 
       - name: Install Playwright browsers
         run: python3 -m playwright install chromium
