@@ -97,13 +97,40 @@ jobs:
           - os: ubuntu-latest
             python-version: "3.9"
     steps:
+      # Checked out into _pins/, NEVER the workspace root. This job asserts
+      # that the PUBLISHED wheel works, and `python -c "import clawmetry"`
+      # below puts the working directory first on sys.path -- a checkout at
+      # the root would shadow the installed package with the repo's own
+      # clawmetry/ source tree and the job would silently stop testing PyPI.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: _pins
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Install the PUBLISHED wheel from PyPI
+        shell: bash
+        env:
+          PY_VERSION: ${{ matrix.python-version }}
         run: |
-          python -m pip install --upgrade pip
+          # Bootstrap pip from the hash-pinned set rather than resolving the
+          # latest release at job start: a hash-checked install is only worth
+          # as much as the installer doing the checking. The clawmetry install
+          # below stays unpinned on purpose -- the published PyPI release is
+          # the artifact this job exists to test.
+          #
+          # Two sets, because pip-bootstrap.txt pins a pip that declares
+          # Requires-Python >=3.10 and so cannot be installed on the 3.9
+          # matrix cell at all. pip-bootstrap-py39.txt pins the last pip line
+          # that still supports 3.9. Selecting on the version keeps the 3.11
+          # cells on the same pip every other job in this repo uses.
+          if [ "${PY_VERSION}" = "3.9" ]; then
+            python -m pip install --require-hashes -r _pins/.github/requirements/pip-bootstrap-py39.txt
+          else
+            python -m pip install --require-hashes -r _pins/.github/requirements/pip-bootstrap.txt
+          fi
           python -m pip install --no-cache-dir clawmetry
           python -m pip show clawmetry | head -3
 
@@ -145,13 +172,24 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
+      # _pins/, not the workspace root -- same reason as pypi-install above:
+      # the `python -c "import clawmetry"` smoke below would otherwise import
+      # the checked-out source instead of the published wheel.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: _pins
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
       - name: Install from PyPI and smoke the CLI
         shell: bash
         run: |
-          python -m pip install --upgrade pip
+          # Hash-pinned pip bootstrap, as in pypi-install above. Only the 3.11
+          # set is needed here -- this job pins one Python for all three
+          # runners. The clawmetry install stays unpinned: the published
+          # release is what this job exists to test.
+          python -m pip install --require-hashes -r _pins/.github/requirements/pip-bootstrap.txt
           python -m pip install --no-cache-dir clawmetry
           python -c "import clawmetry, clawmetry.cli; print('import ok')"
           clawmetry --version
