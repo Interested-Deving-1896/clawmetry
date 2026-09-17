@@ -19,6 +19,22 @@
 # `prisma generate` in the job downloads Prisma's engine binaries, which this
 # file cannot pin.
 #
+# Installed with `pip install --no-deps --require-hashes`. This is a complete
+# resolved closure, so --no-deps costs nothing and buys the one thing that kept
+# breaking: pip no longer re-derives litellm's metadata and enforces its
+# unconditional `==` pins against this lock. litellm 1.83.7 pins
+# aiohttp==3.13.5, click==8.1.8 and python-dotenv==1.0.1 unconditionally, and a
+# Dependabot security bump to any of the three used to make the whole file
+# unsatisfiable -- #6006 (aiohttp) did, and left the job red on main. The pins
+# litellm declares under `extra == "proxy"` were never checked at all, because
+# this file locks litellm without that extra; that is why the cryptography,
+# PyJWT and mcp bumps went green while aiohttp did not.
+#
+# So a bump to any single line here is now installable on its own. What that
+# does NOT do is make it correct: a package bumped past what litellm 1.83.7
+# expects is running untested against it, and the end-to-end job below is what
+# says whether that is fine. Read a red run as the answer, not as a flake.
+#
 # Regenerate: put the direct requirements above in ll.in, then
 #   uv pip compile ll.in --generate-hashes --python-version 3.11 \
 #     --python-platform x86_64-unknown-linux-gnu -o ci-litellm-proxy.txt
