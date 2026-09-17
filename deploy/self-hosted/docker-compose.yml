@@ -13,7 +13,7 @@
 
 services:
   clawmetry:
-    image: ghcr.io/vivekchand/clawmetry:0.12.883@sha256:f48acc00854f422cdac0eb6857334258914cf51c18768a52b673b15ab7ffcc65
+    image: ghcr.io/vivekchand/clawmetry:0.12.884@sha256:5faa24854c7a0189b9e0f8d8cc019b1c7cc3fc4970f41e2fcc24105a2f23596c
     restart: unless-stopped
     ports:
       - "8900:8900"
