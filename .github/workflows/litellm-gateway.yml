@@ -78,9 +78,33 @@ jobs:
           pip install --require-hashes -r .github/requirements/ci-otel-extra.txt
 
       - name: Install LiteLLM 1.83.7 into its own virtualenv (hash-locked)
+        # --no-deps because ci-litellm-proxy.txt is a COMPLETE resolved closure
+        # (uv pip compile), not a list of direct requirements: every transitive
+        # dependency is already named and hash-pinned, so there is nothing left
+        # for pip to resolve.
+        #
+        # Without it, pip re-reads litellm's own metadata and enforces its
+        # unconditional `==` pins against the lock. litellm 1.83.7 pins
+        # aiohttp==3.13.5, click==8.1.8 and python-dotenv==1.0.1 that way, so a
+        # Dependabot SECURITY bump to any of those three makes this file
+        # unsatisfiable and the job dies at the install step, before a single
+        # request is sent. That is not hypothetical: #6006 (aiohttp 3.13.5 ->
+        # 3.14.3) did exactly that and left this job red on main.
+        #
+        # The neighbouring bumps that went green -- cryptography, PyJWT, mcp --
+        # only looked safe: litellm is locked WITHOUT its [proxy] extra, so the
+        # pins it declares under `extra == "proxy"` are inert and never checked.
+        # The three unconditional ones are the whole exposure, and this is what
+        # takes them out of the resolver's hands rather than waiting for the
+        # next one to land.
+        #
+        # Resolving is what is dropped, not verification: --require-hashes still
+        # refuses any artifact this file does not name. A gap in the closure
+        # would surface immediately at the otel-callback assertion below, and
+        # then at the real proxy run.
         run: |
           python3 -m venv "$RUNNER_TEMP/litellm"
-          "$RUNNER_TEMP/litellm/bin/pip" install --require-hashes -r .github/requirements/ci-litellm-proxy.txt
+          "$RUNNER_TEMP/litellm/bin/pip" install --no-deps --require-hashes -r .github/requirements/ci-litellm-proxy.txt
           proxy_dir="$("$RUNNER_TEMP/litellm/bin/python" -c 'import litellm, os; print(os.path.join(os.path.dirname(litellm.__file__), "proxy"))')"
           cd "$proxy_dir"
           PATH="$RUNNER_TEMP/litellm/bin:$PATH" prisma generate --schema schema.prisma
