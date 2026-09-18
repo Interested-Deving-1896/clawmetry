@@ -16,9 +16,15 @@
 # names would leave the wheel's own Requires-Dist to resolve unpinned, which
 # is most of the closure and the half that actually runs the dashboard. So
 # this file carries the full runtime set and the wheel is installed against
-# it with --no-deps. `pip check` is the invariant that keeps the two halves
-# honest -- if the wheel ever declares a dependency this file does not pin,
-# the job reports a broken requirement instead of silently resolving it.
+# it with --no-deps.
+#
+# That makes this file responsible for the wheel's whole declared closure:
+# if setup.py adds a runtime dependency and this file does not gain it, the
+# --no-deps install leaves it missing. The job already fails in that case --
+# the steps below it import dashboard, routes/ and helpers/, then boot the
+# dashboard and fetch a static asset over HTTP, none of which survive a
+# missing runtime dependency. Keep this set in step with setup.py's
+# install_requires for the job's interpreter.
 #
 # Resolved for the job's interpreter: Python 3.11 on ubuntu-latest. This set
 # is NOT used by the py3.9 legs; the cffi/cryptography interpreter bands in

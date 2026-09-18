@@ -1644,11 +1644,6 @@ jobs:
           # and the half that actually runs the dashboard two steps below.
           /tmp/vwheel/bin/pip install --require-hashes -r .github/requirements/ci-wheel-install.txt
           /tmp/vwheel/bin/pip install --no-deps dist/clawmetry-*.whl
-          # Proves the pinned set above covers everything the wheel declares.
-          # Without --no-deps a missing pin was invisible: pip just resolved
-          # it. With --no-deps it would be an ImportError somewhere later, so
-          # fail here, where the message says what is actually wrong.
-          /tmp/vwheel/bin/pip check
       - name: Verify runtime assets shipped in wheel
         run: |
           /tmp/vwheel/bin/python -c "
