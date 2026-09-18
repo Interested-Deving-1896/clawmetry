@@ -107,14 +107,16 @@ jobs:
       - name: Install Python deps
         run: |
           # Bootstrap pip from the hash-pinned set rather than resolving the
-          # latest release at job start. The two installs below stay unpinned
-          # on purpose -- `head/requirements.txt` is the PR's own checkout,
-          # which is the thing under test.
+          # latest release at job start. The `head/requirements.txt` install
+          # below stays unpinned on purpose -- that checkout is the PR's own,
+          # which is the thing under test. duckdb and requests are not: they
+          # are the harness standing around it, so they come from a pinned
+          # set like every other install in this repo's CI.
           # `head/` prefix: this job checks the repo out into head/ and base/,
-          # never at the workspace root, so the set lives under head/ too.
+          # never at the workspace root, so the sets live under head/ too.
           python -m pip install --require-hashes -r head/.github/requirements/pip-bootstrap.txt
           pip install -r head/requirements.txt
-          pip install duckdb requests
+          pip install --require-hashes -r head/.github/requirements/pr-screenshots.txt
 
       # -- 5. Node deps (Playwright + pixelmatch + pngjs) ----------------------
       # `npm ci` against the committed .github/scripts/package-lock.json, not a
