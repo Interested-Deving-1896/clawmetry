@@ -64,10 +64,20 @@ jobs:
         run: |
           python -m venv /tmp/vsmoke
           /tmp/vsmoke/bin/pip install --require-hashes -r .github/requirements/pip-bootstrap.txt
+          # The environment around the artifact under test, pinned by hash.
+          # Installed BEFORE clawmetry so that install finds its dependencies
+          # already satisfied and resolves none of them itself. Both cells
+          # shared these five names, so they are named once here rather than
+          # twice below.
+          /tmp/vsmoke/bin/pip install --require-hashes \
+            -r .github/requirements/api-latency-smoke.txt
+          # clawmetry itself stays unpinned on purpose: the `pypi` cell smokes
+          # the PUBLISHED wheel, the `wheel` cell the one just built into
+          # dist/. Pinning either is what the matrix exists to avoid.
           if [ "$SOURCE" = "pypi" ]; then
-            /tmp/vsmoke/bin/pip install --no-cache-dir clawmetry flask waitress cryptography duckdb requests
+            /tmp/vsmoke/bin/pip install --no-cache-dir clawmetry
           else
-            /tmp/vsmoke/bin/pip install dist/clawmetry-*.whl flask waitress cryptography duckdb requests
+            /tmp/vsmoke/bin/pip install dist/clawmetry-*.whl
           fi
 
       - name: Write minimal daemon config
