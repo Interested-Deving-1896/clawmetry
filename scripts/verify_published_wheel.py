@@ -123,10 +123,98 @@ def stop(proc) -> None:
             pass
 
 
+def _file_gh_issue(version: str, failures: list[str], repo: str) -> None:
+    """Create a GitHub issue for the failed checks via the ``gh`` CLI.
+
+    Deduplicates: if an open issue with the same title already exists the
+    function prints a notice and returns without creating a second one, making
+    the call safe to repeat across matrix legs of the same CI run.
+
+    Requires ``gh`` on ``$PATH`` authenticated to the target repo. In GitHub
+    Actions, set ``permissions: issues: write`` and pass
+    ``GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}`` to the step environment.
+    """
+    if not shutil.which("gh"):
+        print(
+            "  WARN  --file-issue-on-failure: gh CLI not found; skipping issue creation",
+            flush=True,
+        )
+        return
+
+    py_ver = sys.version.split()[0]
+    title = (
+        f"[fresh-install audit] clawmetry=={version} failed on "
+        f"{sys.platform} / py{py_ver}"
+    )
+
+    # Idempotency: skip if an open issue with this exact title already exists.
+    r = run(
+        [
+            "gh", "issue", "list",
+            "--repo", repo,
+            "--state", "open",
+            "--search", title,
+            "--json", "number,title",
+            "--limit", "5",
+        ]
+    )
+    if r.returncode == 0:
+        try:
+            if any(i.get("title") == title for i in json.loads(r.stdout or "[]")):
+                print(
+                    "  SKIP  issue already open for this failure; not creating duplicate",
+                    flush=True,
+                )
+                return
+        except Exception:
+            pass
+
+    body = "\n".join([
+        f"## Fresh-install audit failure: `clawmetry=={version}`",
+        "",
+        f"**Platform**: `{sys.platform}`  ",
+        f"**Python**: `{py_ver}`  ",
+        "**Filed by**: `scripts/verify_published_wheel.py --file-issue-on-failure`",
+        "",
+        "## Failed checks",
+        "",
+        *[f"- `{f}`" for f in failures],
+        "",
+        "## Reproduction",
+        "",
+        "```",
+        f"python3 scripts/verify_published_wheel.py --version {version}",
+        "```",
+    ])
+
+    r = run([
+        "gh", "issue", "create",
+        "--repo", repo,
+        "--title", title,
+        "--body", body,
+        "--label", "bug",
+    ])
+    if r.returncode == 0:
+        url = (r.stdout or "").strip()
+        print(f"  FILED fresh-install audit issue: {url}", flush=True)
+    else:
+        print(
+            f"  WARN  gh issue create returned {r.returncode}: "
+            f"{(r.stderr or r.stdout or '').strip()[:200]}",
+            flush=True,
+        )
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--version", required=True,
                     help="the published version to verify, e.g. 0.12.843")
+    ap.add_argument("--file-issue-on-failure", action="store_true",
+                    help="on any check failure, create a GitHub issue via "
+                         "'gh issue create' (requires gh CLI + issues: write)")
+    ap.add_argument("--repo", default="vivekchand/clawmetry",
+                    help="GitHub repo to file the issue against (owner/name). "
+                         "Only used with --file-issue-on-failure.")
     args = ap.parse_args()
     want = args.version.strip()
 
@@ -251,6 +339,8 @@ def main() -> int:
         print(f"FAILED {len(FAILURES)} check(s):", flush=True)
         for f in FAILURES:
             print(f"  - {f}", flush=True)
+        if args.file_issue_on_failure:
+            _file_gh_issue(want, FAILURES, args.repo)
         return 1
     print(f"All checks passed for clawmetry=={want} on {sys.platform}.", flush=True)
     return 0
