@@ -109,8 +109,22 @@ jobs:
       - name: Install cloud deps
         if: steps.access.outputs.available == 'true'
         run: |
-          # psycopg2 must be importable (DB is monkey-patched, never called)
-          pip install psycopg2-binary
+          # psycopg2 must be importable (DB is monkey-patched, never called).
+          # Hash-pinned: this job holds CLOUD_REPO_PAT, so an unpinned resolve
+          # here is one that feeds a cross-repo credential.
+          #
+          # `oss/` prefix: unlike the OSS-deps step above, this one has no
+          # `working-directory`, because it installs cloud/requirements.txt
+          # from the clawmetry-cloud checkout. It therefore runs at the
+          # workspace root, where this repo lives under oss/ -- a bare
+          # `.github/...` here would not resolve.
+          pip install --require-hashes \
+            -r oss/.github/requirements/cross-repo-handoff-cloud.txt
+          # NOT pinned, and cannot be: cloud/requirements.txt belongs to the
+          # clawmetry-cloud checkout above, not to this repo, so there is no
+          # file here whose hashes could describe it and it moves whenever
+          # that repo moves. `|| true` because it is best-effort already --
+          # the suite stubs what it cannot import.
           pip install -r cloud/requirements.txt || true
 
       - name: Run C4 cross-repo handoff
