@@ -742,7 +742,16 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: pip install flask pytest requests waitress
+        # ci-api-tests.txt is the hash-pinned set carrying these four and
+        # their closure. It is the one set here resolved UNIVERSALLY rather
+        # than for a single interpreter: this matrix spans 3.9 and 3.11, so
+        # the file carries both versions of the five names whose newest
+        # release drops 3.9, behind python_full_version markers, and each
+        # cell installs the one it matches. See that file's header for why
+        # neither ci-tests.txt (3.11) nor ci-lint-verify.txt (3.9) fits.
+        run: >-
+          pip install --require-hashes
+          -r .github/requirements/ci-api-tests.txt
 
       - name: Start server (Unix)
         if: runner.os != 'Windows'

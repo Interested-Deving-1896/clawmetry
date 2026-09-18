@@ -73,10 +73,14 @@ jobs:
         run: |
           python -m venv /tmp/oss-golden
           /tmp/oss-golden/bin/pip install --require-hashes -r .github/requirements/pip-bootstrap.txt
-          /tmp/oss-golden/bin/pip install \
-            dist/clawmetry-*.whl \
-            flask waitress cryptography duckdb requests \
-            pytest pytest-playwright
+          # The environment AROUND the wheel, hash-pinned. These seven names
+          # used to resolve to whatever the index served that minute, on the
+          # job that hard-gates every PR. Installed first so the wheel install
+          # below finds them satisfied and resolves none of them itself.
+          /tmp/oss-golden/bin/pip install --require-hashes \
+            -r .github/requirements/oss-golden-path.txt
+          # The wheel itself stays unpinned -- it is the artifact under test.
+          /tmp/oss-golden/bin/pip install dist/clawmetry-*.whl
 
       # Step 2 -- boot real OpenClaw gateway.
       # setup-openclaw installs the npm package, puts openclaw on PATH, and
