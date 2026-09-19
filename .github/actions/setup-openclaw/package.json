@@ -24,12 +24,20 @@
     "  undici@8 8.2.0 -> 8.10.2            clears GHSA-vmh5-mc38-953g and the ten",
     "                                      other 8.x advisories",
     "  ws@8     8.20.0 -> 8.21.3           clears GHSA-96hv-2xvq-fx4p, GHSA-58qx-3vcg-4xpx",
+    "  markdown-it@14                      clears GHSA-6v5v-wf23-fmfq",
+    "           14.1.1 -> 14.3.2",
+    "",
+    "markdown-it was previously listed below as uncoverable, on the grounds that",
+    "its only fix was 15.x. That is no longer true: upstream backported the",
+    "smartquotes fix into the 14 line (14.3.1, then 14.3.2, both published after",
+    "15.0.2). The advisory range is <=14.1.1, so 14.3.2 is out of range while",
+    "staying inside the major the tree already resolves -- the same shape as the",
+    "three overrides above, and no new API surface for any consumer.",
     "",
     "What these deliberately do NOT cover, because no override can:",
-    "  extract-zip      GHSA-jmr9-qjv8-65gv has no fixed release; 2.0.1 is latest",
-    "                   and is itself in range.",
+    "  extract-zip      GHSA-jmr9-qjv8-65gv and GHSA-7pqw-9j4j-h8q3 have no fixed",
+    "                   release; 2.0.1 is latest and is itself in range.",
     "  pdfjs-dist       fix is 6.2.108, a major bump from the 5.7.284 in tree.",
-    "  markdown-it      fix is 15.x, a major bump from 14.1.1.",
     "  pi-coding-agent  fix is 0.79.0, which arrives with the openclaw bump.",
     "  openclaw itself  its own advisories are fixed only by the version bump.",
     "Those stay open against the pin, and close when the daemon can read the",
@@ -41,6 +49,7 @@
   "overrides": {
     "tar@7": "7.5.22",
     "undici@8": "8.10.2",
-    "ws@8": "8.21.3"
+    "ws@8": "8.21.3",
+    "markdown-it@14": "14.3.2"
   }
 }
