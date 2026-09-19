@@ -372,6 +372,19 @@ def test_pip_failures_classify_to_closed_codes(snippet, code):
     assert dapp._PIP_FAILURE_HINTS[code]
 
 
+def test_tls_intercepted_hint_is_actionable():
+    """The hint must name a concrete remediation so the user knows what to do
+    without a support ticket (#6095: 'check proxy/antivirus settings' gave
+    no starting point on Windows corporate machines)."""
+    hint = dapp._PIP_FAILURE_HINTS["tls_intercepted"].lower()
+    # Should name the pip-respected env var or a firewall-allowlist path,
+    # never just "check settings".
+    assert "requests_ca_bundle" in hint or "allowlist" in hint, (
+        "tls_intercepted hint must name a concrete fix (env var or IT action); "
+        f"got: {dapp._PIP_FAILURE_HINTS['tls_intercepted']!r}"
+    )
+
+
 def test_failure_payload_is_a_closed_dict_of_aggregates(tmp_path, monkeypatch):
     monkeypatch.setattr(dapp, "_install_id", lambda: "0123456789abcdef0123456789abcdef")
     p = dapp.bootstrap_failure_payload("sess-1", "compiler_demand", "3.14")
