@@ -195,8 +195,15 @@ def test_nothing_gates_the_dashboard_on_a_readiness_probe():
     overlay shipped. Those call sites are the reason a deleted screen
     can still hold the product, so assert they are gone too.
     """
-    app_js = (ROOT / "clawmetry/static/js/app.js").read_text()
-    assert "cmFirstRun" not in app_js, "app.js still defers to the removed screen"
+    # Auto-discovered, not a file list. The first pass of this guard read
+    # app.js alone and missed a live ``window.cmFirstRun.start(d)`` in
+    # onboarding.js, which Drift Bot caught. A hand-maintained scope is how
+    # the next leftover survives, so sweep everything that ships.
+    js_dir = ROOT / "clawmetry/static/js"
+    scanned = sorted(js_dir.glob("*.js"))
+    assert len(scanned) > 5, f"expected the shipped js directory, found {scanned}"
+    offenders = [p.name for p in scanned if "cmFirstRun" in p.read_text()]
+    assert offenders == [], f"these still defer to the removed screen: {offenders}"
     onboarding = (ROOT / "routes/onboarding.py").read_text()
     assert "/api/onboarding/readiness" not in onboarding, (
         "the readiness endpoint outlived its only consumer"
