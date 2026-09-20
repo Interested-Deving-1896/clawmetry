@@ -1,5 +1,16 @@
 ## Unreleased
 
+### Release: the dashboard opens on your agents (2026-09-20)
+- **Carries:** #6105. Its entry follows.
+
+### Changed: the first screen is the Agents roster, not the session list
+- **Why:** founder request. Opening on the raw session list asks the reader to already know what a session is, and the list answers the second question, not the first. "Which of my agents are there, is any of them alive, what has each one cost" comes before "which of its runs was that", and the roster answers it without the word session appearing at all.
+- **What:** the dashboard lands on Agents. Sessions is the nav item directly below it and every agent row leads into it, so a run is still one click from the first screen. Deep links outrank the default: a `#session=` link still opens the Sessions list and a `#trail=` link still opens that trail.
+- **Also:** the landing tab is declared in one place and the served markup is checked against it. The nav highlight and the page that ships as active must both equal the tab the script boots on, so a reader can no longer be shown one screen under another screen's highlight while the page finishes loading. A first draft of this change did exactly that, and the new cross-check is what caught it.
+- **Not fixed by this:** the Sessions list can still read as empty for several seconds on arrival. Measured on a real node, the unscoped `/api/transcripts` read takes 15.5 seconds cold, about 1.2 seconds warm, and 1.2 seconds when scoped to one runtime; the list is fetched with no client timeout, so it waits. Moving the landing screen means fewer people meet that first, it does not make the read faster. Tracked separately.
+- **Verified:** 51 checks green on the merge head. `tests/test_trail_tab_template.py` gains a guard that reads the landing tab out of `static/js/app.js` and requires both the pre-highlighted nav item and the active page to equal it; restoring either old default turns two tests red.
+- **Refs:** #6105.
+
 ### Release: the first-install screen opens as soon as there is data (2026-09-20)
 - **Carries:** #6099. Its entry follows.
 
