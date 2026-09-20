@@ -1277,7 +1277,6 @@ async function ackAllAlerts() {
 function visibilitySetInterval(fn, ms) {
   return setInterval(function() {
     if (typeof document !== 'undefined' && document.hidden) return;
-    if (window.cmFirstRun && window.cmFirstRun.active) return;
     try { fn(); } catch (e) {}
   }, ms);
 }
@@ -22597,9 +22596,6 @@ async function _cmSyncTick() {
 async function cmSyncInit() {
   // Cloud mode keeps its existing cm-sync-bar (Phase 2 promotes this component).
   if (window.CLOUD_MODE) return;
-  // First-install preparation owns progress now; do not start a second
-  // progress poller behind its screen.
-  if (window.cmFirstRun) return;
   // #1937: the banner describes CLOUD-side sync work. Don't show it when
   //   * the user opted out (CLAWMETRY_NO_CLOUD=1 or ~/.clawmetry/nocloud), or
   //   * the user never connected (no config.json -> nothing to sync).
@@ -29325,10 +29321,6 @@ var BOOT_HARD_TIMEOUT_MS = 8000;
 var _bootFinished = false;
 function _safeFinishBoot() {
   if (_bootFinished) return;
-  if (window.cmFirstRun && window.cmFirstRun.checking) {
-    window.cmFirstRun.checked.then(_safeFinishBoot);
-    return;
-  }
   _bootFinished = true;
   finishBootOverlay();
 }
