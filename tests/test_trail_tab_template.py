@@ -104,12 +104,14 @@ def test_trail_wrapper_and_sections_render():
     assert 'id="trail-export-btn"' in html
 
 
-def test_default_landing_is_sessions_first():
+def test_default_landing_is_the_agents_roster():
     html = _rendered_live_html()
-    # Exactly one page ships .active, and it is the Sessions list.
+    # Exactly one page ships .active, and it is the Agents roster. The served
+    # markup has to agree with the boot tab: whatever switchTab() does a
+    # moment later, this is the screen the reader is shown first.
     actives = re.findall(r'<div class="page active" id="(page-[a-z-]+)"', html)
-    assert actives == ["page-transcripts"], (
-        f"the default active page must be the Sessions list, got {actives}"
+    assert actives == ["page-inventory"], (
+        f"the default active page must be the Agents roster, got {actives}"
     )
     nav_start = html.index('<aside id="left-nav"')
     nav = html[nav_start:html.index("</aside>", nav_start)]
@@ -148,6 +150,37 @@ def test_default_landing_is_sessions_first():
     for tab in ("approvals", "alerts"):
         assert 'id="page-%s"' % tab in html
         assert "switchTab('%s')" % tab in html
+
+
+def test_nav_default_highlight_equals_the_declared_landing_tab():
+    """The markup default and CM_LANDING_TAB are one decision, so read both.
+
+    The previous guards asserted each half against a literal, which is how
+    they both passed while disagreeing would still be possible: change the
+    constant, forget the template, and the reader sees a highlight on a
+    screen they are not on until the first script runs. Compare them to
+    each other instead of to a string typed twice.
+    """
+    html = _rendered_live_html()
+    js = _read(_APP_JS)
+    declared = re.search(r"var CM_LANDING_TAB = '([a-z-]+)';", js)
+    assert declared, "app.js must declare CM_LANDING_TAB"
+    landing = declared.group(1)
+    nav_start = html.index('<aside id="left-nav"')
+    nav = html[nav_start:html.index("</aside>", nav_start)]
+    highlighted = re.findall(
+        r'<div class="left-nav-item active"[^>]*data-tab="([a-z-]+)"', nav
+    )
+    assert highlighted == [landing], (
+        f"nav pre-highlights {highlighted}, app.js lands on {landing!r}: "
+        "they must be the same one tab"
+    )
+    # ...and so must the page that ships .active, or the highlight points at
+    # one screen while another is on show.
+    pages = re.findall(r'<div class="page active" id="page-([a-z-]+)"', html)
+    assert pages == [landing], (
+        f"the active page is {pages}, app.js lands on {landing!r}"
+    )
 
 
 def test_appjs_routes_trail():
