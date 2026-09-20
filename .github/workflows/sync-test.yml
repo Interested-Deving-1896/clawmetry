@@ -46,7 +46,20 @@ jobs:
           python-version: ${{ matrix.python }}
 
       - name: Install clawmetry
-        run: pip install -e .
+        run: |
+          python -m pip install --require-hashes -r .github/requirements/pip-bootstrap.txt
+          # The environment AROUND the editable install, hash-pinned. Every
+          # test below imports clawmetry.sync, which runs through cryptography,
+          # cffi and duckdb -- so an unannounced version change in any of them
+          # is indistinguishable here from a regression in sync.py, which is
+          # the one thing this workflow exists to report. Installed first so
+          # the editable install finds them satisfied.
+          python -m pip install --require-hashes \
+            -r .github/requirements/ci-sync-test.txt
+          # `-e .` stays unpinned -- it is this repo's working tree, the code
+          # under test. --no-deps because the line above is its whole declared
+          # runtime closure. See that file's header for the boundary.
+          python -m pip install --no-deps -e .
 
       - name: Test 1 - sync.py imports cleanly
         run: python -c "from clawmetry import sync; print('Import OK')"
