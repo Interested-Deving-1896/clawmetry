@@ -43,9 +43,9 @@ def test_tier1_order_and_membership():
     nav = _nav_block()
     tabs = _ordered_tabs(nav)
     tier1 = tabs[:12]
-    # Session-first IA (Trail, 2026-09): Sessions is the landing item; it
-    # sits under the "Monitoring" label directly after Agents (founder
-    # request 2026-09-15) with Home + the raw-signal views (Activity, Cost,
+    # Agent-first IA (2026-09-20): Agents is the landing item, with Sessions
+    # directly after it (founder request 2026-09-15). Both sit under the
+    # "Monitoring" label with Home + the raw-signal views (Activity, Cost,
     # Models, Context usage); Quality +
     # Harness Engineering under Analyze; Guard / Signals / Notifications
     # under Govern. Guard owns the Approvals and Alerts entry points
