@@ -1,5 +1,15 @@
 ## Unreleased
 
+### Release: the first-install screen opens as soon as there is data (2026-09-20)
+- **Carries:** #6099. Its entry follows.
+
+### Fixed: the first-install screen held a dashboard that was already full (2026-09-20)
+- **Why:** readiness was keyed on the collector finishing every phase for every runtime, not on whether the dashboard had anything to render. Measured on a real node running 0.12.887, from `/api/onboarding/readiness`: `started_at` 1789888927 to `updated_at` 1789889488, so 9 minutes 21 seconds to reach phase "complete". `has_data` went true within seconds of that window opening, and pressing "Open dashboard now" rendered 50 already-ingested Claude Code sessions instantly. The screen was covering a dashboard that had been ready for nine minutes.
+- **What:** readiness now reads live activity on every check, so rows arriving while the first pass is still running end the wait. Previously only rows that happened to exist at the instant of the very first progress write counted, which covered an upgrade but not a new installation on a machine that already has agent history. That is the common case, and it is the one the record's own "returning installs with existing activity bypass the wait" promise was written for.
+- **Unchanged:** the collector's own diagnostic events still do not count as activity, so a machine that has never run an agent keeps the "run your first task" guidance. That is now the only case the screen appears for. The reported phase stays honest while the pass continues; only the wait ends. The hosted dashboard reads the same value out of the encrypted snapshot and needs no separate change.
+- **Verified:** `tests/test_startup_readiness.py`, 16 passing, with three cases that fail on the previous code (activity arriving mid-pass opens the dashboard, a later phase cannot close it again, and an existing history is not gated after an upgrade). Reproduced the reported situation on a scratch store: a progress record at "discovering", 50 pre-existing sessions, then phase "runtime_history" 7 of 50, reports ready while the pass is 7 of 50 through.
+- **Refs:** #6041, #6058.
+
 ### Release: open dashboards that already have history (2026-09-17)
 - **Carries:** #6069. A malformed setup status could cover a populated hosted dashboard with a preparation screen. Available hosted history and completed collection now bypass that wait; invalid readiness responses cannot activate the overlay and are omitted by the collector.
 - **Appearance:** remove the rotating partial border around the setup logo. Actual collection stages and counts continue to show progress on a first installation.
