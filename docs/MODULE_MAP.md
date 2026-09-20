@@ -4,7 +4,7 @@
 > `python3 scripts/gen_module_map.py` (CI fails on drift via
 > `tests/test_module_map_drift.py`).
 
-287 modules, 86 Flask blueprints. `CLAUDE.md` carries a short curated table of the ones you reach for most often; this is the whole list.
+289 modules, 86 Flask blueprints. `CLAUDE.md` carries a short curated table of the ones you reach for most often; this is the whole list.
 
 Size bands are deliberately coarse so this file does not churn on every PR: **small** is under 200 lines, **medium** under 1k, **large** under 5k, **huge** is 5k and up.
 
@@ -52,8 +52,8 @@ One module per feature, each owning one or more Flask blueprints. New endpoints 
 | `routes/extensions.py` | small | `bp_extensions` | `/api/extensions` | diagnostic introspection for the entry-point plugin loader. |
 | `routes/fleet_history.py` | medium | `bp_fleet` | `/api/nodes`, `/fleet` | Multi-node fleet endpoints. |
 | `routes/govern.py` | medium | `bp_govern` | `/api/govern` | agent identity: a principal you can attach things to. |
-| `routes/guard.py` | large | `bp_guard` | `/api/guard` | Guard — live session control and enforcement policies. |
-| `routes/harness.py` | small | `bp_harness` | `/api/harness` | ``bp_harness`` — the per-harness custom-tab API. |
+| `routes/guard.py` | large | `bp_guard` | `/api/guard` | Guard -- live session control and enforcement policies. |
+| `routes/harness.py` | small | `bp_harness` | `/api/harness` | ``bp_harness`` -- the per-harness custom-tab API. |
 | `routes/health.py` | large | `bp_health` | `/api/_internal`, `/api/agent-presence`, `/api/authority-violations`, `/api/backups`, `/api/config-diagnostics`, `/api/diagnostics`, `/api/doctor-findings`, `/api/gateway-health`, `/api/handler-latency`, `/api/health`, `/api/health-stream`, `/api/heartbeat-ping`, `/api/heartbeat-status`, `/api/heatmap`, `/api/loop-detection`, `/api/loop-signals`, `/api/mcp-stats`, `/api/rate-limits`, `/api/reliability`, `/api/sandbox-status`, `/api/security-threats`, `/api/service-status`, `/api/system-health`, `/api/version-health`, `/healthz` | Health / reliability / diagnostics / rate-limits endpoints. |
 | `routes/heartbeat.py` | medium | `bp_heartbeat` | `/api/heartbeat`, `/api/heartbeat-loops` | Heartbeat liveness panel API endpoint (#686). |
 | `routes/hitl.py` | medium | `bp_hitl` | `/api/hitl` | Human-in-the-loop (HITL) pause API. |
@@ -75,7 +75,7 @@ One module per feature, each owning one or more Flask blueprints. New endpoints 
 | `routes/projects.py` | medium | `bp_projects` | `/api/projects` | project attribution and per-project budgets (REQ-OBS-PRJ-001). |
 | `routes/public_api.py` | medium | `bp_public_api` | `/api/q` | the keyed, cross-origin read API custom UIs use. |
 | `routes/quality.py` | medium | `bp_quality` | `/api/quality` | the Quality tab endpoint. |
-| `routes/readiness.py` | small | `bp_readiness` | `/api/repo-readiness` | ``bp_readiness`` — repo AI-readiness. |
+| `routes/readiness.py` | small | `bp_readiness` | `/api/repo-readiness` | ``bp_readiness`` -- repo AI-readiness. |
 | `routes/reasoning.py` | medium | `bp_reasoning` | `/api/reasoning` | Reasoning chain viewer endpoint. |
 | `routes/reports.py` | medium | `bp_reports` | `/api/reports`, `/reports`, `/reports/export.csv` | ClawMetry Reports: markdown + embedded DuckDB SQL. |
 | `routes/review.py` | medium | `bp_review` | `/api/review` | decision sampling review surface (issue #1615). |
@@ -115,6 +115,7 @@ The entitlement API surface, split from a single 47k-line file into a package: a
 | `routes/entitlement/_endpoints_06.py` | large |  | `/api/entitlement` | endpoint handlers api_entitlement_feature_catalog_at_path_batch .. |
 | `routes/entitlement/_endpoints_07.py` | large |  | `/api/entitlement` | endpoint handlers api_entitlement_lock_reason_at_path .. |
 | `routes/entitlement/_endpoints_08.py` | large |  | `/api/entitlement` | endpoint handlers api_entitlement_min_tier_for_features_batch .. |
+| `routes/entitlement/_endpoints_09.py` | medium |  | `/api/entitlement` | endpoint handlers api_entitlement_has_capacity_batch, api_entitlement_has_capacity_batch_at. |
 | `routes/entitlement/_shared.py` | huge | `bp_entitlement` |  | imports, constants, the blueprint and every non-handler helper the endpoint modules call. |
 
 ## Shared helpers (`helpers/`)
@@ -143,7 +144,7 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/_paywall_events.py` | large | In-process rolling store for ``POST /api/paywall/event`` client beacons. |
 | `clawmetry/agent_inventory.py` | medium | Agent supply chain: what each agent runtime loads from disk, and what changed. |
 | `clawmetry/agentops_metrics.py` | medium | AgentOps window metrics: latency, handoffs, guardrails, review, ground truth. |
-| `clawmetry/alert_evaluator.py` | large | Local alert-rule evaluator — pure logic, no I/O (PRD #779 PR-D part 2). |
+| `clawmetry/alert_evaluator.py` | large | Local alert-rule evaluator -- pure logic, no I/O (PRD #779 PR-D part 2). |
 | `clawmetry/apikeys.py` | medium | scoped, revocable read keys for custom UIs. |
 | `clawmetry/apikeys_public.py` | small | read-side helpers for the keyed public API. |
 | `clawmetry/approval_events.py` | small | The public seam between approvals and whoever delivers them. |
@@ -153,13 +154,13 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/behaviour_signals.py` | large | Behaviour Signals: what people and agents *say* about a run (WO-58). |
 | `clawmetry/brain_dedupe.py` | medium | Shared collapse for duplicate Brain-feed events. |
 | `clawmetry/briefs.py` | medium | Briefs (WO-62): a saved question, a schedule, and a destination channel. |
-| `clawmetry/ccr.py` | small | CCR — reversible event-payload compression for the DuckDB store (#2843). |
+| `clawmetry/ccr.py` | small | CCR -- reversible event-payload compression for the DuckDB store (#2843). |
 | `clawmetry/claude_code_gate.py` | medium | Claude Code pre-tool gate: policy-driven PreToolUse hook, local-first. |
 | `clawmetry/cli.py` | huge |  |
 | `clawmetry/cohort_compare.py` | medium | Cohort compare and similar runs: pure math, no I/O (WO-60). |
 | `clawmetry/cohort_queries.py` | medium | Store reads behind cohort compare and similar runs (WO-60). |
 | `clawmetry/config.py` | medium | ClawMetry configuration dataclass. |
-| `clawmetry/connector_health.py` | small | Connector liveness — turn the daemon's ``connector.health`` signal stream into a per-channel ok/degraded/down verdict. |
+| `clawmetry/connector_health.py` | small | Connector liveness -- turn the daemon's ``connector.health`` signal stream into a per-channel ok/degraded/down verdict. |
 | `clawmetry/context_coverage.py` | medium | Which context-blowout signals we can actually see, per runtime. |
 | `clawmetry/context_windows.py` | medium | Context-window sizing across every runtime ClawMetry ingests. |
 | `clawmetry/cost_basis.py` | medium | What kind of money a cost figure is. |
@@ -183,10 +184,11 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/distinfo_cleanup.py` | small | prune stale dist-info left by partial upgrades. |
 | `clawmetry/dives_prompt.py` | medium | prompt template + schema descriptor for Dives. |
 | `clawmetry/dives_sql_safety.py` | medium | SQL safety validator for ClawMetry Dives (AI SQL -> chart over local DuckDB). |
-| `clawmetry/doctor.py` | medium | clawmetry doctor — enterprise network connectivity diagnostics. |
+| `clawmetry/doctor.py` | medium | clawmetry doctor -- enterprise network connectivity diagnostics. |
 | `clawmetry/efficiency.py` | medium | Efficiency grade + measured savings (pure math). |
-| `clawmetry/endpoints.py` | small | clawmetry.endpoints — single source of truth for cloud endpoint resolution. |
+| `clawmetry/endpoints.py` | small | clawmetry.endpoints -- single source of truth for cloud endpoint resolution. |
 | `clawmetry/entitlements.py` | huge | open-core entitlement resolution. |
+| `clawmetry/entitlements_capacity_batch.py` | small | has_capacity_batch + has_capacity_batch_at. |
 | `clawmetry/error_signal.py` | small | OSS delegating shim after the impl moved to clawmetry-pro. |
 | `clawmetry/eval_regression_replay.py` | medium | Phase 3 evals: regression-replay. |
 | `clawmetry/eval_runner.py` | large | Local-first LLM-as-judge scoring of completed sessions. |
@@ -204,39 +206,39 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/gateway_tap.py` | medium | live OpenClaw gateway WebSocket subscriber. |
 | `clawmetry/git_config_exec.py` | small | Which git config settings make git execute a program. |
 | `clawmetry/git_outcomes.py` | medium | Read a repository and say whether the agent's work shipped (REQ-OBS-CEA-022). |
-| `clawmetry/guard_actuator.py` | medium | Guard actuator — the ONE path from a decision to a process. |
+| `clawmetry/guard_actuator.py` | medium | Guard actuator -- the ONE path from a decision to a process. |
 | `clawmetry/guard_checks.py` | small | Guard's operator-facing catalogue and durable, node-wide preferences. |
 | `clawmetry/harness_bench.py` | medium | Harness Engineering bench: pure scoring math, no I/O. |
 | `clawmetry/harness_templates.py` | medium | Per-harness custom-tab template registry. |
 | `clawmetry/hook_ownership.py` | medium | Ownership-aware editing of a shared hooks array. |
-| `clawmetry/hooks.py` | medium | Hook lifecycle manager — install manifest and atomic install/uninstall API. |
-| `clawmetry/hooks_claude_code.py` | large | Claude Code hooks → ClawMetry: pre-execution approval gate + phone pushes. |
+| `clawmetry/hooks.py` | medium | Hook lifecycle manager -- install manifest and atomic install/uninstall API. |
+| `clawmetry/hooks_claude_code.py` | large | Claude Code hooks -> ClawMetry: pre-execution approval gate + phone pushes. |
 | `clawmetry/incident_alerts.py` | medium | deliver a detector incident to a human. |
 | `clawmetry/ingest_auth.py` | medium | the gate in front of the ingest surfaces. |
 | `clawmetry/ingest_contract.py` | medium | the declared ingest/1 contract registry. |
 | `clawmetry/injected_context.py` | small | Tell what a human typed apart from context a harness injects as a user turn. |
-| `clawmetry/insights.py` | medium | Weekly Insights Digest — LLM-over-DuckDB summary of the last 7 days. |
-| `clawmetry/installs.py` | medium | Install census — find every clawmetry copy on this machine and flag stale ones. |
-| `clawmetry/instrument.py` | medium | ``clawmetry instrument <runtime>`` — switch a runtime's own OpenTelemetry exporter on and point it at the local ClawMetry receiver (WO-57). |
+| `clawmetry/insights.py` | medium | Weekly Insights Digest -- LLM-over-DuckDB summary of the last 7 days. |
+| `clawmetry/installs.py` | medium | Install census -- find every clawmetry copy on this machine and flag stale ones. |
+| `clawmetry/instrument.py` | medium | ``clawmetry instrument <runtime>`` -- switch a runtime's own OpenTelemetry exporter on and point it at the local ClawMetry receiver (WO-57). |
 | `clawmetry/interceptor.py` | medium | Zero-config HTTP interceptor for LLM API cost tracking. |
 | `clawmetry/latency_tracker.py` | small | Per-endpoint p50/p95 handler-latency tracker (in-memory rolling window). |
 | `clawmetry/license.py` | huge | self-hosted Pro/Enterprise license client. |
 | `clawmetry/lifecycle_coverage.py` | medium | Which lifecycle facts each runtime can put on a session's trail. |
 | `clawmetry/local_server.py` | medium | HTTP query server hosted INSIDE the sync daemon process. |
-| `clawmetry/local_store.py` | huge | Local DuckDB event store — Phase 1 of the local-first refactor (#964). |
+| `clawmetry/local_store.py` | huge | Local DuckDB event store -- Phase 1 of the local-first refactor (#964). |
 | `clawmetry/local_store_agent_meta.py` | small | AgentMetaMixin for LocalStore. |
 | `clawmetry/local_store_projects.py` | medium | ProjectsMixin for LocalStore (REQ-OBS-PRJ-001). |
 | `clawmetry/mcp_install.py` | medium | Register the ClawMetry MCP server with each runtime's MCP configuration (WO-59, REQ-SELF-001). |
-| `clawmetry/mcp_server.py` | medium | ClawMetry MCP server — exposes local telemetry as MCP tools (stdio transport). |
+| `clawmetry/mcp_server.py` | medium | ClawMetry MCP server -- exposes local telemetry as MCP tools (stdio transport). |
 | `clawmetry/narrator.py` | small | LLM-narrated alert enrichment (issue #1412, Feature C). |
-| `clawmetry/net.py` | medium | clawmetry.net — outbound TLS + proxy bootstrap for enterprise networks. |
+| `clawmetry/net.py` | medium | clawmetry.net -- outbound TLS + proxy bootstrap for enterprise networks. |
 | `clawmetry/nonsecret_hash.py` | small | MD5/SHA-1 digests that are *not* being used as a security primitive. |
 | `clawmetry/numbat_ingest.py` | medium | map Perplexity numbat NDJSON records into ClawMetry rows. |
 | `clawmetry/onboarding_state.py` | small | the ONE writer for the first-run gate's choice file, ``~/.clawmetry/onboarding.json``. |
 | `clawmetry/org_key.py` | small | The organisation key: one secret, shared by the people in one organisation. |
 | `clawmetry/otel_discovery.py` | medium | Find applications on this machine that already emit OpenTelemetry (#4784). |
 | `clawmetry/otel_exporter.py` | medium | Outbound OTLP trace exporter for ClawMetry. |
-| `clawmetry/otel_profiles.py` | small | OTel runtime profiles — the seam between the generic OTLP receiver and runtime-specific knowledge (WO-57). |
+| `clawmetry/otel_profiles.py` | small | OTel runtime profiles -- the seam between the generic OTLP receiver and runtime-specific knowledge (WO-57). |
 | `clawmetry/otel_push.py` | small | OSS delegating shim after the impl moved to clawmetry-pro. |
 | `clawmetry/otlp_content.py` | medium | How much content received telemetry keeps (REQ-OBS-OTG-001, AC-OBS-OTG-001.9). |
 | `clawmetry/otlp_guard.py` | medium | OTLP intake, before it is stored or judged (REQ-OBS-OTG-001). |
@@ -244,7 +246,7 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/otlp_json.py` | medium | stdlib OTLP/JSON decoder (issue #4781). |
 | `clawmetry/otlp_sources.py` | medium | Which source records a tool call reported over OTLP (REQ-OBS-OTG-001). |
 | `clawmetry/outcome_classifier.py` | large | Auto-label every session with an outcome. |
-| `clawmetry/policy_engine.py` | medium | Guard policies — turn a detector incident into an enforcement decision. |
+| `clawmetry/policy_engine.py` | medium | Guard policies -- turn a detector incident into an enforcement decision. |
 | `clawmetry/pr_provenance.py` | large | Pull-request provenance: which agent sessions wrote which changed files. |
 | `clawmetry/pr_provenance_cli.py` | medium | ``clawmetry trace report``: agent-session provenance for a change. |
 | `clawmetry/price_book.py` | medium | Price book contract: negotiated rates, Azure OpenAI aliases, effective dates. |
@@ -255,30 +257,30 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/prompt_injection.py` | medium | injection signatures and the untrusted-content signal. |
 | `clawmetry/provenance.py` | medium | Every number says how it was obtained. |
 | `clawmetry/providers_pricing.py` | medium | ClawMetry provider detection and pricing table. |
-| `clawmetry/proxy.py` | large | ClawMetry Proxy — opt-in enforcement layer between OpenClaw and LLM providers. |
+| `clawmetry/proxy.py` | large | ClawMetry Proxy -- opt-in enforcement layer between OpenClaw and LLM providers. |
 | `clawmetry/published_benchmarks.py` | small | Published (harness, model) benchmark pairs for the Harness Engineering tab. |
 | `clawmetry/quality.py` | medium | the Quality tab's plain-English layer. |
 | `clawmetry/quality_signals.py` | medium | evidence-bearing quality signals. |
 | `clawmetry/quality_thresholds.py` | small | per-runtime threshold calibration. |
 | `clawmetry/query_contract.py` | medium | the declared q/1 query contract registry. |
-| `clawmetry/question_sets.py` | medium | Question-set approvals — decisions beyond yes/no (WO-52, phase 1). |
+| `clawmetry/question_sets.py` | medium | Question-set approvals -- decisions beyond yes/no (WO-52, phase 1). |
 | `clawmetry/redaction.py` | medium | Defense-in-depth secret redaction for the daemon ingest path. |
 | `clawmetry/relay.py` | small | DEPRECATED stub. |
 | `clawmetry/replay_schema.py` | small | Canonical replay-event schema. |
 | `clawmetry/repo_readiness.py` | medium | how legible is this repo to an agent? |
 | `clawmetry/repo_scan.py` | medium | Workspace scanner: executable content shipped inside a checkout. |
 | `clawmetry/resume_hints.py` | medium | How a human restarts a session ClawMetry can no longer control. |
-| `clawmetry/retention.py` | small | How long this node keeps event data — one answer, with its reason. |
+| `clawmetry/retention.py` | small | How long this node keeps event data -- one answer, with its reason. |
 | `clawmetry/risk.py` | medium | Hallucination Risk Indicator (issue #567). |
-| `clawmetry/runtime_gates.py` | medium | Pre-tool gates for Cursor and GitHub Copilot CLI — "block before it runs". |
+| `clawmetry/runtime_gates.py` | medium | Pre-tool gates for Cursor and GitHub Copilot CLI -- "block before it runs". |
 | `clawmetry/runtime_memory.py` | large | Per-runtime Memory & Skills file browser. |
 | `clawmetry/runtime_probe.py` | medium | zero-dependency presence probes for every supported agent runtime (#3917, founder request 2026-07-22). |
-| `clawmetry/runtime_records.py` | medium | What each runtime actually records — so a surface can say "not recorded" instead of rendering a zero. |
+| `clawmetry/runtime_records.py` | medium | What each runtime actually records -- so a surface can say "not recorded" instead of rendering a zero. |
 | `clawmetry/sample_data.py` | medium | Synthetic sample sessions, so a fresh install is never an empty product. |
-| `clawmetry/secure.py` | medium | clawmetry secure — one-command numbat (Perplexity agent-EDR) setup. |
+| `clawmetry/secure.py` | medium | clawmetry secure -- one-command numbat (Perplexity agent-EDR) setup. |
 | `clawmetry/security_posture.py` | large | Runtime-aware security posture registry. |
 | `clawmetry/self_diagnostics.py` | medium | Agent self-diagnostics: reports an agent files about its own trouble, and the independent check on whether the tool stream agrees (WO-59, REQ-SELF). |
-| `clawmetry/selfhosted.py` | medium | clawmetry.selfhosted — ClawMetry Enterprise single-tenant server mode. |
+| `clawmetry/selfhosted.py` | medium | clawmetry.selfhosted -- ClawMetry Enterprise single-tenant server mode. |
 | `clawmetry/session_context.py` | medium | Inputs & context: what the agent was actually given, per session. |
 | `clawmetry/session_titles.py` | medium | ChatGPT-style session titles from the first real user prompt. |
 | `clawmetry/setup_prompt.py` | small | the copy-paste prompt you hand your agent. |
@@ -293,19 +295,19 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/telemetry.py` | medium | anonymous, opt-out, install-lifecycle pings. |
 | `clawmetry/token_confidence.py` | medium | Token Probability Visualizer (issue #563). |
 | `clawmetry/tool_risk.py` | medium | deterministic call-level risk classification. |
-| `clawmetry/trace.py` | medium | clawmetry.trace — Dependency-free Python tracing SDK for AI applications. |
+| `clawmetry/trace.py` | medium | clawmetry.trace -- Dependency-free Python tracing SDK for AI applications. |
 | `clawmetry/trace_auto.py` | medium | Automatic PR tracing: capture, publish and comment, with no command. |
 | `clawmetry/trace_capture.py` | medium | Build a PR trace bundle from local session data (PRD-pr-trace.md §4b). |
 | `clawmetry/trace_stamp.py` | medium | Stamp agent-authored commits with the ClawMetry session that produced them. |
 | `clawmetry/trace_viewer.py` | medium | Render a trace bundle to a self-contained HTML page (PRD-pr-trace.md §4g). |
-| `clawmetry/track.py` | small | clawmetry.track — Zero-config HTTP interceptor for LLM cost tracking. |
+| `clawmetry/track.py` | small | clawmetry.track -- Zero-config HTTP interceptor for LLM cost tracking. |
 | `clawmetry/trail_store.py` | medium | Trail store methods: session intent, typed-event back-fill, per-session git join. |
 | `clawmetry/trial_enforcement.py` | medium | Trial-end hard-block layer. |
 | `clawmetry/update_guard.py` | small | Crash-loop rollback guard for daemon self-update (firmware-OTA style). |
 | `clawmetry/update_respawn.py` | medium | Windows out-of-process updater. |
 | `clawmetry/waste_flags.py` | small | OSS delegating shim after the impl moved to clawmetry-pro. |
 | `clawmetry/watchdog.py` | medium | macOS "app-vanished" watchdog. |
-| `clawmetry/winconsole.py` | small | clawmetry.winconsole — stop Windows console windows flashing. |
+| `clawmetry/winconsole.py` | small | clawmetry.winconsole -- stop Windows console windows flashing. |
 | `clawmetry/workload_profiles.py` | small | Workload profiling for the Harness Engineering tab (REQ-HB-004). |
 
 ## Free runtime adapters (`clawmetry/adapters/`)
@@ -316,15 +318,15 @@ The runtime adapters that ship in open source. The paid ones live in `clawmetry-
 |---|---|---|
 | `clawmetry/adapters/base.py` | medium | Adapter base class + unified schemas. |
 | `clawmetry/adapters/cost.py` | small | Shared cost-derivation helper for the bundled runtime adapters. |
-| `clawmetry/adapters/goose.py` | medium | GooseAdapter — read Goose (Block / block/goose) sessions from its SQLite store. |
+| `clawmetry/adapters/goose.py` | medium | GooseAdapter -- read Goose (Block / block/goose) sessions from its SQLite store. |
 | `clawmetry/adapters/inputs.py` | small | Inputs & context emit helper shared by the runtime adapters. |
-| `clawmetry/adapters/nemo.py` | large | NeMoAdapter — push-mode telemetry exporter for NVIDIA's NeMo Agent Toolkit. |
+| `clawmetry/adapters/nemo.py` | large | NeMoAdapter -- push-mode telemetry exporter for NVIDIA's NeMo Agent Toolkit. |
 | `clawmetry/adapters/openclaw.py` | large | This adapter does NOT re-implement OpenClaw session parsing. |
 | `clawmetry/adapters/openclaw_reply_recovery.py` | small | Reply-recovery event scanner for the OpenClaw adapter. |
 | `clawmetry/adapters/openclaw_share.py` | medium | OpenClaw public-share state (issue #5746). |
 | `clawmetry/adapters/openclaw_update_pipeline.py` | small | Update-pipeline state scanner for the OpenClaw adapter. |
 | `clawmetry/adapters/phase.py` | medium | The session phase model: one state machine, every runtime. |
-| `clawmetry/adapters/qwen_code.py` | medium | QwenCodeAdapter — read Qwen Code chat-recording history from disk. |
+| `clawmetry/adapters/qwen_code.py` | medium | QwenCodeAdapter -- read Qwen Code chat-recording history from disk. |
 | `clawmetry/adapters/registry.py` | small | Process-wide adapter registry. |
 
 ## Data providers (`clawmetry/providers/`)
@@ -334,7 +336,7 @@ The pluggable data-provider layer behind `CLAWMETRY_PROVIDER`.
 | Module | Size | Purpose |
 |---|---|---|
 | `clawmetry/providers/base.py` | small | Abstract data provider interface for ClawMetry. |
-| `clawmetry/providers/local.py` | medium | Local filesystem data provider — reads directly from ~/.openclaw files. |
+| `clawmetry/providers/local.py` | medium | Local filesystem data provider -- reads directly from ~/.openclaw files. |
 | `clawmetry/providers/turso.py` | small | Turso cloud data provider for ClawMetry cloud dashboard. |
 
 ## CLI subcommands (`clawmetry/cli_cmds/`)
@@ -344,12 +346,12 @@ Subcommands dispatched by `clawmetry/cli.py`.
 | Module | Size | Purpose |
 |---|---|---|
 | `clawmetry/cli_cmds/_common.py` | medium | Shared plumbing for the agent-facing read CLI. |
-| `clawmetry/cli_cmds/activity.py` | small | `clawmetry activity` — the Brain event feed from the terminal. |
-| `clawmetry/cli_cmds/progress.py` | small | `clawmetry progress` — is the agent actually getting anywhere? |
-| `clawmetry/cli_cmds/selfevolve.py` | small | `clawmetry selfevolve` — OSS 402 stub for the Pro self-improvement engine. |
-| `clawmetry/cli_cmds/sessions.py` | medium | `clawmetry sessions` — list sessions; drill into one with facets. |
-| `clawmetry/cli_cmds/usage.py` | small | `clawmetry usage` — token/cost analytics from the terminal. |
-| `clawmetry/cli_cmds/waste.py` | small | `clawmetry waste` — the re-read tax, from the terminal. |
+| `clawmetry/cli_cmds/activity.py` | small | `clawmetry activity` -- the Brain event feed from the terminal. |
+| `clawmetry/cli_cmds/progress.py` | small | `clawmetry progress` -- is the agent actually getting anywhere? |
+| `clawmetry/cli_cmds/selfevolve.py` | small | `clawmetry selfevolve` -- OSS 402 stub for the Pro self-improvement engine. |
+| `clawmetry/cli_cmds/sessions.py` | medium | `clawmetry sessions` -- list sessions; drill into one with facets. |
+| `clawmetry/cli_cmds/usage.py` | small | `clawmetry usage` -- token/cost analytics from the terminal. |
+| `clawmetry/cli_cmds/waste.py` | small | `clawmetry waste` -- the re-read tax, from the terminal. |
 
 ## v2 API (`clawmetry/v2/`)
 
