@@ -1,4 +1,4 @@
-<!-- i18n-src:a855a14295b0 -->
+<!-- i18n-src:b22579578775 -->
 > עברית translation of [README](../../../README.md), auto-generated from the English source. English is canonical; open a PR against `README.md` for content changes.
 
 # ClawMetry
@@ -11,151 +11,150 @@
 [![Security policy](https://img.shields.io/badge/security-policy-informational)](SECURITY.md)
 [![Egress: documented](https://img.shields.io/badge/egress-documented-informational)](docs/EGRESS.md)
 
-**סוכן יכול לבצע מאה קריאות כלים בלי לחולל התקדמות.** ClawMetry
-קוראת את קובצי הסשן שסוכני הקוד שלך כותבים כבר בעצמם, ומאגדת את ציר הזמן,
-קריאות הכלים וכל נתוני הטוקנים והעלות שה-runtime חושף לתצוגה אחת -
-כך שתוכל להבחין בין הרצה ארוכה שעובדת לבין הרצה שנתקעה.
+**סוכן יכול לבצע מאה קריאות כלים בלי להתקדם.** ClawMetry
+קוראת את קובצי הסשן שסוכני הקוד שלכם כבר כותבים, ומרכזת את ציר הזמן,
+קריאות הכלים וכל נתוני הטוקנים והעלות שהריצה חושפת בתצוגה אחת —
+כך שתוכלו להבחין בין ריצה ארוכה שעובדת לבין ריצה שנתקעה.
 
-עובד עם **32 runtimes של סוכני AI** - Claude Code, OpenAI Codex, Hermes, OpenClaw ו-28 נוספים. דשבורד אחד לכל צי הסוכנים שלך. ([הרשימה המלאה](SUPPORTED_RUNTIMES.txt), שנוצרת מהקטלוג.)
+עובד עם **32 ריצות סוכני AI** — Claude Code, OpenAI Codex, Hermes, OpenClaw ועוד 28. לוח מחוונים אחד לכל צי הסוכנים שלכם. ([הרשימה המלאה](SUPPORTED_RUNTIMES.txt), נוצרת מהקטלוג.)
 
-> 🌐 **קראו זאת ב:** [English](README.md) · [简体中文](docs/i18n/zh-CN/README.md) · [日本語](docs/i18n/ja/README.md) · [한국어](docs/i18n/ko/README.md) · [Español](docs/i18n/es/README.md) · [Português (BR)](docs/i18n/pt-BR/README.md) · [Français](docs/i18n/fr/README.md) · [Deutsch](docs/i18n/de/README.md) · [हिन्दी](docs/i18n/hi/README.md) · [العربية](docs/i18n/ar/README.md) · [Русский](docs/i18n/ru/README.md) · [עוד →](docs/i18n/)
+> 🌐 **קראו את זה ב:** [English](README.md) · [简体中文](docs/i18n/zh-CN/README.md) · [日本語](docs/i18n/ja/README.md) · [한국어](docs/i18n/ko/README.md) · [Español](docs/i18n/es/README.md) · [Português (BR)](docs/i18n/pt-BR/README.md) · [Français](docs/i18n/fr/README.md) · [Deutsch](docs/i18n/de/README.md) · [हिन्दी](docs/i18n/hi/README.md) · [العربية](docs/i18n/ar/README.md) · [Русский](docs/i18n/ru/README.md) · [עוד →](docs/i18n/)
 
-פקודה אחת. אפס הגדרות. מאתר הכול אוטומטית.
+פקודה אחת. אפס הגדרות. מזהה הכול אוטומטית.
 
 ```bash
 pip install clawmetry && clawmetry
 ```
 
-נפתח בכתובת **http://localhost:8900**. אפס הגדרות: המערכת מוצאת את ה-runtimes
-שכבר מותקנים לך, קוראת אותם בקריאה בלבד, ולא משנה כלום באופן שבו הם רצים.
+נפתח בכתובת **http://localhost:8900**. אפס הגדרות: הכלי מוצא את ריצות הסוכנים
+שכבר יש לכם, קורא אותן במצב קריאה בלבד, ולא משנה דבר באופן שבו הן פועלות.
 
 ![ClawMetry dashboard: every AI agent runtime on one machine with 24h and lifetime cost per agent](https://raw.githubusercontent.com/vivekchand/clawmetry/main/screenshots/hero.png)
 
-## לפני שאתם מתקינים
+## לפני שמתקינים
 
 | | |
 |---|---|
-| **מה זה עושה** | קוראת את קובצי הסשן והלוגים שהסוכנים שלך כותבים כבר בעצמם. אין SDK, אין שינוי קוד, אין אינסטרומנטציה באפליקציה שלכם. |
-| **מה אתם רואים** | ציר זמן של הסשן, שידור חוזר כלי-אחר-כלי, פירוט טוקנים ועלות, ואינדיקטורים למגמות (לופים, כשלים חוזרים) - לפי runtime. |
-| **מה חינמי** | `pip install clawmetry` קוראת **OpenClaw, NVIDIA NemoClaw ו-Goose** בלי חשבון, בלי מפתח ובלי קריאת רשת. 27 האחרים - Claude Code, Codex, Cursor והשאר - נקראים על ידי המלווה הקוד-סגור `clawmetry-pro`, שמגיע עם תקופת הניסיון של 7 ימים או תוכנית מנוי - ראו [docs/ENTITLEMENTS.md](docs/ENTITLEMENTS.md) לחלוקה המדויקת. |
+| **מה זה עושה** | קורא את קובצי הסשן והלוגים שהסוכנים שלכם כבר כותבים. בלי SDK, בלי שינוי קוד, בלי אינסטרומנטציה באפליקציה שלכם. |
+| **מה אתם רואים** | ציר זמן של הסשן, שחזור כלי אחר כלי, פירוט טוקנים ועלויות, ואיתותי מסלול (לולאות, כשלים חוזרים) — לכל ריצה בנפרד. |
+| **מה חינמי** | `pip install clawmetry` קורא את **OpenClaw, NVIDIA NemoClaw, Goose ו-Qwen Code** בלי חשבון, בלי מפתח ובלי קריאת רשת. שאר ה-28 — Claude Code, Codex, Cursor והשאר — נקראים על ידי הרכיב הנלווה סגור-הקוד `clawmetry-pro`, שמגיע עם תקופת הניסיון של 7 ימים או עם תוכנית בתשלום — ראו [docs/ENTITLEMENTS.md](docs/ENTITLEMENTS.md) לפירוט המדויק. |
 | **איך מתחילים** | `pip install clawmetry && clawmetry`, ואז פותחים את localhost:8900. אין עדיין סוכנים על המחשב הזה? `clawmetry --sample` נפתח עם שלושה סשנים סינתטיים מתויגים. |
-| **מה עוזב את המחשב שלכם** | אין נתוני סשן, אלא אם תריצו `clawmetry connect`. שני דברים כן רצים כברירת מחדל, שניהם ניתנים לביטול ואף אחד מהם לא נושא תוכן סשן: פינג התקנה אנונימי ובדיקת גרסה מול PyPI. כל יעד רשום ב-[docs/EGRESS.md](docs/EGRESS.md), שנבנה מלכידת תעבורת רשת בפועל ולא מקריאת הערות בקוד. |
+| **מה יוצא מהמחשב שלכם** | שום נתוני סשן, אלא אם תריצו `clawmetry connect`. שני דברים כן רצים כברירת מחדל, שניהם ניתנים לביטול ואף אחד מהם לא נושא תוכן סשן: פינג התקנה אנונימי ובדיקת גרסה מול PyPI. כל יעד מתועד ב-[docs/EGRESS.md](docs/EGRESS.md), שנבנה מחדש מלכידת תעבורת רשת ולא מקריאת הערות בקוד. |
 
-שתי מגבלות ששווה להכיר לפני שתשפטו את הפלט: ה-runtimes חושפים נתונים שונים
-מאוד (חלקם לא מפרסמים עלות בכלל - [המטריצה](docs/compatibility.md)
-מציינת מי, לפי runtime), וצפייה בפעולה אינה זהה ליכולת לחסום אותה
-([אילו פקדים אמיתיים, לפי runtime](docs/APPROVALS.md)).
+שתי מגבלות שכדאי להכיר לפני שפוסקים על הפלט: ריצות שונות חושפות נתונים שונים
+מאוד (חלקן לא מפרסמות עלות בכלל — [הטבלה](docs/compatibility.md) מפרטת אילו,
+לפי ריצה), ולצפות בפעולה זה לא כמו היכולת לחסום אותה
+([אילו פקדים אמיתיים, לפי ריצה](docs/APPROVALS.md)).
 
 
-## עובד עם 32 runtimes של סוכנים
+## עובד עם 32 ריצות סוכנים
 
-**חינם באפליקציית קוד הפתוח:** 🦞 **[OpenClaw](https://clawmetry.com/runtimes/openclaw)** · 🟩 **[NVIDIA NemoClaw](https://clawmetry.com/nemoclaw)** · 🪿 **[Goose](https://clawmetry.com/runtimes/goose)**
+**חינמי באפליקציית הקוד הפתוח:** 🦞 **[OpenClaw](https://clawmetry.com/runtimes/openclaw)** · 🟩 **[NVIDIA NemoClaw](https://clawmetry.com/nemoclaw)** · 🪿 **[Goose](https://clawmetry.com/runtimes/goose)** · ◈ **[Qwen Code](https://clawmetry.com/runtimes/qwen-code)**
 
-**בתוכנית בתשלום:** ◆ **[Claude Code](https://clawmetry.com/runtimes/claude-code)** · **[Cursor](https://clawmetry.com/runtimes/cursor)** · 🐙 **[GitHub Copilot](https://clawmetry.com/runtimes/copilot)** · ⬡ **[OpenAI Codex](https://clawmetry.com/runtimes/codex)** · ♊ **[Gemini CLI](https://clawmetry.com/runtimes/gemini-cli)** · 💗 **[Lovable](https://clawmetry.com/runtimes/lovable)** · ⠕ **[Replit Agent](https://clawmetry.com/runtimes/replit)** · 🖇 **[Cline](https://clawmetry.com/runtimes/cline)** · 🙌 **[OpenHands](https://clawmetry.com/runtimes/openhands)** · 🧑‍💼 **[OpenWorker](https://clawmetry.com/runtimes/openworker)** · 🎭 **[Muse Code](https://clawmetry.com/runtimes/muse-code)** · 🏛️ **[OpenExecutive](https://clawmetry.com/runtimes/openexecutive)** · **[opencode](https://clawmetry.com/runtimes/opencode)** · **[Aider](https://clawmetry.com/runtimes/aider)** · 🔗 **[n8n](https://clawmetry.com/runtimes/n8n)** · ◈ **[Qwen Code](https://clawmetry.com/runtimes/qwen-code)** · 🅳 **[Devin](https://clawmetry.com/runtimes/devin)** · 🪐 **[Antigravity](https://clawmetry.com/runtimes/antigravity)** · **[Grok Build](https://clawmetry.com/runtimes/grok)** · 🤖 **[Grok Bot](https://clawmetry.com/runtimes/grok-bot)** · ⚡ **[Hermes](https://clawmetry.com/runtimes/hermes)** · **[Pi](https://clawmetry.com/runtimes/pi)** · **[Deep Agents](https://clawmetry.com/runtimes/deep-agents)** · 🌙 **[Kimi CLI](https://clawmetry.com/runtimes/kimi)** · 🐋 **[DeepSeek Harness](https://clawmetry.com/runtimes/deepseek-harness)** · 🦾 **[Exo](https://clawmetry.com/runtimes/exo)** · **[NanoClaw](https://clawmetry.com/runtimes/nanoclaw)** · **[PicoClaw](https://clawmetry.com/runtimes/picoclaw)** · **[QM](https://clawmetry.com/runtimes/qm)**
+**בתוכנית בתשלום:** ◆ **[Claude Code](https://clawmetry.com/runtimes/claude-code)** · **[Cursor](https://clawmetry.com/runtimes/cursor)** · 🐙 **[GitHub Copilot](https://clawmetry.com/runtimes/copilot)** · ⬡ **[OpenAI Codex](https://clawmetry.com/runtimes/codex)** · ♊ **[Gemini CLI](https://clawmetry.com/runtimes/gemini-cli)** · 💗 **[Lovable](https://clawmetry.com/runtimes/lovable)** · ⠕ **[Replit Agent](https://clawmetry.com/runtimes/replit)** · 🖇 **[Cline](https://clawmetry.com/runtimes/cline)** · 🙌 **[OpenHands](https://clawmetry.com/runtimes/openhands)** · 🧑‍💼 **[OpenWorker](https://clawmetry.com/runtimes/openworker)** · 🎭 **[Muse Code](https://clawmetry.com/runtimes/muse-code)** · 🏛️ **[OpenExecutive](https://clawmetry.com/runtimes/openexecutive)** · **[opencode](https://clawmetry.com/runtimes/opencode)** · **[Aider](https://clawmetry.com/runtimes/aider)** · 🔗 **[n8n](https://clawmetry.com/runtimes/n8n)** · 🅳 **[Devin](https://clawmetry.com/runtimes/devin)** · 🪐 **[Antigravity](https://clawmetry.com/runtimes/antigravity)** · **[Grok Build](https://clawmetry.com/runtimes/grok)** · 🤖 **[Grok Bot](https://clawmetry.com/runtimes/grok-bot)** · ⚡ **[Hermes](https://clawmetry.com/runtimes/hermes)** · **[Pi](https://clawmetry.com/runtimes/pi)** · **[Deep Agents](https://clawmetry.com/runtimes/deep-agents)** · 🌙 **[Kimi CLI](https://clawmetry.com/runtimes/kimi)** · 🐋 **[DeepSeek Harness](https://clawmetry.com/runtimes/deepseek-harness)** · 🦾 **[Exo](https://clawmetry.com/runtimes/exo)** · **[NanoClaw](https://clawmetry.com/runtimes/nanoclaw)** · **[PicoClaw](https://clawmetry.com/runtimes/picoclaw)** · **[QM](https://clawmetry.com/runtimes/qm)**
 
-כל runtime מקבל את אותו הדשבורד. הריצו כמה בבת אחת, והמחליף בכותרת
-יעצב מחדש את ההיקף של כל טאב לאחד מהם.
+כל ריצה מקבלת את אותו לוח מחוונים. הריצו כמה בו-זמנית והבורר בכותרת
+ימקד מחדש כל טאב לאחת מהן.
 
-בניתם סוכן משלכם על גבי SDK במקום זאת? המיירט (interceptor) עוקב גם אחרי
-קריאות ה-LLM שלו. ראו [docs/SDK_TRACKING.md](docs/SDK_TRACKING.md).
+בניתם את הסוכן שלכם על SDK במקום זאת? המיירט עוקב גם אחרי קריאות ה-LLM שלו.
+ראו [docs/SDK_TRACKING.md](docs/SDK_TRACKING.md).
 
-## מה אתם מקבלים
+## מה מקבלים
 
-- **סשנים ותמלולים**: מה כל סוכן עשה, תור אחר תור, עם שידור חוזר
-- **עלות וטוקנים**: לפי runtime, מודל, סשן ויום, עם דגלי חריגות
-- **זרימה (Flow)**: דיאגרמה חיה של הודעות שעוברות בין ערוצים, מודלים וכלים
+- **סשנים ותמלולים**: מה כל סוכן עשה, תור אחר תור, עם שחזור
+- **עלות וטוקנים**: לפי ריצה, מודל, סשן ויום, עם דגלי חריגה
+- **זרימה**: תרשים חי של הודעות שזזות בין ערוצים, מודלים וכלים
 - **מוח (Brain)**: זרם אירועי החשיבה וקריאות הכלים בזמן אמת
-- **התפוצצות קונטקסט**: ניצול חלון הקונטקסט בגודל לפי ספק, דחיסה מול גלישה מאולצת, בתוספת מפה לפי runtime של מה שאנחנו *לא יכולים* לראות ([איך](docs/CONTEXT_BLOWOUT.md))
-- **זיכרון וכישורים**: הקבצים והכישורים שכל runtime בפועל טען
-- **בריאות ולוגים**: דיסק, זיכרון, שיעורי שגיאות, מגבלות קצב, זרם לוג חי
-- **התראות**: תקציבי מקסימום, קפיצות שגיאות, סוכן-לא-מקוון, מנותב ל-Slack, Discord, PagerDuty, Telegram, Email
-- **אישורים**: עיכוב קריאות כלים מסוכנות *לפני* שהן רצות ואישור מהטלפון שלכם ([איך](docs/APPROVALS.md))
+- **התפוצצות הקשר (Context blowout)**: ניצול חלון הקשר בגודל לפי ספק, כיווץ (compaction) מול גלישה כפויה, ומיפוי לפי ריצה של מה שאנחנו *לא* יכולים לראות ([איך](docs/CONTEXT_BLOWOUT.md))
+- **זיכרון וכישורים (Memory & skills)**: הקבצים והכישורים שכל ריצה בפועל טענה
+- **בריאות ולוגים**: דיסק, זיכרון, שיעורי שגיאות, מגבלות קצב, זרם לוגים חי
+- **התראות**: תקרות תקציב, קפיצות שגיאות, סוכן לא מגיב, מנותב ל-Slack, Discord, PagerDuty, Telegram, אימייל
+- **אישורים**: השהיית קריאות כלים מסוכנות *לפני* שהן רצות ואישור מהטלפון ([איך](docs/APPROVALS.md))
 
-## התפוצצות קונטקסט, ומה עולה המעקב
+## התפוצצות הקשר, ומה עולה לעקוב אחריה
 
-שתי שאלות ששווה לענות עליהן לפני שתסמכו על כל כלי להשוואת סוכנים.
+שתי שאלות ששווה לענות עליהן לפני שסומכים על כל כלי להשוואת סוכנים.
 
-**איך המערכת מתמודדת עם התפוצצות חלון קונטקסט בין runtimes?**
+**איך זה מטפל בהתפוצצות חלון הקשר בין ריצות שונות?**
 
-אחוז ניצול הוא הגון בדיוק כמו המכנה שהוא מחולק בו. ClawMetry
-קובעת את גודל החלון לפי ספק מ-[טבלה שאפשר לקרוא ולשלוח לה PR](clawmetry/context_windows.py),
-המכסה את Anthropic, OpenAI, Google, xAI,
-DeepSeek, Kimi, Qwen, Mistral, Llama ו-GLM. היא לא מודדת את כל 32
-ה-runtimes בסרגל של ספק אחד. זה משנה: תור בגודל 300K של GPT-5 שנבדק
-מול ה-200K של Anthropic נקרא ">100%, התפוצץ" כשבפועל הוא ב-75% מה-400K
-של GPT-5. אותו סרגל מסתיר תור DeepSeek בגודל 130K שבאמת גלש כ-65%
-נוחים.
+אחוז ניצול הוא כן רק כמו המספר שהוא מחולק בו. ClawMetry
+קובעת את גודל החלון לפי ספק מ[טבלה שאפשר לקרוא ולשלוח עליה PR](clawmetry/context_windows.py),
+המכסה את Anthropic, OpenAI, Google, xAI, DeepSeek, Kimi, Qwen, Mistral, Llama ו-GLM. היא לא
+מודדת את כל 32 הריצות בסרגל של ספק אחד. זה חשוב: תור של 300K טוקנים ב-GPT-5
+שנמדד מול 200K של Anthropic נקרא ">100%, התפוצץ" כאשר בפועל הוא ב-75% מ-400K
+של GPT-5. אותו סרגל מסתיר תור DeepSeek של 130K שבאמת גלש כ-65% נוח.
 
 כל חלון מגיע עם המקור שלו: `model_table`, `explicit_marker`,
-`observed_floor`, או `default` הגון כשאנחנו לא מכירים את המודל. מד שנבנה
-על השערה לעולם לא מוצג באותה סמכות כמו מד שנבנה על חיפוש בטבלה.
+`observed_floor`, או `default` כן כשלא ידוע לנו המודל. מד שבנוי על ניחוש
+לעולם לא יוצג עם אותה סמכות כמו כזה שבנוי על חיפוש בטבלה.
 
-ClawMetry יכולה לראות אירועי דחיסה רק בחלק מה-runtimes. כך ש-
-`GET /api/context-coverage` מדווחת, לפי runtime, אם **אפס פירושו
-"רץ נקי" או "אנחנו עיוורים"**. אפס שבאמת פירושו עיוורים אומר זאת בבירור.
+ClawMetry יכולה לראות אירועי כיווץ (compaction) רק בחלק מהריצות. לכן
+`GET /api/context-coverage` מדווחת, לפי ריצה, האם **אפס פירושו "רץ נקי" או "אנחנו עיוורים"**.
+אפס שבאמת פירושו עיוור אומר את זה במפורש.
 [פירוט מלא](docs/CONTEXT_BLOWOUT.md)
 
-**מה האינסטרומנטציה עולה?**
+**מה עולה האינסטרומנטציה?**
 
 | נתיב | נוסף לסוכן שלכם | ברירת מחדל? |
 |---|---|---|
-| מעקב אחר קובצי סשן (כל 32 ה-runtimes) | **0**. תהליך נפרד, אין קוד ClawMetry בסוכן שלכם | פעיל |
-| מיירט HTTP (`CLAWMETRY_INTERCEPT=1`) | **+0.44 מ"ש** לכל קריאת LLM, כלומר 0.009% מקריאה של 5 שניות | כבוי |
-| שער hook לפני-כלי (מטמון חם) | **+44 מ"ש** לכל קריאת כלי שנשערת, מעל רצפת מפרש של 36 מ"ש | כבוי |
-| פרוקסי אכיפה | **+9.7 מ"ש** לכל קריאת LLM | כבוי |
+| מעקב אחרי קובצי סשן (כל 32 הריצות) | **0**. תהליך נפרד, אין קוד ClawMetry בסוכן שלכם | פועל |
+| מיירט HTTP (`CLAWMETRY_INTERCEPT=1`) | **+0.44 מילישניות** לכל קריאת LLM, או 0.009% מקריאה של 5 שניות | כבוי |
+| שער hook טרום-כלי (מטמון חם) | **+44 מילישניות** לכל קריאת כלי שנשערת, מעל רצפת מפרש של 36 מילישניות | כבוי |
+| פרוקסי אכיפה | **+9.7 מילישניות** לכל קריאת LLM | כבוי |
 
-עלות מארח הדיימון: **2,762 אירועים/שנייה** קליטה, **710 בייטים/אירוע** על
-הדיסק (67.7 מגה-בייט לכל 100,000 אירועים), ו-**כ-12% מליבה אחת** באופן
-מתמשך על התקנה עמוסה. המספר האחרון הזה חורג מתקציב ה-5-10% שקבענו
-לעצמנו, כך שהוא מתפרסם כבאג למעקב ולא מוסתר מהדף.
+עלות מארח הדימון: **2,762 אירועים לשנייה** בקליטה, **710 בייטים לאירוע** על הדיסק
+(67.7 מגה-בייט לכל 100 אלף אירועים), וכ-**12% מליבה אחת** בממוצע קבוע בהתקנה עמוסה.
+המספר האחרון הזה חורג מהתקציב שהצהרנו עליו של 5-10%, ולכן הוא מפורסם כבאג
+שצריך לרדוף אחריו ולא נשמט מהדף.
 
-נמדד על Apple M2 Pro עם `benchmarks/overhead.py`. ה-harness מריץ
-כל תנאי בתהליך נפרד, מחליף בין הסדר שלהם, ו**מסרב להדפיס מספר כשהסבבים
-לא מסכימים על הסימן שלו**. הריצו אותו על המחשב שלכם בתוך דקה:
+נמדד על Apple M2 Pro עם `benchmarks/overhead.py`. הרתמה מריצה
+כל תנאי בתהליך נפרד, מחליפה את סדר הריצה, **ומסרבת להדפיס מספר
+כאשר הסבבים חלוקים על הסימן שלו**. הריצו את זה על המחשב שלכם בתוך דקה:
 
 ```bash
 pip install clawmetry && python -m benchmarks.overhead
 ```
 
 כל נתיב נמדד, כולל שערי ה-hook ופרוקסי האכיפה,
-וה-harness רץ על Linux, macOS ו-Windows ב-CI. שתי תוצאות ששווה
-להכיר: הפרוקסי עולה בערך שבע פעמים יותר על Windows מאשר על Linux, והדיימון
-מחזיק כרגע כ-12% מליבה אחת, מעל תקציב ה-5-10% שלנו. ה-JSON הגולמי, השיטה, ומה
+והרתמה רצה על Linux, macOS ו-Windows ב-CI. שתי תוצאות ששווה להכיר: הפרוקסי
+עולה בערך פי שבעה יותר על Windows מאשר על Linux, והדימון כרגע מחזיק בקביעות
+כ-12% מליבה אחת, מעל התקציב שלנו עצמנו של 5-10%. ה-JSON הגולמי, השיטה, ומה
 שעדיין לא נמדד נמצאים ב-[docs/OVERHEAD.md](docs/OVERHEAD.md).
 
 ## תמחור
 
 | תוכנית | מה היא מכסה | מחיר |
 |---|---|---|
-| **חינם** | OpenClaw + NVIDIA NemoClaw + Goose, דשבורד מלא, מקומי בלבד | $0 |
-| **Starter** | כל runtime אחר שלמעלה, תצוגת צי, סנכרון עם הענן | $9 לצומת / חודש |
-| **Pro** | Starter + שליטה והערכה: אישורים, מדיניות סיכון-כלים, הערכות, זיהוי חריגות, מייעל עלות, ייצוא OTel, יומן ביקורת חסין-שיבוש | $19 לצומת / חודש |
+| **חינם (Free)** | OpenClaw + NVIDIA NemoClaw + Goose + Qwen Code, לוח מחוונים מלא, מקומי בלבד | $0 |
+| **Starter** | כל ריצה נוספת מלמעלה, תצוגת צי, סנכרון ענן | $9 לצומת / חודש |
+| **Pro** | Starter + בקרה והערכה: אישורים, מדיניות סיכון כלים, evals, זיהוי חריגות, אופטימיזציית עלויות, ייצוא OTel, יומן ביקורת עמיד בפני שיבוש | $19 לצומת / חודש |
 
-תוכניות שנתיות, Enterprise והמספרים העדכניים נמצאים ב-
-**[clawmetry.com/pricing](https://clawmetry.com/pricing)**. מפתחות רישוי לאירוח עצמי
-עובדים בלי הענן (`clawmetry license`). החלוקה המדויקת בין חינם לתשלום
-נמצאת ב-[docs/ENTITLEMENTS.md](docs/ENTITLEMENTS.md).
+תוכניות שנתיות, Enterprise והמספרים העדכניים נמצאים בכתובת
+**[clawmetry.com/pricing](https://clawmetry.com/pricing)**. מפתחות רישיון לאירוח עצמי
+פועלים בלי הענן (`clawmetry license`). החלוקה המדויקת בין חינם לתשלום נמצאת
+ב-[docs/ENTITLEMENTS.md](docs/ENTITLEMENTS.md).
 
 ## הנתונים שלכם נשארים על המחשב שלכם
 
-ClawMetry קוראת קובצי סשן ולוגים מקומיים. **שום נתון סשן לא עוזב את המכשיר שלכם
-אלא אם תריצו `clawmetry connect`** - לא הנחיות, לא תשובות, לא ארגומנטים של כלים,
-לא תוכן קבצים ולא שורות לוג. כשאתם אכן מתחברים, התמונת המצב מוצפנת מקצה לקצה
-עם מפתח שלעולם לא עוזב את המחשב שלכם, ומפוענחת בדפדפן שלכם. אם לצומת אין
-מפתח, ההעלאה מדולגת ולא נשלחת בגלוי, ואף תגובת שרת לא יכולה לכבות את זה.
+ClawMetry קוראת קובצי סשן ולוגים מקומיים. **שום נתון סשן לא יוצא מהמכונה שלכם
+אלא אם תריצו `clawmetry connect`** — לא הנחיות (prompts), תשובות, ארגומנטים
+של כלים, תוכן קבצים או שורות לוג. כשאתם כן מתחברים, התמונת המצב מוצפנת
+מקצה לקצה עם מפתח שלעולם לא יוצא מהמכונה שלכם, ומפוענחת בדפדפן שלכם. אם
+לצומת אין מפתח, ההעלאה מדולגת במקום להישלח בגלוי, ואף תגובת שרת לא יכולה
+לכבות את זה.
 
 שני דברים כן רצים כברירת מחדל לפני שאתם מתחברים, שניהם ניתנים לביטול ואף אחד
-מהם לא נושא נתוני סשן: פינג התקנה אנונימי ובדיקת גרסה מול PyPI. התקנת ברירת
-מחדל גם מחפשת את כתובת ה-IP הציבורית שלכם פעם אחת עבור שורת בנר בהפעלה. כל
-יעד, מה הוא נושא ואיך לכבות אותו רשומים ב-
-[docs/EGRESS.md](docs/EGRESS.md); התקנות מאורחות בעצמי, מכוונות מחדש
-ומבודדות מרשת אינן מבצעות שום קריאה חוצה-רשת שאינה חיונית.
+מהם לא נושא נתוני סשן: פינג התקנה אנונימי ובדיקת גרסה מול PyPI. התקנה כברירת
+מחדל גם מחפשת פעם אחת את כתובת ה-IP הציבורית שלכם עבור שורת באנר בהפעלה. כל
+יעד, מה שהוא נושא, ואיך לכבות אותו מפורטים ב-[docs/EGRESS.md](docs/EGRESS.md);
+התקנות המתארחות עצמאית, מנותבות מחדש ומבודדות מרשת לא מבצעות שום קריאה
+יוצאת שרירותית כלל.
 
-הפענוח מתבצע בדפדפן שלכם, בקוד שאנחנו מגישים לכם. זו הייתה הבטחה בעבר;
-עכשיו זה דבר שאפשר לבדוק. כל שורה שנוגעת במפתח שלכם חיה בקובץ קריא אחד,
+הפענוח קורה בדפדפן שלכם, בקוד שאנחנו מגישים לכם. זו הייתה הבטחה בעבר;
+עכשיו זה משהו שאפשר לבדוק. כל שורה שנוגעת במפתח שלכם נמצאת בקובץ קריא אחד,
 [`clawmetry/static/js/cm-e2e.js`](clawmetry/static/js/cm-e2e.js),
-שמגיע בתוך ה-wheel ומוגש כלשונו, מקובע עם גיבוב Subresource
-Integrity. כדי לאשר שהדפדפן מריץ את מה שפרסמנו:
+שנשלח בתוך ה-wheel ומוגש כלשונו, מקובע עם hash של Subresource Integrity.
+כדי לאמת שהדפדפן מריץ את מה שפרסמנו:
 
 ```bash
 curl -s https://app.clawmetry.com/static/js/cm-e2e.js -o served.js
@@ -164,11 +163,11 @@ unzip -p /tmp/cm/clawmetry-*.whl clawmetry/static/js/cm-e2e.js > published.js
 diff served.js published.js && echo identical
 ```
 
-מה שזה לא מוכיח: אנחנו מגישים את העמוד שטוען את הקובץ, כך שיכולנו להגיש
-עמוד אחר. גיבובי Integrity מגנים עליכם מ-CDN שנפרץ, לא מהיצרן. מה שאתם
-מרוויחים הוא שכל החלפה חייבת להיות מכוונת, נראית בקוד המקור של העמוד, ושונה
-מארטיפקט על PyPI שכל אחד יכול להוריד. אירוח עצמי או שהייה מקומית בלבד
-מסירים את התלות הזו לחלוטין.
+מה שזה לא מוכיח: אנחנו מגישים את הדף שטוען את הקובץ, כך שאנחנו יכולים
+להגיש דף אחר. hash-ים של שלמות מגנים עליכם מ-CDN שנפרץ, לא מהספק. מה
+שאתם מרוויחים הוא שכל החלפה חייבת להיות מכוונת, גלויה בקוד המקור של הדף,
+ושונה מארטיפקט ב-PyPI שכל אחד יכול להוריד. אירוח עצמי או הישארות מקומית
+בלבד מסירים את התלות הזאת לחלוטין.
 
 ## התקנה
 
@@ -178,13 +177,13 @@ pip install clawmetry     # ואז: clawmetry
 
 או השורה האחת: `curl -sSL https://raw.githubusercontent.com/vivekchand/clawmetry/main/install.sh | bash`
 
-דורש Python 3.8+ על macOS, Linux או Windows, ולפחות runtime סוכן אחד על
-אותו מחשב. הנחיות Docker: [docs/DOCKER.md](docs/DOCKER.md).
+דורש Python 3.8+ ב-macOS, Linux או Windows, ולפחות ריצת סוכן אחת על
+אותה מכונה. הוראות Docker: [docs/DOCKER.md](docs/DOCKER.md).
 
-או תנו לסוכן להגדיר את זה בעצמכם. הכישור [`agent-kill-switch`](skills/agent-kill-switch/SKILL.md)
+או תנו לסוכן להתקין עבורכם. הכישור [`agent-kill-switch`](skills/agent-kill-switch/SKILL.md)
 מלמד את Claude Code, Codex, Cursor, Gemini CLI, Copilot או OpenCode
-להתקין את ClawMetry, לדווח מה הסוכנים על המכשיר עושים ומוציאים,
-לעצור סשן אחד לפי דרישה, ולעכב קריאות כלים מסוכנות לאישור:
+להתקין את ClawMetry, לדווח מה הסוכנים על המכונה עושים ומוציאים,
+לעצור סשן אחד לפי בקשה, ולעכב קריאות כלים מסוכנות לאישור:
 
 ```bash
 npx skills add vivekchand/clawmetry --skill agent-kill-switch
@@ -194,88 +193,87 @@ npx skills add vivekchand/clawmetry --skill agent-kill-switch
 
 | | |
 |---|---|
-| [תאימות runtime](docs/compatibility.md) | מה כל מתאם קורא, ואיך להוסיף runtime |
-| [התפוצצות קונטקסט](docs/CONTEXT_BLOWOUT.md) | חלונות לפי ספק, דחיסה מול גלישה, כיסוי לפי runtime |
-| [עומס נוסף (Overhead)](docs/OVERHEAD.md) | מה האינסטרומנטציה עולה, נמדד, עם ה-harness לשחזור |
-| [הרשאות (Entitlements)](docs/ENTITLEMENTS.md) | חינם מול בתשלום, מטריצת דרגות, CLI לרישוי |
-| [אישורים ומדיניות](docs/APPROVALS.md) | שערים לפני הרצה, ניקוד סיכון, אישורים מהטלפון |
+| [תאימות ריצות](docs/compatibility.md) | מה כל מתאם קורא, ואיך מוסיפים ריצה |
+| [התפוצצות הקשר](docs/CONTEXT_BLOWOUT.md) | חלונות לפי ספק, כיווץ מול גלישה, כיסוי לפי ריצה |
+| [תקורה (Overhead)](docs/OVERHEAD.md) | כמה עולה האינסטרומנטציה, נמדד, עם הרתמה לשחזור |
+| [זכאויות (Entitlements)](docs/ENTITLEMENTS.md) | חינם מול תשלום, טבלת דרגות, CLI לרישיון |
+| [אישורים ומדיניות](docs/APPROVALS.md) | שערור לפני ביצוע, ניקוד סיכון, אישורים מהטלפון |
 | [OpenTelemetry](docs/OPENTELEMETRY.md) | ייצוא traces לכל מקום, קליטת OTLP מכל דבר |
-| [הביאו את הסוכן שלכם](docs/BRING_YOUR_OWN_AGENT.md) | AWS AgentCore, Pydantic AI, LangChain מקצה לקצה, עם דוגמאות שאפשר להריץ |
-| [מעקב SDK](docs/SDK_TRACKING.md) | ייחוס עלות לסוכנים שבניתם בעצמכם |
+| [הביאו את הסוכן שלכם](docs/BRING_YOUR_OWN_AGENT.md) | AWS AgentCore, Pydantic AI, LangChain מקצה לקצה, עם דוגמאות שרצות |
+| [מעקב SDK](docs/SDK_TRACKING.md) | ייחוס עלויות לסוכנים שבניתם בעצמכם |
 | [ערוצי צ'אט](docs/CHANNELS.md) | מתאמי הצ'אט המוצגים ב-Flow |
-| [NemoClaw / OpenShell](docs/NEMOCLAW.md) | הגדרות NVIDIA NemoClaw במארז מבודד (sandboxed) |
-| [Docker](docs/DOCKER.md) | תמונה, compose, הרכבות נפח |
-| [ארכיטקטורה](ARCHITECTURE.md) · [פיתוח](docs/DEVELOPMENT.md) | איך זה עובד בפנים; הרצה מהמקור |
-| [טלמטריה](docs/TELEMETRY.md) | פינגי ההתקנה האנונימית ופתיחת שולחן העבודה, ואיך לכבות אותם |
+| [NemoClaw / OpenShell](docs/NEMOCLAW.md) | הגדרות NVIDIA NemoClaw מבודדות (sandboxed) |
+| [Docker](docs/DOCKER.md) | תמונה, compose, הרכבות volume |
+| [ארכיטקטורה](ARCHITECTURE.md) · [פיתוח](docs/DEVELOPMENT.md) | איך זה עובד מבפנים; הרצה מהמקור |
+| [טלמטריה](docs/TELEMETRY.md) | הפינגים האנונימיים של התקנה ופתיחת דסקטופ, ואיך לכבות אותם |
 
 ## צילומי מסך
 
-כל מספר למטה הוא ממחשב אחד אמיתי, בקריאה בלבד, בלי שום דבר מוזרע.
+כל מספר למטה לקוח ממכונה אמיתית אחת, במצב קריאה בלבד, בלי שום דבר מוזרע.
 
-**המערכת אומרת לכם כשמשהו שגוי, לא רק מה קרה.**
-שני בנרי חריגה בראש: הוצאה שרצה 7 פעמים מהממוצע היומי, וקפיצת עלות
-של 4.2x. מתחתיהם, 324 מ-667 סשנים אחרונים נושאים סימן לבזבוז, מפורטים
-לפי סיבה.
+**זה אומר לכם מתי משהו לא בסדר, לא רק מה קרה.**
+שני באנרי חריגה למעלה: הוצאה שרצה פי 7 מהממוצע היומי, וקפיצת עלות של פי 4.2.
+מתחתם, 324 מתוך 667 סשנים אחרונים נושאים איתות בזבוז, מפורטים לפי סיבה.
 
 ![Overview: spending anomaly and cost spike banners over live agent work](https://raw.githubusercontent.com/vivekchand/clawmetry/main/screenshots/overview.png)
 
-**המערכת מציגה לכם לאן הכסף הלך, בכל חלון זמן.**
+**זה מראה לכם לאן הכסף הלך, בכל חלון זמן.**
 $252.47 היום, $513.15 השבוע, $1,312.92 החודש, כל אחד עם הטוקנים
-שמאחוריו וכמה מהם המנוי שלכם כבר מכסה. מתחת לזה, בערך $1,128/חודש
-מפורטים כמשוחזרים ו-$17,256/חודש שכבר נחסכו על ידי שימוש חזור במטמון.
+שמאחוריו וכמה מזה המנוי שלכם כבר מכסה. מתחת לזה, בערך $1,128 לחודש
+מפורטים כניתנים להחזרה ו-$17,256 לחודש כבר נחסכו בזכות שימוש חוזר במטמון (cache).
 
 ![Cost: today, this week and this month, with an efficiency grade and itemised savings ideas](https://raw.githubusercontent.com/vivekchand/clawmetry/main/screenshots/cost.png)
 
-**המערכת מציגה איך הודעה הופכת לתשובה.**
-דיאגרמת הזרימה החיה: אתם, הערוץ שממנו זה הגיע, השער (gateway), המודל
-שעונה כרגע, וכל כלי שהוא פנה אליו. צמתים נדלקים כשעבודה זזה בהם.
+**זה מצייר איך הודעה הופכת לתשובה.**
+תרשים הזרימה החי: אתם, הערוץ שממנו זה הגיע, השער (gateway), המודל
+שעונה כרגע, וכל כלי שהוא פנה אליו. צמתים נדלקים כשעבודה עוברת דרכם.
 
 ![Flow: live diagram from you through the gateway to the model and its tools](https://raw.githubusercontent.com/vivekchand/clawmetry/main/screenshots/flow.png)
 
-**כל סוכן על המכשיר, בטבלה אחת.**
-מה הוא מריץ, מה הוא עולה ב-24 השעות האחרונות ובמשך חייו, מתי הוא נראה
-לאחרונה, מי הבעלים שלו, ואם מנוי מכסה את החשבון. 14 סוכנים כאן, 3 סשנים
-עובדים, 13 שקטים.
+**כל סוכן על המכונה, בטבלה אחת.**
+מה הוא מריץ, כמה הוא עולה ב-24 השעות האחרונות ולאורך כל חייו, מתי
+נראה לאחרונה, מי הבעלים שלו, והאם מנוי מכסה את החשבון. 14 סוכנים
+כאן, 3 סשנים עובדים, 13 שקטים.
 
 ![Agents: every runtime on the machine with cost, owner, last seen and current work](https://raw.githubusercontent.com/vivekchand/clawmetry/main/screenshots/agents.png)
 
-**המערכת מציגה לאן הזמן והכסף של תור הלכו, כלי אחר כלי.**
-תור אחד של סשן אמיתי: 11 כלים ב-11.2 דקות עבור $1.16. כל קריאת Bash
-וכל קריאת מודל מקבלות פס משלהן על ציר הזמן, כך שהפקודה שרצה
-4.1 דקות והפקודה שרצה 226 מילישניות נבדלות זו מזו במבט אחד.
+**זה מראה לאן הזמן והכסף של תור הלכו, כלי אחר כלי.**
+תור אחד של סשן אמיתי: 11 כלים ב-11.2 דקות תמורת $1.16. לכל קריאת
+Bash וקריאת מודל יש פס משלה בציר הזמן, כך שהפקודה שרצה 4.1 דקות
+והפקודה שרצה 226 מילישניות נבדלות זו מזו במבט חטוף.
 
 ![Sessions: one agent turn on a timeline, every tool call with its own duration and the turn's cost](https://raw.githubusercontent.com/vivekchand/clawmetry/main/screenshots/sessions.png)
 
-**המערכת מדרגת את העבודה, לא רק את ההוצאה.**
-דירוג A' השבוע: 54 משימות הוחזרו נקיות, 2 גסות עלו $48.57, וההרצות
-עם פעילות מעטה מכדי לשפוט אותן הושמטו מהדירוג במקום להיחשב כזכיות. כל
-הרצה גסה מקושרת לעקבה (trace) שלה.
+**זה מדרג את העבודה, לא רק את ההוצאה.**
+ציון A השבוע: 54 משימות חזרו נקיות, 2 מחוספסות עלו $48.57, וריצות
+עם פעילות מועטה מדי לשיפוט מושמטות מהציון במקום להיחשב כזכיות. כל
+ריצה מחוספסת מקושרת ל-trace שלה.
 
 ![Quality: this week's report card with the rough runs and what they cost](https://raw.githubusercontent.com/vivekchand/clawmetry/main/screenshots/quality.png)
 
-**המערכת מציגה מדוע חלון הקונטקסט ממשיך להתמלא.**
-715K מחלון של 1M טוקנים בתור האחרון, שיא של 83.3%, 4 דחיסות
-שכולן הופעלו באופן פרואקטיבי ולא עקב גלישה, וניצול כל תור שמאחוריהן.
+**זה מראה למה חלון ההקשר ממשיך להתמלא.**
+715K מתוך חלון של 1M טוקנים בתור האחרון, שיא של 83.3%, 4 כיווצים
+(compactions) שכולם הופעלו יזומית ולא עקב גלישה, וניצול כל תור מאחורי זה.
 
 ![Context usage: window utilisation per turn, compaction events and tokens reclaimed](https://raw.githubusercontent.com/vivekchand/clawmetry/main/screenshots/context.png)
 
-**זיהוי רץ בלי שתגדירו כלום.**
-הגלאים המובנים פעילים מההתקנה: הסוכן השתתק, זרימת הטלמטריה
-נעצרה, קפיצת עלות, פרץ טוקנים, שגיאות עולות, קפיצת שגיאות, סף
-תקציב, זוהתה חתימת איום, ממצא כלי אבטחה, שינוי בעמדת אבטחה.
-הכללים שלכם עצמכם הם אופציונליים בנוסף.
+**הזיהוי פועל בלי שתגדירו כלום.**
+הגלאים המובנים פועלים מרגע ההתקנה: הסוכן השתתק, זרם הטלמטריה
+הפסיק, קפיצת עלות, התפרצות טוקנים, שגיאות מטפסות, קפיצת שגיאות, סף
+תקציב, זוהתה חתימת איום, ממצא של כלי אבטחה, שינוי בעמדת האבטחה.
+הכללים שלכם עצמכם אופציונליים בנוסף.
 
 ![Alerts: built-in detectors plus optional custom rules](https://raw.githubusercontent.com/vivekchand/clawmetry/main/screenshots/alerts.png)
 
 **עיכוב קריאה מסוכנת הוא אופציונלי, ומגיע כבוי.**
 מחיקות רקורסיביות, force push, sudo, סודות, התקנות חבילות וקריאות
-יוצאות מקבלות כל אחת כלל שאפשר להפעיל. עד שתעשו זאת, ClawMetry
-צופה ולא משנה כלום. כשאחד מופעל, קריאות מתאימות מחכות כאן (או בטלפון
-שלכם) לאישור או דחייה.
+יוצאות מקבלים כל אחד כלל שאפשר להפעיל. עד שתעשו זאת, ClawMetry
+צופה ולא משנה דבר. ברגע שאחד מופעל, קריאות תואמות ממתינות כאן (או
+בטלפון שלכם) לאישור או דחייה.
 
 ![Approvals: protection rules for risky tool calls, all off until you enable them](https://raw.githubusercontent.com/vivekchand/clawmetry/main/screenshots/approvals.png)
 
-עוד, לפי runtime: [docs/RUNTIME_SCREENSHOTS.md](docs/RUNTIME_SCREENSHOTS.md).
+עוד, לפי ריצה: [docs/RUNTIME_SCREENSHOTS.md](docs/RUNTIME_SCREENSHOTS.md).
 
 ## הכרה
 
@@ -292,7 +290,7 @@ $252.47 היום, $513.15 השבוע, $1,312.92 החודש, כל אחד עם ה�
  </picture>
 </a>
 
-## רישוי
+## רישיון
 
 MIT · נבנה על ידי [@vivekchand](https://github.com/vivekchand) · [clawmetry.com](https://clawmetry.com)
 
