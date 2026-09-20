@@ -1186,7 +1186,7 @@
       "id": "AC-OBS-FRP-001.2",
       "doc": "First installation prepares useful data before showing the dashboard",
       "doc_id": "c11e8f26-d19d-4a5d-ac10-7e1e99188a18",
-      "text": "When an established installation is reopened or its collector restarts, the system shall not impose a first-install wait."
+      "text": "When agent activity is available to show, the system shall not impose a first-install wait. This covers an established installation being reopened, a collector restart, and a first installation on a machine that already has agent history, whose activity becomes available while the initial pass is still running."
     },
     {
       "id": "AC-OBS-FRP-001.3",
