@@ -49,7 +49,19 @@ jobs:
       - name: Install
         run: |
           python -m pip install --require-hashes -r .github/requirements/pip-bootstrap.txt
-          python -m pip install -e . requests
+          # The environment AROUND the editable install, hash-pinned. This job
+          # does not test the package, it MEASURES it: the harness times the
+          # interceptor against unpatched `requests` and the duckdb write path,
+          # so those two are the measured quantity rather than scenery. An
+          # unannounced version change in either moves the published overhead
+          # figure with nothing in the artifact saying so. Installed first so
+          # the editable install finds them satisfied.
+          python -m pip install --require-hashes \
+            -r .github/requirements/overhead-bench.txt
+          # `-e .` stays unpinned -- it is this repo's working tree, the code
+          # being measured. --no-deps because the line above is its whole
+          # declared runtime closure. See that file's header for the boundary.
+          python -m pip install --no-deps -e .
 
       # --quick keeps a shared runner under a couple of minutes. The full run
       # is for a quiet machine you own.
