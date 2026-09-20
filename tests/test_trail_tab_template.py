@@ -104,25 +104,32 @@ def test_trail_wrapper_and_sections_render():
     assert 'id="trail-export-btn"' in html
 
 
-def test_default_landing_is_sessions_first():
+def test_default_landing_is_the_agents_roster():
     html = _rendered_live_html()
-    # Exactly one page ships .active, and it is the Sessions list.
+    # Exactly one page ships .active, and it is the Agents roster. The served
+    # markup has to agree with the boot tab: whatever switchTab() does a
+    # moment later, this is the screen the reader is shown first.
     actives = re.findall(r'<div class="page active" id="(page-[a-z-]+)"', html)
-    assert actives == ["page-transcripts"], (
-        f"the default active page must be the Sessions list, got {actives}"
+    assert actives == ["page-inventory"], (
+        f"the default active page must be the Agents roster, got {actives}"
     )
     nav_start = html.index('<aside id="left-nav"')
     nav = html[nav_start:html.index("</aside>", nav_start)]
     tabs = re.findall(r'data-tab="([a-z-]+)"', nav)
-    # Sessions sits directly under Agents (founder request 2026-09-15); it is
-    # still the landing page, so it keeps the default highlight.
+    # Sessions sits directly under Agents (founder request 2026-09-15), and
+    # Agents is the landing page (founder request 2026-09-20), so Agents
+    # carries the default highlight and Sessions is one row below it.
     assert tabs.index("transcripts") == tabs.index("inventory") + 1, (
         f"Sessions must sit directly after Agents, got {tabs[:4]}"
     )
-    first_item = re.search(r'<div class="left-nav-item[^"]*" data-tab="transcripts"[^>]*>', nav)
-    assert first_item and "active" in first_item.group(0), "Sessions must carry the default nav highlight"
-    assert not re.search(r'<div class="left-nav-item active" data-tab="overview"', nav), (
-        "Overview must not also carry the default highlight"
+    landing = re.search(r'<div class="left-nav-item[^"]*" data-tab="inventory"[^>]*>', nav)
+    assert landing and "active" in landing.group(0), "Agents must carry the default nav highlight"
+    # Exactly one item is pre-highlighted, or the nav contradicts itself before
+    # a single click: whatever switchTab() later does, the served markup is
+    # what the reader sees first.
+    prehighlighted = re.findall(r'<div class="left-nav-item active"[^>]*data-tab="([a-z-]+)"', nav)
+    assert prehighlighted == ["inventory"], (
+        f"exactly Agents must be pre-highlighted, got {prehighlighted}"
     )
     assert 'data-i18n="nav.section_monitoring"' in nav, "Overview must sit under a Monitoring label"
     # Monitoring holds Home, Agents, Sessions + the raw-signal views; order is stable.
@@ -145,13 +152,50 @@ def test_default_landing_is_sessions_first():
         assert "switchTab('%s')" % tab in html
 
 
+def test_nav_default_highlight_equals_the_declared_landing_tab():
+    """The markup default and CM_LANDING_TAB are one decision, so read both.
+
+    The previous guards asserted each half against a literal, which is how
+    they both passed while disagreeing would still be possible: change the
+    constant, forget the template, and the reader sees a highlight on a
+    screen they are not on until the first script runs. Compare them to
+    each other instead of to a string typed twice.
+    """
+    html = _rendered_live_html()
+    js = _read(_APP_JS)
+    declared = re.search(r"var CM_LANDING_TAB = '([a-z-]+)';", js)
+    assert declared, "app.js must declare CM_LANDING_TAB"
+    landing = declared.group(1)
+    nav_start = html.index('<aside id="left-nav"')
+    nav = html[nav_start:html.index("</aside>", nav_start)]
+    highlighted = re.findall(
+        r'<div class="left-nav-item active"[^>]*data-tab="([a-z-]+)"', nav
+    )
+    assert highlighted == [landing], (
+        f"nav pre-highlights {highlighted}, app.js lands on {landing!r}: "
+        "they must be the same one tab"
+    )
+    # ...and so must the page that ships .active, or the highlight points at
+    # one screen while another is on show.
+    pages = re.findall(r'<div class="page active" id="page-([a-z-]+)"', html)
+    assert pages == [landing], (
+        f"the active page is {pages}, app.js lands on {landing!r}"
+    )
+
+
 def test_appjs_routes_trail():
     js = _read(_APP_JS)
     assert "if (name === 'trail')" in js, "switchTab must dispatch the trail tab"
     assert "loadTrailTab" in js and "_trailRestoreHosts" in js
     assert "_trailSessionFromHash(window.location.hash)" in js, "#trail= deep links must be routed"
     assert "function _cmBootLanding()" in js
-    assert "switchTab('transcripts');\n}" in js, "the boot landing must default to the Sessions list"
+    # The landing tab is declared once and the nav markup agrees with it
+    # (checked above). A #session= deep link still opens the Sessions list.
+    assert "var CM_LANDING_TAB = 'inventory';" in js, (
+        "the boot landing must default to the Agents roster"
+    )
+    assert "switchTab(CM_LANDING_TAB);" in js, "_cmBootLanding must use the declared landing tab"
+    assert "/[#&]session=/.test" in js, "a #session= deep link must still land on Sessions"
     assert "_cmVerdictBadge(tx)" in js, "session rows must carry the verdict badge"
     assert "openTrail(this.getAttribute" in js, "session rows need a one-click Open trail"
 
