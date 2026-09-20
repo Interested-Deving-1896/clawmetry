@@ -1180,7 +1180,7 @@
       "id": "AC-OBS-FRP-001.1",
       "doc": "First installation prepares useful data before showing the dashboard",
       "doc_id": "c11e8f26-d19d-4a5d-ac10-7e1e99188a18",
-      "text": "When a first installation is collecting its initial activity, the system shall show preparation instead of empty dashboard panels, and shall open automatically after collection is ready."
+      "text": "While a first installation is collecting its initial activity, the system shall leave the dashboard usable and shall not cover it with a setup screen."
     },
     {
       "id": "AC-OBS-FRP-001.2",
@@ -1192,19 +1192,7 @@
       "id": "AC-OBS-FRP-001.3",
       "doc": "First installation prepares useful data before showing the dashboard",
       "doc_id": "c11e8f26-d19d-4a5d-ac10-7e1e99188a18",
-      "text": "When collection finishes without agent activity, the system shall explain that a first task is needed and allow the user to open the dashboard."
-    },
-    {
-      "id": "AC-OBS-FRP-001.4",
-      "doc": "First installation prepares useful data before showing the dashboard",
-      "doc_id": "c11e8f26-d19d-4a5d-ac10-7e1e99188a18",
-      "text": "When readiness cannot be confirmed within three minutes, the system shall stop the loading animation and offer working retry and open-dashboard actions without exposing raw errors."
-    },
-    {
-      "id": "AC-OBS-FRP-001.5",
-      "doc": "First installation prepares useful data before showing the dashboard",
-      "doc_id": "c11e8f26-d19d-4a5d-ac10-7e1e99188a18",
-      "text": "When the page is hidden or preparation has finished, the system shall stop preparation polling; concurrent checks shall share a single in-flight request."
+      "text": "When there is no agent activity yet, the system shall say so on the dashboard itself, with the rest of the product reachable."
     },
     {
       "id": "AC-OBS-FRP-001.6",
