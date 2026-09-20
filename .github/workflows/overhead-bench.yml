@@ -56,8 +56,13 @@ jobs:
           # unannounced version change in either moves the published overhead
           # figure with nothing in the artifact saying so. Installed first so
           # the editable install finds them satisfied.
-          python -m pip install --require-hashes \
-            -r .github/requirements/overhead-bench.txt
+          #
+          # One line, deliberately. This job's matrix includes windows-latest,
+          # where the default shell is PowerShell and `\` is not a line
+          # continuation (that is a backtick) -- a wrapped command there parses
+          # as a literal `\` argument plus a stray `-r` command. The bootstrap
+          # line above has always been single-line for the same reason.
+          python -m pip install --require-hashes -r .github/requirements/overhead-bench.txt
           # `-e .` stays unpinned -- it is this repo's working tree, the code
           # being measured. --no-deps because the line above is its whole
           # declared runtime closure. See that file's header for the boundary.
