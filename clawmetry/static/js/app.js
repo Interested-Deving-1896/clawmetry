@@ -29543,18 +29543,31 @@ document.addEventListener('DOMContentLoaded', function() {
   try { _cmInitGlobalRuntimeSwitcher(); } catch (e) { /* non-fatal */ }
   try { _hideCloudIrrelevantNav(); } catch (e) { /* non-fatal */ }
   try { _applyTracingFlag(); } catch (e) { /* non-fatal */ }
-  // Session-first landing: the product opens on the decision trail (the
-  // Sessions list, each row one click from its Trail), not on a KPI board.
-  // Overview stays one click away under Monitoring. Deep links win:
+  // Agent-first landing: the product opens on WHO is running (the Agents
+  // roster: one row per agent, what it runs, whether it is alive, what it
+  // costs), not on a KPI board and not on the raw session list. "Which of my
+  // agents is this?" comes before "which of its runs was that?", and the
+  // roster answers the first question without the reader knowing what a
+  // session is. Sessions is the next item down and every agent row leads
+  // into it. Deep links still win:
   //   #trail=<agent_type>:<session_id>  -> that session's Trail page
   //   #session=<id>                     -> Sessions, replay opened by loadTranscripts()
   try { _cmBootLanding(); } catch (e) { /* non-fatal */ }
 });
 
+//: The tab the dashboard opens on. One place, because the nav markup's
+//: `active` class and the e2e landing guards have to agree with it.
+var CM_LANDING_TAB = 'inventory';
+
 function _cmBootLanding() {
   var trailSid = (typeof _trailSessionFromHash === 'function') ? _trailSessionFromHash(window.location.hash) : null;
   if (trailSid && typeof openTrail === 'function') { openTrail(trailSid); return; }
-  if (typeof switchTab === 'function') switchTab('transcripts');
+  // A #session= deep link is a request for the Sessions list, not the roster.
+  if (/[#&]session=/.test(window.location.hash || '')) {
+    if (typeof switchTab === 'function') switchTab('transcripts');
+    return;
+  }
+  if (typeof switchTab === 'function') switchTab(CM_LANDING_TAB);
 }
 
 // Hash router. Only `#trail=` is routed here: `#session=` is consumed by

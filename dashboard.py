@@ -7249,12 +7249,15 @@ DASHBOARD_HTML = r"""
          UNCHANGED; only icons, ordering and section labels moved. The
          Approvals/Alerts/Notifications adjacency (founder request
          2026-07-29) is preserved inside Govern. #}
-      {# Session-first IA (Trail, 2026-09): the product opens on the decision
-         trail. Sessions is the landing item; the KPI board (Home) and the
-         other raw-signal views sit under a "Monitoring" label. Sessions
-         lives there too, directly under Agents (founder request
-         2026-09-15), and still carries the default highlight. data-tab ids
-         are unchanged; only order, labels and grouping moved. #}
+      {# Agent-first IA (2026-09-20, founder request): the product opens on
+         WHO is running. Agents is the landing item and carries the default
+         highlight; Sessions sits directly under it and every agent row leads
+         into it. "Which of my agents is this?" comes before "which of its
+         runs was that?", and the roster answers the first without the reader
+         knowing what a session is. The KPI board (Home) and the other
+         raw-signal views stay under "Monitoring". The landing tab itself is
+         `CM_LANDING_TAB` in static/js/app.js; this `active` class is the
+         markup half and the two must agree. data-tab ids are unchanged. #}
       <div class="left-nav-section-label" data-i18n="nav.section_monitoring">Monitoring</div>
       <div class="left-nav-item" data-tab="overview" onclick="switchTab('overview')" data-i18n-title="nav.home_tooltip" title="Is everything OK, at a glance">
         <span class="left-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
@@ -7262,11 +7265,11 @@ DASHBOARD_HTML = r"""
         <span id="nav-stuck-badge" class="left-nav-badge" style="display:none;">0</span>
       </div>
 
-      <div class="left-nav-item" data-tab="inventory" onclick="switchTab('inventory')" data-i18n-title="nav.inventory_tooltip" title="Every agent on this machine: what it runs, what it costs, is it alive, who owns it">
+      <div class="left-nav-item active" data-tab="inventory" onclick="switchTab('inventory')" data-i18n-title="nav.inventory_tooltip" title="Every agent on this machine: what it runs, what it costs, is it alive, who owns it">
         <span class="left-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg></span>
         <span class="left-nav-label" data-i18n="nav.inventory">Agents</span>
       </div>
-      <div class="left-nav-item active" data-tab="transcripts" onclick="switchTab('transcripts')" data-i18n-title="nav.session_replay_tooltip" title="Every session, newest first. Open one to see what it was asked, what it did, and how it ended">
+      <div class="left-nav-item" data-tab="transcripts" onclick="switchTab('transcripts')" data-i18n-title="nav.session_replay_tooltip" title="Every session, newest first. Open one to see what it was asked, what it did, and how it ended">
         <span class="left-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
         <span class="left-nav-label" data-i18n="nav.session_replay">Sessions</span>
       </div>

@@ -63,18 +63,34 @@
       if (active) window.switchTab(active.id.replace(/^page-/, ''));
     }
   }
-  async function openReady() {
+  //: The landing screens whose own fetch must finish before the preparation
+  //: screen lifts, by page id. The boot-time render may hold zero rows, and
+  //: revealing that is the empty dashboard this screen exists to prevent.
+  //: Keep in step with ``CM_LANDING_TAB`` in app.js.
+  var LANDING_LOADERS = {
+    'page-inventory': 'renderInventory',
+    'page-transcripts': 'loadTranscripts',
+  };
+  // Only a loader that actually exists earns the wait. Resolving a missing
+  // one would report the landing screen as fetched when nothing fetched.
+  function landingLoader() {
     var active = document.querySelector('.page.active');
-    if (shown && active && active.id === 'page-transcripts' && typeof window.loadTranscripts === 'function') {
-      // Keep the screen covered until the landing list has fetched the newly
-      // ingested history. The boot-time list may still contain zero rows.
+    var name = active && LANDING_LOADERS[active.id];
+    return (name && typeof window[name] === 'function') ? window[name] : null;
+  }
+
+  async function openReady() {
+    var load = landingLoader();
+    if (shown && load) {
+      // Keep the screen covered until the landing screen has fetched the
+      // newly ingested history. The boot-time render may hold zero rows.
       stop();
       step('history', 'done', '2'); step('dashboard', 'active', '3');
       text('status', 'Opening your dashboard…');
       var timeout;
       try {
         var rendered = await Promise.race([
-          window.loadTranscripts(),
+          Promise.resolve(load()),
           new Promise(function (_, reject) { timeout = setTimeout(function () { reject(new Error('dashboard delayed')); }, 10000); })
         ]);
         if (rendered === false) throw new Error('dashboard unavailable');

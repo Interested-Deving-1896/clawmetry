@@ -114,15 +114,20 @@ def test_default_landing_is_sessions_first():
     nav_start = html.index('<aside id="left-nav"')
     nav = html[nav_start:html.index("</aside>", nav_start)]
     tabs = re.findall(r'data-tab="([a-z-]+)"', nav)
-    # Sessions sits directly under Agents (founder request 2026-09-15); it is
-    # still the landing page, so it keeps the default highlight.
+    # Sessions sits directly under Agents (founder request 2026-09-15), and
+    # Agents is the landing page (founder request 2026-09-20), so Agents
+    # carries the default highlight and Sessions is one row below it.
     assert tabs.index("transcripts") == tabs.index("inventory") + 1, (
         f"Sessions must sit directly after Agents, got {tabs[:4]}"
     )
-    first_item = re.search(r'<div class="left-nav-item[^"]*" data-tab="transcripts"[^>]*>', nav)
-    assert first_item and "active" in first_item.group(0), "Sessions must carry the default nav highlight"
-    assert not re.search(r'<div class="left-nav-item active" data-tab="overview"', nav), (
-        "Overview must not also carry the default highlight"
+    landing = re.search(r'<div class="left-nav-item[^"]*" data-tab="inventory"[^>]*>', nav)
+    assert landing and "active" in landing.group(0), "Agents must carry the default nav highlight"
+    # Exactly one item is pre-highlighted, or the nav contradicts itself before
+    # a single click: whatever switchTab() later does, the served markup is
+    # what the reader sees first.
+    prehighlighted = re.findall(r'<div class="left-nav-item active"[^>]*data-tab="([a-z-]+)"', nav)
+    assert prehighlighted == ["inventory"], (
+        f"exactly Agents must be pre-highlighted, got {prehighlighted}"
     )
     assert 'data-i18n="nav.section_monitoring"' in nav, "Overview must sit under a Monitoring label"
     # Monitoring holds Home, Agents, Sessions + the raw-signal views; order is stable.
@@ -151,7 +156,13 @@ def test_appjs_routes_trail():
     assert "loadTrailTab" in js and "_trailRestoreHosts" in js
     assert "_trailSessionFromHash(window.location.hash)" in js, "#trail= deep links must be routed"
     assert "function _cmBootLanding()" in js
-    assert "switchTab('transcripts');\n}" in js, "the boot landing must default to the Sessions list"
+    # The landing tab is declared once and the nav markup agrees with it
+    # (checked above). A #session= deep link still opens the Sessions list.
+    assert "var CM_LANDING_TAB = 'inventory';" in js, (
+        "the boot landing must default to the Agents roster"
+    )
+    assert "switchTab(CM_LANDING_TAB);" in js, "_cmBootLanding must use the declared landing tab"
+    assert "/[#&]session=/.test" in js, "a #session= deep link must still land on Sessions"
     assert "_cmVerdictBadge(tx)" in js, "session rows must carry the verdict badge"
     assert "openTrail(this.getAttribute" in js, "session rows need a one-click Open trail"
 
