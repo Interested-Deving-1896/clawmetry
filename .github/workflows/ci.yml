@@ -1728,7 +1728,16 @@ jobs:
       - name: Install ClawMetry (editable) + eval deps
         run: |
           python -m pip install --require-hashes -r .github/requirements/pip-bootstrap.txt
-          pip install -e . pyyaml httpx
+          # The environment AROUND the editable install, hash-pinned. pyyaml and
+          # httpx used to resolve to whatever the index served that minute, on
+          # the job that hard-gates every PR and holds CI_ANTHROPIC_API_KEY.
+          # Installed first so the editable install below finds them satisfied
+          # and resolves neither of them itself.
+          pip install --require-hashes \
+            -r .github/requirements/ci-eval-suite.txt
+          # `-e .` stays unpinned -- it is this repo's working tree, the code
+          # under test. See that file's header for the boundary.
+          pip install -e .
       - name: Check kill-switch
         id: gate
         env:
