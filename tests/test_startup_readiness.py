@@ -1,7 +1,7 @@
 """First-install preparation uses durable data and never traps the browser.
 
 AC-OBS-FRP-001.1: progress and automatic handoff
-AC-OBS-FRP-001.2: restart and upgrade bypass
+AC-OBS-FRP-001.2: restart, upgrade and existing-history bypass
 AC-OBS-FRP-001.3: empty-store guidance
 AC-OBS-FRP-001.4: bounded fallback and working retry
 AC-OBS-FRP-001.5: visibility and in-flight deduplication
@@ -55,19 +55,60 @@ def test_existing_sessions_do_not_get_gated_after_an_upgrade(store):
     assert status["initialized"] is True
 
 
-def test_agent_activity_during_setup_does_not_finish_the_import(store):
+def test_agent_activity_during_setup_opens_the_dashboard(store):
+    """AC-OBS-FRP-001.2 -- rows arriving mid-sweep end the wait.
+
+    This assertion used to read the other way round, and that is the bug.
+    Readiness was keyed on the daemon finishing every phase for every
+    runtime, so a new install on a machine with existing agent history sat
+    on the preparation screen for minutes (9m21s measured on a real node)
+    while the data behind it was already queryable. An install over an
+    established history is an established installation the moment its rows
+    land; the screen replaces empty panels, and these panels are not empty.
+    """
     from clawmetry.startup import record_progress
     record_progress(store, "discovering")
-    store._conn.execute("INSERT INTO sessions (agent_type, session_id, updated_at) VALUES ('openclaw', 'arriving', 1)")
-    assert store.query_startup_status()["has_data"] is True
     assert store.query_startup_status()["initialized"] is False
+    store._conn.execute("INSERT INTO sessions (agent_type, session_id, updated_at) VALUES ('openclaw', 'arriving', 1)")
+    status = store.query_startup_status()
+    assert status["has_data"] is True
+    assert status["initialized"] is True
+    # Still mid-sweep: the phase stays honest, only the gate opens.
+    assert status["phase"] == "discovering"
+
+
+def test_a_later_sweep_phase_cannot_reclose_the_dashboard(store):
+    """AC-OBS-FRP-001.2 -- the release is not undone by the next tick.
+
+    ``record_progress`` runs once per phase for the whole sweep. A user who
+    was let through must not be pulled back onto the screen by the next one.
+    """
+    from clawmetry.startup import record_progress
+    store._conn.execute("INSERT INTO sessions (agent_type, session_id, updated_at) VALUES ('claude_code', 'existing', 1)")
+    record_progress(store, "discovering")
+    assert store.query_startup_status()["initialized"] is True
+    for phase in ("runtime_history", "logs", "crons"):
+        record_progress(store, phase, 1, 50)
+        assert store.query_startup_status()["initialized"] is True
+
 
 
 def test_daemon_diagnostics_are_not_agent_activity(store):
+    """AC-OBS-FRP-001.3 -- releasing on data must not release on noise.
+
+    The daemon writes its own error and telemetry events on every install.
+    Now that ``has_data`` alone opens the dashboard, counting those would
+    walk a machine that has never run an agent straight onto empty panels,
+    which is the one case the screen exists to serve.
+    """
+    from clawmetry.startup import record_progress
+    record_progress(store, "discovering")
     store.ingest({"id": "diagnostic", "agent_type": "daemon", "node_id": "test",
                   "event_type": "daemon_error", "ts": "2026-09-16T10:00:00Z"})
     store.flush()
-    assert store.query_startup_status()["has_data"] is False
+    status = store.query_startup_status()
+    assert status["has_data"] is False
+    assert status["initialized"] is False
 
 
 def test_malformed_progress_does_not_crash(store):

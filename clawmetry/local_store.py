@@ -19124,6 +19124,20 @@ class LocalStore(AgentMetaMixin, ProjectsMixin, TrailStoreMixin):
         Daemon diagnostic events are not evidence of useful agent activity.
         A session row also counts: some runtimes import metadata before events.
         Exceptions propagate so an unreadable store never looks empty.
+
+        Real agent activity IS readiness. The first-install screen exists to
+        replace empty panels, so the moment the panels can fill it has no
+        further job -- waiting past that point hides usable data behind a
+        spinner. Only a store with nothing in it still has to wait, and it
+        waits for guidance ("run your first task"), not for rows.
+
+        Burned 2026-09-20: a new install on a machine with months of Claude
+        Code history sat on the preparation screen for 9m21s (measured:
+        started_at 1789888927 -> updated_at 1789889488 on a real node) while
+        50 already-ingested sessions rendered instantly the second the user
+        pressed "Open dashboard now". Readiness was keyed on the daemon
+        finishing EVERY phase for EVERY runtime, which is unrelated to
+        whether this dashboard has something to show.
         """
         from clawmetry.startup import read_progress
 
@@ -19138,7 +19152,10 @@ class LocalStore(AgentMetaMixin, ProjectsMixin, TrailStoreMixin):
             **progress,
             "available": True,
             "has_data": has_data,
-            "initialized": bool(progress.get("initialized")) or (not progress and has_data),
+            # ``has_data`` alone releases the screen: an install over an
+            # existing agent history is an established installation the
+            # moment its rows land, whether or not the sweep has finished.
+            "initialized": bool(progress.get("initialized")) or has_data,
         }
 
     def health(self) -> dict[str, Any]:
