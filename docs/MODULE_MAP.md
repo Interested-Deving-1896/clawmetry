@@ -319,12 +319,14 @@ The runtime adapters that ship in open source. The paid ones live in `clawmetry-
 | `clawmetry/adapters/base.py` | medium | Adapter base class + unified schemas. |
 | `clawmetry/adapters/cost.py` | small | Shared cost-derivation helper for the bundled runtime adapters. |
 | `clawmetry/adapters/goose.py` | medium | GooseAdapter — read Goose (Block / block/goose) sessions from its SQLite store. |
+| `clawmetry/adapters/inputs.py` | small | Inputs & context emit helper shared by the runtime adapters. |
 | `clawmetry/adapters/nemo.py` | large | NeMoAdapter — push-mode telemetry exporter for NVIDIA's NeMo Agent Toolkit. |
 | `clawmetry/adapters/openclaw.py` | large | This adapter does NOT re-implement OpenClaw session parsing. |
 | `clawmetry/adapters/openclaw_reply_recovery.py` | small | Reply-recovery event scanner for the OpenClaw adapter. |
 | `clawmetry/adapters/openclaw_share.py` | medium | OpenClaw public-share state (issue #5746). |
 | `clawmetry/adapters/openclaw_update_pipeline.py` | small | Update-pipeline state scanner for the OpenClaw adapter. |
 | `clawmetry/adapters/phase.py` | medium | The session phase model: one state machine, every runtime. |
+| `clawmetry/adapters/qwen_code.py` | medium | QwenCodeAdapter — read Qwen Code chat-recording history from disk. |
 | `clawmetry/adapters/registry.py` | small | Process-wide adapter registry. |
 
 ## Data providers (`clawmetry/providers/`)
