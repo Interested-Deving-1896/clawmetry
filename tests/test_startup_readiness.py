@@ -1,16 +1,26 @@
-"""First-install preparation uses durable data and never traps the browser.
+"""The dashboard is never held behind a preparation screen.
 
-AC-OBS-FRP-001.1: progress and automatic handoff
-AC-OBS-FRP-001.2: restart, upgrade and existing-history bypass
-AC-OBS-FRP-001.3: empty-store guidance
-AC-OBS-FRP-001.4: bounded fallback and working retry
-AC-OBS-FRP-001.5: visibility and in-flight deduplication
-AC-OBS-FRP-001.6: shared cloud snapshot, no cloud-host reads
+The blocking first-install overlay was removed on 2026-09-20 after it
+trapped a working dashboard three times in four days: it locked the
+hosted nav for accounts with nothing to wait for (#6058), it held a
+populated dashboard for 9m21s while waiting for a sweep to finish
+(#6099), and it settled into a terminal "taking a little longer" state
+on one transient probe failure during a daemon upgrade and never
+re-checked, because settling clears its own poll timer.
+
+The daemon still records how far its first pass has got, and still
+publishes that in the encrypted snapshot, because the hosted first-run
+banner reads it. What is gone is anything that covers the dashboard
+with it. A machine with no agents is told so by the Agents roster's own
+empty state, on the page, with the rest of the product reachable.
+
+AC-OBS-FRP-001.1: the dashboard is not covered while collection runs
+AC-OBS-FRP-001.2: restart, upgrade and existing-history impose no wait
+AC-OBS-FRP-001.3: an empty machine is told on the page, not behind it
+AC-OBS-FRP-001.6: readiness travels in the machine's own snapshot
 """
 import ast
 from pathlib import Path
-import shutil
-import subprocess
 
 from flask import Flask, render_template_string
 import pytest
@@ -119,38 +129,6 @@ def test_malformed_progress_does_not_crash(store):
         assert store.query_startup_status()["initialized"] is False
 
 
-def test_endpoint_uses_daemon_and_preserves_unavailable(monkeypatch):
-    from routes import local_query, onboarding
-    app = Flask(__name__)
-    app.register_blueprint(onboarding.bp_onboarding)
-    calls = []
-
-    def proxy(method):
-        calls.append(method)
-        return {"available": True, "initialized": False, "has_data": False}
-
-    monkeypatch.setattr(local_query, "local_store_call_via_daemon", proxy)
-    response = app.test_client().get("/api/onboarding/readiness")
-    assert response.status_code == 200
-    assert response.json["initialized"] is False
-    assert calls == ["query_startup_status"]
-    assert "query_startup_status" in local_query._DAEMON_METHODS
-    monkeypatch.setattr(local_query, "local_store_call_via_daemon", lambda _: None)
-    response = app.test_client().get("/api/onboarding/readiness")
-    assert response.status_code == 503
-    assert response.json == {"available": False}
-
-
-def test_upgrading_dashboard_can_read_an_older_populated_daemon(monkeypatch):
-    from routes import local_query, onboarding
-    app = Flask(__name__)
-    app.register_blueprint(onboarding.bp_onboarding)
-    monkeypatch.setattr(local_query, "local_store_call_via_daemon",
-                        lambda method, **kw: [{"session_id": "existing"}] if method == "query_sessions_table" else local_query.PROXY_UNAVAILABLE)
-    response = app.test_client().get("/api/onboarding/readiness")
-    assert response.json == {"available": True, "initialized": True, "has_data": True}
-
-
 def test_daemon_progress_is_in_the_encrypted_snapshot(store, tmp_path, monkeypatch):
     from clawmetry import sync
     monkeypatch.setattr(sync, "_startup_store", store)
@@ -184,22 +162,57 @@ def test_snapshot_omits_invalid_readiness(readiness, tmp_path, monkeypatch, capl
     assert "readiness" in caplog.text
 
 
-def test_live_template_renders_preparation_and_ships_assets():
+def test_no_blocking_preparation_screen_ships():
+    """AC-OBS-FRP-001.1 -- nothing covers the dashboard while it collects.
+
+    Asserted against the RENDERED page, not the source, because the
+    overlay reached the browser through a Jinja include and two asset
+    tags rather than through anything importable. Checking the shipped
+    files alone would pass while an include still pulled one in.
+    """
     tree = ast.parse((ROOT / "dashboard.py").read_text())
     html = next(ast.literal_eval(n.value) for n in tree.body
                 if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "DASHBOARD_HTML" for t in n.targets))
     app = Flask(__name__, template_folder=str(ROOT / "clawmetry/templates"))
     with app.test_request_context():
         rendered = render_template_string(html, version="test")
-    assert 'id="first-run"' in rendered
+    assert 'id="first-run"' not in rendered, (
+        "the blocking preparation overlay is back in the rendered page"
+    )
     for asset in ("js/first-run.js", "css/first-run.css"):
-        assert asset in rendered
-        assert (ROOT / "clawmetry/static" / asset).is_file()
+        assert asset not in rendered, f"{asset} is referenced again"
+        assert not (ROOT / "clawmetry/static" / asset).exists(), f"{asset} is back"
+    assert not (ROOT / "clawmetry/templates/partials/first-run.html").exists()
 
 
-@pytest.mark.skipif(shutil.which("node") is None, reason="Node required for browser state tests")
-def test_browser_state_machine():
-    result = subprocess.run(["node", str(ROOT / "tests/test_startup_readiness.js")],
-                            capture_output=True, text=True, timeout=30)
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "PASS" in result.stdout
+def test_nothing_gates_the_dashboard_on_a_readiness_probe():
+    """AC-OBS-FRP-001.1 -- no code path waits on a setup check again.
+
+    The overlay published ``window.cmFirstRun`` and three unrelated
+    things deferred to it: the shared poller helper, the cloud sync
+    banner and the boot overlay. The banner's guard was an unconditional
+    ``if (window.cmFirstRun) return;``, so it never ran at all once the
+    overlay shipped. Those call sites are the reason a deleted screen
+    can still hold the product, so assert they are gone too.
+    """
+    app_js = (ROOT / "clawmetry/static/js/app.js").read_text()
+    assert "cmFirstRun" not in app_js, "app.js still defers to the removed screen"
+    onboarding = (ROOT / "routes/onboarding.py").read_text()
+    assert "/api/onboarding/readiness" not in onboarding, (
+        "the readiness endpoint outlived its only consumer"
+    )
+
+
+def test_an_empty_machine_is_told_on_the_page():
+    """AC-OBS-FRP-001.3 -- the guidance survives the overlay.
+
+    Removing the screen must not remove the one thing it did that was
+    worth doing. The Agents roster is the landing screen and carries a
+    runtime-neutral empty state, reachable, with the nav still live.
+    """
+    inventory = (ROOT / "clawmetry/templates/tabs/inventory.html").read_text()
+    assert 'id="inv-empty"' in inventory
+    assert 'data-i18n="inventory.empty_title"' in inventory
+    assert '<div class="page active" id="page-inventory">' in inventory, (
+        "the empty state only helps if the roster is the landing screen"
+    )
