@@ -27,7 +27,7 @@ def run(makensis, include):
         script.write_text(r'''
 Unicode true
 Name "ClawMetry cleanup regression test"
-OutFile "@ROOT@\setup.exe"
+OutFile "@ROOT@\harness.exe"
 RequestExecutionLevel user
 AutoCloseWindow true
 ShowUninstDetails show
@@ -37,6 +37,9 @@ Section
   WriteUninstaller "@ROOT@\uninstall.exe"
 SectionEnd
 Section "Uninstall"
+  ; AutoCloseWindow applies only to the installer. This test has no human
+  ; to press Close after the non-silent uninstaller finishes.
+  SetAutoClose true
   !insertmacro ClawMetryRemoveTree "@ROOT@\runtime" "test runtime"
   ; Missing directories are idempotent, not an uninstall failure.
   !insertmacro ClawMetryRemoveTree "@ROOT@\missing" "missing runtime"
@@ -56,7 +59,7 @@ SectionEnd
 '''.replace("@ROOT@", str(root)).replace("@INCLUDE@", str(include)),
                           encoding="utf-8")
         subprocess.run([makensis, "/V2", str(script)], check=True, timeout=60)
-        subprocess.run([str(root / "setup.exe"), "/S"], check=True, timeout=30)
+        subprocess.run([str(root / "harness.exe"), "/S"], check=True, timeout=30)
         start = time.monotonic()
         result = subprocess.run(
             [str(root / "uninstall.exe"), "_?=" + str(root)], timeout=120,
