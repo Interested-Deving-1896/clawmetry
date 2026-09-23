@@ -1,5 +1,10 @@
 ## Unreleased
 
+### Fixed: Windows uninstall slows down on large runtime folders
+- Recursive cleanup now reports each cleanup stage instead of adding and scrolling a UI row for every file. This avoids overwhelming the uninstaller when old pip upgrades have left hundreds of thousands of runtime files.
+- Locked files produce a visible warning and a failing exit code. Account-data choices and cleanup locations are unchanged.
+- A native Windows regression test exercises 5,000-file removal, missing directories, locked files and unrelated-file preservation. It also restores the old logging behavior and requires the guard to reject it.
+
 ### Release: OpenClaw's own approval prompts reach the Approvals tab (2026-09-21)
 - **Carries:** #6102. Its entry follows.
 
