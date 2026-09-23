@@ -1,7 +1,13 @@
 ## Unreleased
 
 ### Release: Windows uninstall no longer stalls on large runtime folders (2026-09-23)
-- **Carries:** #6138. Its entry follows.
+- **Carries:** #6138 and #6150. Their entries follow.
+- The first attempt at this release (merged as `[RELEASE]` on 2026-09-23) did not publish: it failed in `Build v2 React bundle (fresh)`, on breakage that had been sitting on `main` since that morning. #6150 repairs it and adds the PR-time guard that would have caught it.
+
+### Fixed: the frontend bundle is built before merge, not only at release time
+- Two dependabot bumps broke the publish path and nothing noticed, because `frontend/` was only ever built after merge: react 18 -> 19 left `@visx/shape@3` unsatisfiable (`npm ci` ERESOLVE), and typescript 5.9 -> 7.0 turned the untyped `import "./styles.css"` side-effect imports into TS2882.
+- `@visx/shape` moves to ^4.0.0 (peers react ^18 || ^19, matching its three sibling `@visx` packages) and the standard Vite `src/vite-env.d.ts` supplies the CSS module declarations TypeScript 7 now requires.
+- `npm ci && npm run build`, exactly what the publish path runs, now runs on every pull request and blocks the merge gate, so a frontend dependency bump can no longer reach a release unbuilt.
 
 ### Fixed: Windows uninstall slows down on large runtime folders
 - Recursive cleanup now reports each cleanup stage instead of adding and scrolling a UI row for every file. This avoids overwhelming the uninstaller when old pip upgrades have left hundreds of thousands of runtime files.
