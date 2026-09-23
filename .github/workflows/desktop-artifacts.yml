@@ -350,7 +350,7 @@ jobs:
       # every downstream step stay untouched.
       - name: Azure login (OIDC)
         if: env.HAS_AZ_SIGN == 'true'
-        uses: azure/login@7ddb5af1ef8758cf1353cf3b42f940aee27ba21c # v3.0.2
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -506,6 +506,9 @@ jobs:
           Move-Item "desktop\installer\ClawMetry-Setup-${version}.exe" "dist\ClawMetry-Setup-${version}.exe"
           # Fixed-name copy — same stable-URL convention as the zip above.
           Copy-Item "dist\ClawMetry-Setup-${version}.exe" "dist\ClawMetry-windows-setup.exe" -Force
+
+      - name: Verify native uninstall cleanup
+        run: python desktop/smoke_windows_cleanup.py
 
       # Verify the artifact, not the build log (FLYWHEEL §0b.5): a chained
       # Authenticode signature must actually be on the setup exe and the
