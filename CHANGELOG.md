@@ -1,5 +1,12 @@
 ## Unreleased
 
+### Release: git transport flags that name a program are high risk (2026-09-25)
+- **Carries:** #6160. Its entry follows.
+
+### Fixed: `git --upload-pack` / `--receive-pack` / `--exec` rated high, not medium
+- These CLI flags make git run a named program, so `git push --receive-pack=/tmp/evil.sh origin main` is code execution, but it scored `medium` and a `min_risk: high` policy did not hold it. They now score `high` on any subcommand (`--exec` only where it names a pack program; `-u` only on `clone` / `ls-remote`), with the flag named in the reason. The standard `git-upload-pack` / `git-receive-pack` programs stay `medium`.
+- Quoting never changes a verdict: the command is unquoted before it is inspected, and a test pins that, closing the validator bypass that stripped single-quoted content. Second half of vivekchand/clawmetry-pro#244.
+
 ### Release: a secret read and sent out in one command is critical (2026-09-25)
 - **Carries:** #6161. Its entry follows.
 
