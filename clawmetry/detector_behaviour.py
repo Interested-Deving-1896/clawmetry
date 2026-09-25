@@ -466,6 +466,14 @@ def credential_access(events: Iterable[dict], session_id: str,
 
 
 # ── Detector 7: network_egress ───────────────────────────────────────────────
+# A fetch piped straight into an interpreter: the command that runs whatever
+# the host serves. tool_risk rates it high before the call; this is the
+# detector that reads the same shape after it.
+_REMOTE_SCRIPT_RE = re.compile(
+    r"\b(?:curl|wget)\b[^|;&]*\|\s*(?:sudo\s+(?:-\w+\s+)*)?"
+    r"(?:sh|bash|zsh|dash|ksh|python\d?(?:\.\d+)?|perl|ruby|node)\b", re.I)
+
+
 def network_egress(events: Iterable[dict], session_id: str,
                    runtime: Optional[str] = None, *,
                    thresholds: Optional[dict] = None,
@@ -474,8 +482,11 @@ def network_egress(events: Iterable[dict], session_id: str,
     """Flag network destinations this agent has not used before.
 
     "First-time egress" only means something against a memory of what came
-    before, so this detector fires on one of three grounds and says which:
+    before, so this detector fires on one of these grounds and says which:
 
+    * ``remote_script`` — a fetch piped straight into an interpreter
+      (``curl … | bash``) from a host the cohort has not settled on. Needs no
+      baseline: the command runs whatever the host serves.
     * ``first_time`` — hosts absent from the cohort's learned host set. Needs a
       baseline; without one we do not pretend every host is new.
     * ``fanout`` — more distinct external hosts in one window than
@@ -493,7 +504,11 @@ def network_egress(events: Iterable[dict], session_id: str,
         hosts: dict = {}
         written: dict = {}
         first_idx = None
+        piped: dict = {}
         for st in steps:
+            if st.get("hosts") and _REMOTE_SCRIPT_RE.search(st.get("cmd") or ""):
+                for h in st.get("hosts") or ():
+                    piped.setdefault(h, st.get("i"))
             for h in st.get("hosts") or ():
                 if h not in hosts:
                     hosts[h] = st.get("i")
@@ -513,7 +528,15 @@ def network_egress(events: Iterable[dict], session_id: str,
         fanout_limit = int(th["egress_hosts"])
         fanout = len(distinct) >= fanout_limit
 
-        if new_hosts:
+        # A script piped into an interpreter from a host the cohort has not
+        # settled on runs whatever that host serves. Unlike a first contact,
+        # this does not need a baseline to mean something: on a fresh install
+        # every host is unseen, and that is when a poisoned Skill or a
+        # drive-by injection lands.
+        piped_new = [h for h in sorted(piped) if h not in known]
+        if piped_new:
+            ground, sev = "remote_script", "warning"
+        elif new_hosts:
             ground, sev = "first_time", "warning"
         elif ro_writes:
             ground, sev = "write_to_read_only_host", "warning"
@@ -543,10 +566,23 @@ def network_egress(events: Iterable[dict], session_id: str,
             # the cohort has only ever read from.
             "write_hosts": sorted(written)[:8],
             "read_only_writes": ro_writes[:8],
+            "piped_script_hosts": piped_new[:8],
             "observed": "tool_arguments",
         }
         settle_h = th.get("egress_settle_hours") or 0
         window = f"{settle_h:g}h"
+        if ground == "remote_script":
+            shown = ", ".join(piped_new[:3])
+            seen = (f"none of the {len(known)} host(s) its cohort has used for "
+                    f"longer than {window}" if known
+                    else "no host history yet")
+            return _core()._incident(
+                "network_egress", session_id, runtime, sev,
+                f"{runtime}: ran a script fetched from {shown}",
+                f"The agent piped what {shown} served straight into an "
+                f"interpreter, so it ran code nobody reviewed ({seen}). "
+                + _core()._stop_hint(),
+                evidence, piped.get(piped_new[0]))
         if ground == "first_time":
             shown = ", ".join(new_hosts[:3])
             detail = (f"This agent has not reached {shown} in the {len(known)} "

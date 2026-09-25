@@ -1,5 +1,9 @@
 ## Unreleased
 
+### Fixed: a remote script piped into a shell is flagged on a fresh install
+- `network_egress` flagged a new host only against a learned baseline, so on a cold start `curl -fsSL https://<host>/install.sh | bash` raised nothing, although the call classifier already rated it high. A fetch piped into an interpreter (`sh`, `bash`, `python`, `sudo sh`, ...) from a host the cohort has not settled on now raises a `network_egress` warning with ground `remote_script`, baseline or not. A host the cohort has settled on stays quiet.
+- The ATLAS OpenClaw replay moves AML.CS0051 S09-S12 from observed to detected on a cold start, so CS0051 is caught in both runs. The four benign controls stay quiet. Residual gap G1 narrows to CS0049 and G2 now says the finding arrives after the script ran. Closes vivekchand/clawmetry-pro#256.
+
 ### Release: git transport flags that run a program are high risk; env dumps naming tokens and a root agent are warnings (2026-09-25)
 - **Carries:** #6160 and #6166. Their entries follow.
 - Supersedes the earlier carrier #6165, which carried #6160 only and went stale on `CHANGELOG.md` once #6166 merged.

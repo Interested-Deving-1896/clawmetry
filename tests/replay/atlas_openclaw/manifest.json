@@ -880,17 +880,16 @@
     {
       "id": "G1",
       "stages": [
-        "AML.CS0049 S09-S10",
-        "AML.CS0051 S09-S12"
+        "AML.CS0049 S09-S10"
       ],
-      "text": "New-host detection needs a learned baseline. On a fresh install neither the lookalike Skill host nor the attacker's page raises anything; with 40 earlier sessions of history both raise network_egress at warning."
+      "text": "New-host detection needs a learned baseline. On a fresh install a plain request to the lookalike Skill host raises nothing; with 40 earlier sessions of history it raises network_egress at warning. A remote script piped into an interpreter does not need the baseline (G2 below)."
     },
     {
       "id": "G2",
       "stages": [
         "AML.CS0051 S09-S12"
       ],
-      "text": "A remote script piped into bash raises no finding on its own. The call classifier rates it high, but no detector reads that rating. ClawMetry has no pre-tool hook of its own for OpenClaw: the only control that acts before the command runs is OpenClaw's exec approval, which ClawMetry turns on only when a require-approval policy covers exec (see FM-1 to FM-3)."
+      "text": "A remote script piped into bash now raises network_egress at warning on a cold start (ground remote_script, vivekchand/clawmetry-pro#256), but only on the daemon's next pass, after the script ran. ClawMetry has no pre-tool hook of its own for OpenClaw: the only control that acts before the command runs is OpenClaw's exec approval, which ClawMetry turns on only when a require-approval policy covers exec (see FM-1 to FM-3)."
     },
     {
       "id": "G4",
