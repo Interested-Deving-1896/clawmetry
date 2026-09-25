@@ -1,5 +1,10 @@
 ## Unreleased
 
+### Fixed: an environment dump that prints other services' tokens, and an agent already running as root, are warnings
+- `credential_access` rated every bare `env` / `printenv` at info. A dump whose output names credentials (`SLACK_TOKEN=`, `OPENAI_API_KEY=`, matched on whole `_`-separated words, so `TOKENIZERS_PARALLELISM` and `SSH_AUTH_SOCK` do not count) is now a warning. Only the count is recorded, never the names or values, and it holds when the values are masked.
+- `privilege_change` only matched verbs that change privilege, so an agent started as root never raised anything. A bare identity probe (`whoami`, `id`, `id -u`) whose answer is root or uid 0 now raises `runs as root (uid 0)` at warning. `sudo whoami` stays elevation, not identity.
+- The ATLAS OpenClaw replay moves AML.CS0048 S05 (partial) and S06 (observed) to detected in both cold-start and learned-baseline runs, and residual gap G8 is retired. The controls stay quiet. Closes vivekchand/clawmetry-pro#261.
+
 ### Release: a secret read and sent out in one command is critical (2026-09-25)
 - **Carries:** #6161. Its entry follows.
 
