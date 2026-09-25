@@ -926,14 +926,6 @@
         "AML.CS0050 S06"
       ],
       "text": "ClawMetry does not re-apply OpenClaw's exec approval after something else turns it off, and nothing on that path reports the change."
-    },
-    {
-      "id": "G8",
-      "stages": [
-        "AML.CS0048 S05",
-        "AML.CS0048 S06"
-      ],
-      "text": "Dumping an environment that holds secrets is info only, and commands run by an agent that is already root raise nothing."
     }
   ]
 }
