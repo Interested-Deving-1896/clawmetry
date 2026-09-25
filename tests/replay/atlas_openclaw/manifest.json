@@ -893,13 +893,6 @@
       "text": "A remote script piped into bash raises no finding on its own. The call classifier rates it high, but no detector reads that rating. ClawMetry has no pre-tool hook of its own for OpenClaw: the only control that acts before the command runs is OpenClaw's exec approval, which ClawMetry turns on only when a require-approval policy covers exec (see FM-1 to FM-3)."
     },
     {
-      "id": "G3",
-      "stages": [
-        "AML.CS0051 S16"
-      ],
-      "text": "A secret file read and sent out in one command is a warning, not critical: credential_access escalates only when egress happens in a later call. The call classifier rates that command medium."
-    },
-    {
       "id": "G4",
       "stages": [
         "AML.CS0049 S07-S08",
@@ -933,14 +926,6 @@
         "AML.CS0050 S06"
       ],
       "text": "ClawMetry does not re-apply OpenClaw's exec approval after something else turns it off, and nothing on that path reports the change."
-    },
-    {
-      "id": "G8",
-      "stages": [
-        "AML.CS0048 S05",
-        "AML.CS0048 S06"
-      ],
-      "text": "Dumping an environment that holds secrets is info only, and commands run by an agent that is already root raise nothing."
     }
   ]
 }
