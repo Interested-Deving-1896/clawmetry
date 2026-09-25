@@ -47,7 +47,21 @@ RUN set -eu; \
       echo "expected exactly one clawmetry wheel in dist/, found: $*" >&2; exit 1; \
     fi; \
     pip install --no-cache-dir "$1[otel]"; \
-    rm -rf /tmp/dist
+    rm -rf /tmp/dist; \
+    python3 -m pip uninstall --yes pip
+
+# pip is removed once the wheel is in, because the image never needs it again
+# (CLAWMETRY_AUTO_UPDATE=0 above) and, per trivy, it is the only thing in the
+# image that carries fixable advisories. pip vendors its own copies of msgpack
+# and setuptools (pip/_vendor/vendor.txt: msgpack==1.1.2, setuptools==70.3.0),
+# and trivy reports them as installed packages:
+#   GHSA-6v7p-g79w-8964  msgpack     1.1.2  -> 1.2.1   HIGH
+#   CVE-2025-47273       setuptools  70.3.0 -> 78.1.1  HIGH
+#   CVE-2026-59890       setuptools  70.3.0 -> 83.0.0  MEDIUM
+# Upgrading pip does not help: the latest pip vendors the same versions.
+# License activation still works without pip: license._pip_install_wheel
+# bootstraps pip with ensurepip when the interpreter has it and, failing that,
+# unzips the wheel into site-packages.
 
 # HOME=/root, so the store lives in /root/.clawmetry: the volume path the
 # Compose file has always mounted. Changing it would strand existing data.

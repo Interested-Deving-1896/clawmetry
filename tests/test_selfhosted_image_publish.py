@@ -180,6 +180,20 @@ def test_image_installs_only_the_published_wheel() -> None:
     )
 
 
+def test_image_does_not_ship_pip() -> None:
+    # pip vendors msgpack and setuptools releases that carry fixable
+    # advisories, so a pip left in the runtime image shows up as fixable HIGH
+    # findings in every image scan. It must be removed after the wheel install.
+    text = _read("deploy", "self-hosted", "Dockerfile.release")
+    code = [ln for ln in text.splitlines() if ln.strip() and not ln.lstrip().startswith("#")]
+    body = "\n".join(code)
+    install = body.index('pip install --no-cache-dir "$1[otel]"')
+    uninstall = body.find("pip uninstall --yes pip")
+    assert uninstall > install, (
+        "Dockerfile.release must uninstall pip after installing the wheel"
+    )
+
+
 # ── verify ──────────────────────────────────────────────────────────────────
 
 
