@@ -1,5 +1,13 @@
 ## Unreleased
 
+### Release: git transport flags that run a program are high risk; env dumps naming tokens and a root agent are warnings (2026-09-25)
+- **Carries:** #6160 and #6166. Their entries follow.
+- Supersedes the earlier carrier #6165, which carried #6160 only and went stale on `CHANGELOG.md` once #6166 merged.
+
+### Fixed: `git --upload-pack` / `--receive-pack` / `--exec` rated high, not medium
+- These CLI flags make git run a named program, so `git push --receive-pack=/tmp/evil.sh origin main` is code execution, but it scored `medium` and a `min_risk: high` policy did not hold it. They now score `high` on any subcommand (`--exec` only where it names a pack program; `-u` only on `clone` / `ls-remote`), with the flag named in the reason. The standard `git-upload-pack` / `git-receive-pack` programs stay `medium`.
+- Quoting never changes a verdict: the command is unquoted before it is inspected, and a test pins that, closing the validator bypass that stripped single-quoted content. Second half of vivekchand/clawmetry-pro#244.
+
 ### Fixed: an environment dump that prints other services' tokens, and an agent already running as root, are warnings
 - `credential_access` rated every bare `env` / `printenv` at info. A dump whose output names credentials (`SLACK_TOKEN=`, `OPENAI_API_KEY=`, matched on whole `_`-separated words, so `TOKENIZERS_PARALLELISM` and `SSH_AUTH_SOCK` do not count) is now a warning. Only the count is recorded, never the names or values, and it holds when the values are masked.
 - `privilege_change` only matched verbs that change privilege, so an agent started as root never raised anything. A bare identity probe (`whoami`, `id`, `id -u`) whose answer is root or uid 0 now raises `runs as root (uid 0)` at warning. `sudo whoami` stays elevation, not identity.
