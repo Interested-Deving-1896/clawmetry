@@ -53,7 +53,11 @@ jobs:
         # to its third-party branch, where the absence of an `@<sha>` is a finding.
         # On a pull_request that commit is the merge commit, so this still runs the
         # action as changed by the PR -- which is the whole point of this workflow.
-        uses: ./integrations/github-action
+        # zizmor's self-repository audit asks for `$/` here, and marks its own
+        # fix `unsafe`; taking it would re-open the Scorecard finding described
+        # above. Both forms resolve to this repository at this commit, so the
+        # Low finding is accepted rather than traded for an error-level one.
+        uses: ./integrations/github-action  # zizmor: ignore[self-repository]
         with:
           install-from: ${{ github.workspace }}
           working-directory: ${{ steps.demo.outputs.repo }}
@@ -73,7 +77,8 @@ jobs:
       - name: Gate on, with approved exceptions
         id: gated
         # Local-action form, as above.
-        uses: ./integrations/github-action
+        # zizmor self-repository accepted, as above.
+        uses: ./integrations/github-action  # zizmor: ignore[self-repository]
         with:
           install-from: ${{ github.workspace }}
           working-directory: ${{ steps.demo.outputs.repo }}
