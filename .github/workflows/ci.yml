@@ -1913,7 +1913,11 @@ jobs:
         # own checkout, at the commit the workflow is already running. Scorecard's
         # pinned-dependencies probe recognises only `./` as local; `$/` fell through
         # to its third-party branch, where the absence of an `@<sha>` is a finding.
-        uses: ./.github/actions/setup-openclaw
+        # zizmor's self-repository audit asks for `$/` here, and marks its own
+        # fix `unsafe`; taking it would re-open the Scorecard finding described
+        # above. Both forms resolve to this repository at this commit, so the
+        # Low finding is accepted rather than traded for an error-level one.
+        uses: ./.github/actions/setup-openclaw  # zizmor: ignore[self-repository]
         with:
           gateway-token: moat-live-e2e-token
       - name: Install Python deps
