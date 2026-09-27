@@ -174,6 +174,7 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/delegated_usage.py` | medium | Usage for work a runtime handed to another vendor's agent. |
 | `clawmetry/detector_behaviour.py` | medium | Is this agent doing something it does not normally do? |
 | `clawmetry/detector_calibration.py` | medium | How a detector decides what "too many" means, for THIS runtime and THIS team. |
+| `clawmetry/detector_decoding.py` | small | Bounded, inert text views for credential inspection (REQ-GOV-DET-001). |
 | `clawmetry/detector_injection.py` | small | the ``prompt_injection`` Guard detector. |
 | `clawmetry/detector_money.py` | small | What a finding costs, and therefore what to look at first. |
 | `clawmetry/detector_payload.py` | medium | What a tool call SENT, and what it CARRIED. |
