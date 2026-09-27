@@ -49,10 +49,11 @@ jobs:
 
       - name: Setup OpenClaw
         id: openclaw
-        # `$/<path>` is GitHub's self-repository syntax: it resolves against this
-        # repository at the commit the workflow is already running, and counts as a
-        # pinned reference for policy purposes, which the older `./<path>` does not.
-        uses: $/.github/actions/setup-openclaw
+        # `./<path>` is the local-action form: it resolves against this repository's
+        # own checkout, at the commit the workflow is already running. Scorecard's
+        # pinned-dependencies probe recognises only `./` as local; `$/` fell through
+        # to its third-party branch, where the absence of an `@<sha>` is a finding.
+        uses: ./.github/actions/setup-openclaw
         with:
           gateway-token: ci-openclaw-token
 

@@ -47,12 +47,13 @@ jobs:
 
       - name: Report only (gate off)
         id: report_only
-        # `$/<path>` is GitHub's self-repository syntax: it resolves against this
-        # repository at the commit the workflow is already running, and counts as a
-        # pinned reference for policy purposes, which the older `./<path>` does not.
+        # `./<path>` is the local-action form: it resolves against this repository's
+        # own checkout, at the commit the workflow is already running. Scorecard's
+        # pinned-dependencies probe recognises only `./` as local; `$/` fell through
+        # to its third-party branch, where the absence of an `@<sha>` is a finding.
         # On a pull_request that commit is the merge commit, so this still runs the
         # action as changed by the PR -- which is the whole point of this workflow.
-        uses: $/integrations/github-action
+        uses: ./integrations/github-action
         with:
           install-from: ${{ github.workspace }}
           working-directory: ${{ steps.demo.outputs.repo }}
@@ -71,8 +72,8 @@ jobs:
 
       - name: Gate on, with approved exceptions
         id: gated
-        # Self-repository syntax, as above.
-        uses: $/integrations/github-action
+        # Local-action form, as above.
+        uses: ./integrations/github-action
         with:
           install-from: ${{ github.workspace }}
           working-directory: ${{ steps.demo.outputs.repo }}
