@@ -1236,6 +1236,10 @@ jobs:
       # network_egress first-time severity to info and by hand-editing the doc.
       - name: ATLAS OpenClaw replay (stage outcomes pinned)
         run: python3 -m pytest tests/test_atlas_openclaw_replay.py -v --tb=short
+      # The exec-approval gate FM-1 drives, including the live-posture drift
+      # check that re-applies it (vivekchand/clawmetry-pro#259).
+      - name: OpenClaw exec-approval gate and posture drift
+        run: python3 -m pytest tests/test_openclaw_exec_policy_gate.py -v --tb=short
       - name: ATLAS OpenClaw scorecard is regenerated and current
         run: |
           python3 scripts/gen_atlas_openclaw_scorecard.py --check

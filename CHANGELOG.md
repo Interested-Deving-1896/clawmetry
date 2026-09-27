@@ -1,5 +1,10 @@
 ## Unreleased
 
+### Fixed: OpenClaw exec approval turned off out of band is put back and audited
+- While a require-approval policy covers exec, the daemon now re-reads OpenClaw's effective exec posture (`openclaw exec-policy show --json`) at most once a minute. If any scope no longer gates exec, for example after `exec.approvals.set {"ask": "off"}` through the gateway API (CVE-2026-25253, ATLAS AML.CS0050 S06), it re-applies the `cautious` preset and writes a `guard.exec_approval_drift` audit entry naming the relaxed scopes. Before this change it compared only against its own state file and never noticed.
+- A posture that is already gated when the policy arrives, such as a hand-set deny-all, is left alone and is never relaxed to `cautious` or later to `yolo`. An unreadable posture is never treated as drift.
+- The ATLAS OpenClaw replay's FM-1 now pins `restored=true` and the audit entry, and gap G7 is narrowed to the up-to-60-second window before the next check. Closes vivekchand/clawmetry-pro#259 (FM-1). FM-2 (no binary) and FM-3 (failed apply) are unchanged.
+
 ### Release: harder-to-evade credential inspection with visible coverage gaps
 
 - Guard now recognizes commonly encoded credentials, including nested percent, Base64, hexadecimal and escaped representations. Tool results keep their original case for this scan, independently of the short error preview.

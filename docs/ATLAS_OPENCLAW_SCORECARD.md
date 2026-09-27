@@ -122,7 +122,7 @@ Why each stage scored as it did:
 
 - **S00-S02**: Attacker infrastructure and a script running in a browser tab. No agent turn, no tool call.
 - **S03-S05**: Browser to gateway WebSocket traffic from another client. It is not a session event. Whether the gateway logs these connections, and whether ClawMetry's gateway log reader keeps such a line, is not checked in this tier.
-- **S06**: A gateway API call, not a tool call. This is also the one pre-action control ClawMetry drives for OpenClaw, and failure mode FM-1 shows ClawMetry does not put it back.
+- **S06**: A gateway API call, not a tool call. This is also the one pre-action control ClawMetry drives for OpenClaw, and failure mode FM-1 shows ClawMetry puts it back on its next posture check, up to 60 seconds later.
 - **S07**: A gateway API call that changes OpenClaw's own configuration. Guard's workspace scan reads git config, editor tasks, agent hook settings and package manifests, not OpenClaw's configuration.
 - **S08**: The command is sent through the gateway's node RPC, not through an agent turn, so no tool call reaches the session transcript Guard reads. Gateway log visibility is not checked in this tier.
 
@@ -172,7 +172,7 @@ For OpenClaw, the one control that acts before a command runs is OpenClaw's own 
 
 | Id | Situation | Result | Meaning |
 |---|---|---|---|
-| FM-1 | OpenClaw's exec approval is turned off through the gateway API after ClawMetry turned it on (AML.CS0050 S06) | `applied_on_first_pass=["cautious"], applied_after_change=[], restored=false` | Fails open. ClawMetry decides whether to apply the cautious preset by comparing with the posture it last applied, which it keeps in its own state file, and never reads OpenClaw's live posture. An out-of-band change is neither noticed nor undone. |
+| FM-1 | OpenClaw's exec approval is turned off through the gateway API after ClawMetry turned it on (AML.CS0050 S06) | `applied_on_first_pass=["cautious"], applied_after_change=["cautious"], restored=true, audited=["guard.exec_approval_drift"]` | Re-applied. While a require-approval policy covers exec, ClawMetry re-reads OpenClaw's effective posture (openclaw exec-policy show) at most once a minute, re-applies the cautious preset when any scope no longer gates exec, and writes a guard.exec_approval_drift audit entry. Exec runs without approval between the change and the next check, up to 60 seconds. A posture that is already stricter, such as a hand-set deny-all, is left alone. |
 | FM-2 | The openclaw binary is not on the daemon's PATH (unavailable agent) | `applied=[], gate_in_force=false` | Fails open. The gate is never applied and the agent runs without exec approval. |
 | FM-3 | Applying the cautious preset fails or times out (timeout) | `gate_in_force=false, consecutive_failures=1, retry_after_secs=300` | Fails open. Nothing is recorded as applied, the next attempt waits 300 seconds (doubling to an hour), and the agent runs without exec approval in the meantime. A preset apply is killed after 60 seconds. |
 
@@ -191,7 +191,7 @@ For OpenClaw, the one control that acts before a command runs is OpenClaw's own 
 - **G4** (AML.CS0049 S07-S08, AML.CS0051 S09-S12). Instructions injected into a fetched page or a Skill file are not read as instructions. Tracked in vivekchand/clawmetry#5945.
 - **G5** (AML.CS0051 S13, AML.CS0049 S05-S06). A change to HEARTBEAT.md, which OpenClaw loads into every new system prompt, raises no finding, whether a user makes it through a tool (see the heartbeat control) or a script makes it with no tool call at all. The workspace scan does not read Skill folders either.
 - **G6** (AML.CS0050 S03-S05, AML.CS0050 S06, AML.CS0050 S07, AML.CS0050 S08, AML.CS0048 S00-S02). Gateway API activity from another client (a stolen token in use, exec.approvals.set, config.patch, node.invoke) and an internet-exposed control interface are not Guard inputs.
-- **G7** (FM-1, AML.CS0050 S06). ClawMetry does not re-apply OpenClaw's exec approval after something else turns it off, and nothing on that path reports the change.
+- **G7** (FM-1, AML.CS0050 S06). The gateway call that turns OpenClaw's exec approval off raises no finding by itself. ClawMetry notices the relaxed posture only on its next posture check (up to 60 seconds later), re-applies the gate and audits the drift. Anything exec runs in that window runs without approval.
 
 ## Reproduce
 

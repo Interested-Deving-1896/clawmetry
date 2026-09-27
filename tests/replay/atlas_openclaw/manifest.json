@@ -822,9 +822,12 @@
       "relates_to": "AML.CS0050 S06",
       "title": "OpenClaw's exec approval is turned off through the gateway API after ClawMetry turned it on",
       "expected": {
-        "restored": false
+        "restored": true,
+        "audited": [
+          "guard.exec_approval_drift"
+        ]
       },
-      "meaning": "Fails open. ClawMetry decides whether to apply the cautious preset by comparing with the posture it last applied, which it keeps in its own state file, and never reads OpenClaw's live posture. An out-of-band change is neither noticed nor undone."
+      "meaning": "Re-applied. While a require-approval policy covers exec, ClawMetry re-reads OpenClaw's effective posture (openclaw exec-policy show) at most once a minute, re-applies the cautious preset when any scope no longer gates exec, and writes a guard.exec_approval_drift audit entry. Exec runs without approval between the change and the next check, up to 60 seconds. A posture that is already stricter, such as a hand-set deny-all, is left alone."
     },
     {
       "id": "FM-2",
@@ -925,7 +928,7 @@
         "FM-1",
         "AML.CS0050 S06"
       ],
-      "text": "ClawMetry does not re-apply OpenClaw's exec approval after something else turns it off, and nothing on that path reports the change."
+      "text": "The gateway call that turns OpenClaw's exec approval off raises no finding by itself. ClawMetry notices the relaxed posture only on its next posture check (up to 60 seconds later), re-applies the gate and audits the drift. Anything exec runs in that window runs without approval."
     }
   ]
 }
