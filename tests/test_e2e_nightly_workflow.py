@@ -5,13 +5,14 @@ import yaml
 
 WORKFLOW_PATH = Path(".github/workflows/e2e-nightly.yml")
 
-#: Both spellings of a reference to the in-repo composite action. `$/<path>` is
-#: GitHub's self-repository syntax and is what the workflows use now; `./<path>`
-#: is the older form. This test is about the step's ORDER, not which spelling
-#: the workflow happens to use, so accept either rather than pinning one.
+#: Both spellings of a reference to the in-repo composite action. `./<path>` is
+#: the local-action form and is what this workflow uses; `$/<path>` is GitHub's
+#: self-repository syntax, still used by pr-screenshots.yml, which has no
+#: workspace-root checkout. This test is about the step's ORDER, not which
+#: spelling the workflow happens to use, so accept either rather than pinning one.
 SETUP_OPENCLAW_REFS = (
-    "$/.github/actions/setup-openclaw",
     "./.github/actions/setup-openclaw",
+    "$/.github/actions/setup-openclaw",
 )
 
 
