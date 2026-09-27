@@ -31,7 +31,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 # http/protobuf, and without these the receiver answers 501 to every POST.
 # An enterprise receiver that has to be told to `pip install clawmetry[otel]`
 # before it accepts data is not a receiver.
-RUN pip install --no-cache-dir "opentelemetry-proto>=1.20.0" "protobuf>=4.21.0"
+#
+# Installed from a hash-pinned set rather than the `>=` ranges this line used
+# to carry: the base image above is pinned by digest so an identical build
+# pulls identical bytes, and a live resolve on the next layer gave that back.
+# See that file's header for why it is separate from ci-otel-extra.txt.
+COPY .github/requirements/docker-otel.txt /tmp/docker-otel.txt
+RUN pip install --no-cache-dir --require-hashes -r /tmp/docker-otel.txt \
+    && rm -f /tmp/docker-otel.txt
 
 # Copy application code and necessary files for setup
 COPY dashboard.py .
