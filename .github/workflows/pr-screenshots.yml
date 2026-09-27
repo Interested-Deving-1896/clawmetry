@@ -145,18 +145,25 @@ jobs:
       # process itself is NOT in the auth-check path.
       #
       # `$/<path>` is GitHub's self-repository syntax: it resolves against this
-      # repository at the commit the workflow is already running, and counts as a
-      # pinned reference for policy purposes, which the older `./<path>` does not.
-      # It is also what the other five callers use (ci, e2e-nightly, openclaw-boot,
-      # oss-golden-path, moat-keystone-drive-nightly); this one was left on the
-      # relative form because its path had to be spelled `./head/...`, this being
-      # the only workflow that checks the repository out under a subdirectory
-      # rather than at the workspace root. `$/` needs no workspace checkout at
-      # all, so the `head/` prefix goes away with it.
+      # repository at the commit the workflow is already running, needing no
+      # workspace checkout at all. That is why THIS caller uses it and the other
+      # five (ci, e2e-nightly, openclaw-boot, oss-golden-path,
+      # moat-keystone-drive-nightly) do not: this is the only workflow that
+      # checks the repository out under subdirectories (`head/` and `base/`)
+      # rather than at the workspace root, so a root-relative `./<path>` would
+      # not resolve here and the path would have to be spelled `./head/...`.
       #
       # Behaviour is unchanged: the composite action addresses everything through
       # `${{ github.action_path }}` and installs into its own directory with
       # `npm ci --prefix`, so it never depended on living under `head/`.
+      #
+      # DO NOT "fix" this to `./` to clear the Scorecard pinned-dependencies
+      # finding it draws. Scorecard recognises only `./` as a local action and
+      # reads `$/` as an unpinned third party, which is why the other five moved;
+      # here the job has no root checkout to resolve `./` against. Clearing this
+      # one means either adding a root checkout or `./head/...`, and `./head/...`
+      # is the PR head rather than the merge commit `$/` resolves to -- a real
+      # behaviour change, not a spelling one. One finding, deliberately kept.
       - name: Setup OpenClaw
         continue-on-error: true
         uses: $/.github/actions/setup-openclaw
