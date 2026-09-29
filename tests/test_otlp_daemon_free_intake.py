@@ -20,6 +20,7 @@ prompt is not recorded as a tool call, and absent tool arguments are not
 hashed into a fake "identical calls" loop.
 """
 import os
+import re
 import tempfile
 import time
 
@@ -426,8 +427,20 @@ def test_enterprise_image_ships_the_otlp_protobuf_dependency():
     """
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     dockerfile = open(os.path.join(root, "Dockerfile")).read()
-    assert "opentelemetry-proto" in dockerfile
-    assert "protobuf" in dockerfile
+
+    # The two names may be written into the RUN line directly, or -- since the
+    # image installs them from a hash-pinned set -- live in a requirements file
+    # the Dockerfile COPYs in. Follow that indirection rather than pinning the
+    # test to one layout: what AC-OBS-006.4 guarantees is that the image ships
+    # the OTLP protobuf decoder, not where the dependency is spelled.
+    installed = dockerfile
+    for rel in re.findall(r"^COPY\s+(\S+\.txt)\s", dockerfile, re.M):
+        candidate = os.path.join(root, rel)
+        if os.path.exists(candidate):
+            installed += "\n" + open(candidate).read()
+
+    assert "opentelemetry-proto" in installed
+    assert "protobuf" in installed
 
     compose = open(
         os.path.join(root, "deploy", "self-hosted", "docker-compose.yml")
