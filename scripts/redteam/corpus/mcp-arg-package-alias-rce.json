@@ -1,0 +1,62 @@
+{
+  "id": "mcp-arg-package-alias-rce",
+  "name": "MCP tool argument carries a package alias, and the server installs and imports it",
+  "disclosed": "2026-09-09",
+  "source": "https://github.com/advisories/GHSA-wcjj-9m6g-2fr2",
+  "cve": [
+    "CVE-2026-59176"
+  ],
+  "attack_class": "silent-rce",
+  "surface": "tool_stream",
+  "affects_runtimes": [
+    "*"
+  ],
+  "summary": "An MCP tool takes an unconstrained version string, interpolates it into an npm package specifier and installs it with `pnpm add`, then dynamically imports the result. npm specifiers accept alias syntax (`file:`, `npm:`, `git+ssh:`), so an argument like `file:/tmp/evil` makes the server install and execute attacker-controlled code in its own process. Disclosed in functype-mcp-server, enabled by default with no authentication in stdio mode.",
+  "why_hard_to_see": "This is the OPPOSITE direction from our two existing MCP cases. Those cover a server injecting instructions into the agent (server -> agent); here the agent's own tool argument weaponizes the server (agent -> server). The argument looks like a version number, the execution happens inside the MCP server process where no ClawMetry detector is looking, and nothing the agent does afterwards need be suspicious at all.",
+  "workspace": {
+    "files": {}
+  },
+  "events": [
+    {
+      "event_type": "tool_call",
+      "ts": "2026-09-10T09:00:01",
+      "data": {
+        "tool": "mcp__functype__set_functype_version",
+        "args": {
+          "version": "file:/tmp/evil-pkg"
+        }
+      }
+    },
+    {
+      "event_type": "tool_result",
+      "ts": "2026-09-10T09:00:07",
+      "data": {
+        "tool": "mcp__functype__set_functype_version",
+        "content": "installed functype@file:/tmp/evil-pkg"
+      }
+    },
+    {
+      "event_type": "tool_call",
+      "ts": "2026-09-10T09:00:12",
+      "data": {
+        "tool": "mcp__functype__get_docs",
+        "args": {
+          "symbol": "Option"
+        }
+      }
+    }
+  ],
+  "known_gap": {
+    "issue": "vivekchand/clawmetry-pro#242",
+    "since": "2026-09-10"
+  },
+  "expect": {
+    "detected": true,
+    "any_of": [
+      "package_manifest_exec",
+      "untrusted_package_source"
+    ],
+    "min_severity": "warning",
+    "rationale": "A tool argument that names a package SOURCE rather than a version is installing code from somewhere the user never chose. `package_manifest_exec` already owns 'this checkout installs code from an install hook'; an argument-borne alias is the same idea arriving through a different door. If neither kind fires, the finding is that ClawMetry sees MCP tool arguments but reads nothing in them."
+  }
+}
