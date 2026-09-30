@@ -63,6 +63,27 @@ verdict pasted in, because a corpus entry that always fails is a red build nobod
 - **Credential scoping bypass** (session-scoped credentials outliving their session). Nothing in the
   tool stream distinguishes a credential that should have expired from one that should not.
 
+## Known gaps: a signature we cannot yet catch
+
+The corpus is both a regression gate and a gap ledger, and those conflict: a verified `MISS` that
+cannot be closed the same day would turn main red if committed, and rot in an issue body if not.
+So a case may carry a tracking issue:
+
+```jsonc
+"known_gap": {"issue": "vivekchand/clawmetry-pro#242", "since": "2026-09-10"}
+```
+
+- The case is still run on every build. Its `MISS` (or `UNDER-SEVERITY`) is reported as
+  `KNOWN-GAP`, listed on a `KNOWN GAP (n)` line in the output and the CI summary, and is not
+  filed again (it already has an issue).
+- `test_corpus_case` treats it as a strict xfail, and `--strict` does not fail on it.
+- The day it starts passing it becomes `GAP-CLOSED`, which fails both the test and `--strict`
+  until the flag is removed. A gap that quietly closes does not stay marked.
+- The flag needs a non-empty `issue` or it is ignored, and it never applies to a control or
+  softens `UNSAFE-CORPUS` / `FALSE-POSITIVE`.
+
+`mcp-arg-package-alias-rce` (CVE-2026-59176) is the first case committed this way.
+
 ## Writing a case
 
 ```jsonc
@@ -121,7 +142,8 @@ author's own tooling (`warning`, "check `git log` on this file"), while a gitign
 
 1. Write the case. Ground it in the disclosure; do not invent a mechanism.
 2. Run `--case <id>`. Expect `MISS` — that is the point.
-3. Either close the gap in `repo_scan`/`detectors`, or run `--file-issues` and let the tracker hold it.
+3. Either close the gap in `repo_scan`/`detectors`, or file the issue (`--file-issues`) and commit
+   the case with `known_gap` pointing at it, so it keeps running while the tracker holds it.
    "We looked and we do not catch it" is a fine outcome; an unrecorded one is not.
 4. Add a negative control if the new detector could plausibly fire on ordinary behaviour.
 5. Confirm the corpus is still green, **including the controls**.

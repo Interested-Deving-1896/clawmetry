@@ -313,29 +313,53 @@ _EXEC_GATE_POLICY = [{"action": "require_approval", "tool": "exec",
                       "pattern": r"curl\s", "enabled": True}]
 
 
+def _posture_scope(security: str, ask: str) -> dict:
+    """One scope as ``openclaw exec-policy show --json`` reports it."""
+    return {"scopeLabel": "tools.exec", "agentId": "main",
+            "security": {"effective": security}, "ask": {"effective": ask},
+            "askFallback": {"effective": "deny"}}
+
+
 def probe_gate_disabled_out_of_band() -> dict:
     """CS0050 S06 turns OpenClaw's exec approval off through the gateway API.
     Does ClawMetry, which turned it on, put it back on its next pass?"""
     from pathlib import Path
-    from clawmetry import approvals
+    from clawmetry import approvals, audit
     tmp = tempfile.mkdtemp(prefix="atlas-gate-")
     applied: List[str] = []
+    audited: List[str] = []
+    # OpenClaw's live posture: yolo until a preset is applied.
+    live = {"scope": _posture_scope("full", "off")}
+
+    def _apply(preset):
+        applied.append(preset)
+        live["scope"] = (_posture_scope("allowlist", "on-miss")
+                         if preset == "cautious" else _posture_scope("full", "off"))
+        return True
+
+    def _show(args):
+        return True, {"effectivePolicy": {"scopes": [live["scope"]]}}, ""
     try:
         with _Patched(approvals,
                       _EXEC_POLICY_STATE=Path(tmp) / "exec_policy_applied",
                       _EXEC_POLICY_BACKOFF={"fails": 0, "until": 0.0},
+                      _EXEC_POSTURE_CHECK={"at": 0.0},
+                      _EXEC_POSTURE_CHECK_INTERVAL_S=0,
                       _openclaw_env_and_bin=lambda: ("/opt/openclaw/bin/openclaw", {}),
-                      _apply_openclaw_exec_preset=lambda p: (applied.append(p), True)[1]):
+                      _run_openclaw_approval_command=_show,
+                      _apply_openclaw_exec_preset=_apply), \
+                _Patched(audit, audit_event=lambda action, **kw: audited.append(action)):
             approvals.sync_openclaw_exec_policy(_EXEC_GATE_POLICY)
             first = list(applied)
             # Out of band: exec.approvals.set {"ask": "off"}. It changes
             # OpenClaw's posture and nothing ClawMetry stores.
+            live["scope"] = _posture_scope("full", "off")
             approvals.sync_openclaw_exec_policy(_EXEC_GATE_POLICY)
             second = applied[len(first):]
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     return {"applied_on_first_pass": first, "applied_after_change": second,
-            "restored": bool(second)}
+            "restored": bool(second), "audited": audited}
 
 
 def probe_gate_binary_unavailable() -> dict:
@@ -367,6 +391,7 @@ def probe_gate_apply_fails() -> dict:
         with _Patched(approvals, _EXEC_POLICY_STATE=state,
                       _EXEC_POLICY_BACKOFF=backoff,
                       _openclaw_env_and_bin=lambda: ("/opt/openclaw/bin/openclaw", {}),
+                      _openclaw_exec_posture=lambda: None,
                       _apply_openclaw_exec_preset=lambda p: False):
             approvals.sync_openclaw_exec_policy(_EXEC_GATE_POLICY)
             state_written = state.exists()

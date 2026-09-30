@@ -39,11 +39,111 @@ def test_corpus_is_not_empty():
 @pytest.mark.parametrize("case", _CASES, ids=[c.get("id") for c in _CASES])
 def test_corpus_case(case):
     result = redteam.run_case(case)
+    where = (f"Corpus case: {case.get('_path')}\n"
+             f"Reproduce: python3 scripts/redteam/audit.py --case {case['id']}")
+    issue = redteam.known_gap_issue(case)
+    if issue:
+        # A strict xfail, but narrower than pytest's: only the gap itself may
+        # fail. A known gap that starts passing fails the suite so the flag is
+        # removed, and one that goes UNSAFE-CORPUS or FALSE-POSITIVE is a real
+        # failure like any other case's.
+        assert result["verdict"] != "PASS", (
+            f"{case['id']}: known gap {issue} now PASSES ({result['detail']}). "
+            f"Remove known_gap from the case.\n{where}")
+        assert result["verdict"] in ("MISS", "UNDER-SEVERITY"), (
+            f"{case['id']}: {result['verdict']} — {result['detail']}\n{where}")
+        pytest.xfail(f"known gap, tracked in {issue}: {result['detail']}")
     assert result["verdict"] == "PASS", (
-        f"{case['id']}: {result['verdict']} — {result['detail']}\n"
-        f"Corpus case: {case.get('_path')}\n"
-        f"Reproduce: python3 scripts/redteam/audit.py --case {case['id']}"
-    )
+        f"{case['id']}: {result['verdict']} — {result['detail']}\n{where}")
+
+
+def test_every_known_gap_names_its_issue():
+    """``known_gap`` without an issue is the lazy way to turn a red suite green.
+
+    The runner already ignores such a flag, so the case would fail anyway; this
+    says why, at the source. Controls may never be known gaps: a control that
+    stops firing means the audit cannot vouch for anything else.
+    """
+    for case in _CASES:
+        if "known_gap" not in case:
+            continue
+        kg = case["known_gap"]
+        assert not case.get("control"), f"{case['id']}: a control cannot be a known gap"
+        assert isinstance(kg, dict), f"{case['id']}: known_gap must be an object"
+        assert redteam.known_gap_issue(case), (
+            f"{case['id']}: known_gap needs a non-empty issue, e.g. "
+            f'{{"issue": "vivekchand/clawmetry-pro#242", "since": "2026-09-10"}}')
+        assert kg.get("since"), f"{case['id']}: known_gap needs a since date"
+
+
+def _fake_case(**kw):
+    case = {"id": "fake", "expect": {"detected": True, "any_of": ["nope"]}}
+    case.update(kw)
+    return case
+
+
+@pytest.mark.parametrize("raw,want", [
+    ("MISS", "KNOWN-GAP"),
+    ("UNDER-SEVERITY", "KNOWN-GAP"),
+    ("PASS", "GAP-CLOSED"),
+    ("UNSAFE-CORPUS", "UNSAFE-CORPUS"),
+    ("FALSE-POSITIVE", "FALSE-POSITIVE"),
+])
+def test_known_gap_softens_only_the_gap(raw, want):
+    case = _fake_case(known_gap={"issue": "vivekchand/clawmetry-pro#1", "since": "2026-09-30"})
+    got = redteam._apply_known_gap(case, {"verdict": raw, "detail": "d"})
+    assert got["verdict"] == want
+
+
+@pytest.mark.parametrize("flag", [
+    {"since": "2026-09-30"}, {"issue": ""}, {"issue": "   "}, True, "#242",
+])
+def test_known_gap_without_an_issue_is_ignored(flag):
+    got = redteam._apply_known_gap(_fake_case(known_gap=flag),
+                                   {"verdict": "MISS", "detail": "d"})
+    assert got["verdict"] == "MISS"
+
+
+def test_a_control_is_never_a_known_gap():
+    case = _fake_case(control=True, known_gap={"issue": "x#1", "since": "2026-09-30"})
+    got = redteam._apply_known_gap(case, {"verdict": "MISS", "detail": "d"})
+    assert got["verdict"] == "MISS"
+
+
+def _run_main(monkeypatch, capsys, cases, verdicts, *argv):
+    monkeypatch.setattr(redteam, "_load_corpus", lambda only=None: cases)
+    monkeypatch.setattr(redteam, "run_case", lambda c: {
+        "id": c["id"], "name": c["id"], "surface": "tool_stream",
+        "control": bool(c.get("control")), "verdict": verdicts[c["id"]],
+        "detail": "d", "fired": []})
+    monkeypatch.setattr(sys, "argv", ["audit.py", *argv])
+    code = redteam.main()
+    return code, capsys.readouterr().out
+
+
+def test_strict_passes_with_only_known_gaps(monkeypatch, capsys, tmp_path):
+    kg = {"issue": "vivekchand/clawmetry-pro#242", "since": "2026-09-10"}
+    cases = [_fake_case(id="a"), _fake_case(id="gap", known_gap=kg)]
+    summary = tmp_path / "summary.md"
+    code, out = _run_main(monkeypatch, capsys, cases, {"a": "PASS", "gap": "MISS"},
+                          "--strict", "--summary", str(summary))
+    assert code == 0
+    assert "KNOWN GAP (1): gap" in out
+    assert "1/2 pass, 0 gap(s)" in out
+    assert "**KNOWN GAP (1)**" in summary.read_text()
+
+
+def test_strict_fails_when_a_known_gap_closes(monkeypatch, capsys):
+    kg = {"issue": "vivekchand/clawmetry-pro#242", "since": "2026-09-10"}
+    code, out = _run_main(monkeypatch, capsys, [_fake_case(id="gap", known_gap=kg)],
+                          {"gap": "PASS"}, "--strict")
+    assert code == 1
+    assert "GAP CLOSED (1)" in out
+
+
+def test_strict_still_fails_on_an_unflagged_miss(monkeypatch, capsys):
+    code, _ = _run_main(monkeypatch, capsys, [_fake_case(id="a")], {"a": "MISS"}, "--strict")
+    assert code == 1
 
 
 def test_every_case_declares_a_source():
