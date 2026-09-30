@@ -357,11 +357,14 @@ jobs:
       # LISTS -- a signature added without a line here is checked by nothing.
       # Verified to go RED by removing core.fsmonitor from repo_scan._EXEC_KEYS.
       # The corpus payloads are inert markers; the runner fails a case that
-      # actually executes one.
+      # actually executes one. --strict is safe because a verified-but-open gap
+      # carries "known_gap" (reported, never failing); any other MISS is a real
+      # regression, and a known gap that starts passing fails until the flag
+      # is removed.
       - name: Red-team detection corpus
         run: |
           python3 -m pytest tests/test_redteam_corpus.py -q
-          python3 scripts/redteam/audit.py
+          python3 scripts/redteam/audit.py --strict
 
       # Non-security digests (dedup ids, trace ids, change-detection hashes)
       # must go through clawmetry.nonsecret_hash. A bare hashlib.md5/sha1

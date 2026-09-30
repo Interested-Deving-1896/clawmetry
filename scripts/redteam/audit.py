@@ -27,6 +27,15 @@ positives that existing detectors must catch, and one negative (a real git-lfs
 config) that a scanner must stay quiet about. If a control fails, the audit's
 verdict on everything else is untrustworthy and the run exits non-zero.
 
+Known gaps. A case may carry ``"known_gap": {"issue": "<repo>#<n>", "since":
+"<date>"}``: a disclosed attack we verified we MISS and cannot close the same
+day. It stays in the corpus and is re-run on every build, but its MISS is
+reported as KNOWN-GAP rather than as a regression, and ``--strict`` does not
+fail on it. The moment it starts passing it is reported as GAP-CLOSED, which
+DOES fail ``--strict``, so the flag cannot outlive the gap. The flag only counts
+with a non-empty ``issue`` (otherwise it is ignored and the case fails as usual),
+and it never softens a control or an UNSAFE-CORPUS verdict.
+
 Usage:
   python3 scripts/redteam/audit.py                    # run corpus, print report
   python3 scripts/redteam/audit.py --json report.json # machine-readable
@@ -74,6 +83,37 @@ def _load_corpus(only: str | None = None) -> list:
             continue
         cases.append(case)
     return cases
+
+
+def known_gap_issue(case: dict) -> str:
+    """The tracking issue of a well-formed ``known_gap`` flag, else ``""``.
+
+    A flag without an issue reference is treated as absent: "known" means
+    somebody wrote the gap down, and marking a case known is otherwise just the
+    lazy way to turn a red suite green. Controls can never be known gaps.
+    """
+    if case.get("control"):
+        return ""
+    kg = case.get("known_gap")
+    if not isinstance(kg, dict):
+        return ""
+    issue = kg.get("issue")
+    return issue.strip() if isinstance(issue, str) else ""
+
+
+def _apply_known_gap(case: dict, result: dict) -> dict:
+    """Reclassify a known gap's verdict. Only MISS and UNDER-SEVERITY soften."""
+    issue = known_gap_issue(case)
+    if not issue:
+        return result
+    if result["verdict"] in ("MISS", "UNDER-SEVERITY"):
+        result = dict(result, verdict="KNOWN-GAP",
+                      detail=f"{result['detail']} (known gap, tracked in {issue})")
+    elif result["verdict"] == "PASS":
+        result = dict(result, verdict="GAP-CLOSED",
+                      detail=(f"{result['detail']}; the gap in {issue} is closed, "
+                              f"remove known_gap from the case"))
+    return result
 
 
 def _materialise(case: dict, root: str) -> str:
@@ -301,10 +341,13 @@ _VERDICT_ICON = {
     "FALSE-POSITIVE": "FALSE POSITIVE",
     "UNDER-SEVERITY": "UNDER SEVERITY",
     "UNSAFE-CORPUS": "UNSAFE CORPUS",
+    "KNOWN-GAP": "KNOWN GAP",
+    "GAP-CLOSED": "GAP CLOSED",
 }
 
 
-def _write_summary(path: str, results: list, misses: list, bad_controls: list) -> None:
+def _write_summary(path: str, results: list, misses: list, bad_controls: list,
+                   known: list = (), closed: list = ()) -> None:
     """Append a markdown verdict table (one row per case) to ``path``.
 
     Written for ``$GITHUB_STEP_SUMMARY`` so a scheduled run is readable from the
@@ -312,10 +355,19 @@ def _write_summary(path: str, results: list, misses: list, bad_controls: list) -
     A summary nobody can read is the same as no audit.
     """
     lines = ["## Red-team detection audit", ""]
-    ok = len(results) - len(misses) - len(bad_controls)
+    ok = len(results) - len(misses) - len(bad_controls) - len(known) - len(closed)
     lines.append(f"**{ok}/{len(results)} pass** - "
                  f"{len(misses)} gap(s), {len(bad_controls)} control failure(s)")
     lines.append("")
+    if known:
+        # Visible on every run, so a standing gap is never out of sight.
+        lines.append(f"**KNOWN GAP ({len(known)})**: "
+                     + ", ".join(f"`{r['id']}`" for r in known))
+        lines.append("")
+    if closed:
+        lines.append(f"**GAP CLOSED ({len(closed)})** - remove `known_gap` from: "
+                     + ", ".join(f"`{r['id']}`" for r in closed))
+        lines.append("")
     lines.append("| Case | Surface | Verdict | Detectors that fired | Detail |")
     lines.append("|---|---|---|---|---|")
     for r in results:
@@ -339,7 +391,8 @@ def main() -> int:
     ap.add_argument("--file-issues", action="store_true",
                     help=f"open a sec-gap issue per MISS in {ISSUE_REPO}")
     ap.add_argument("--strict", action="store_true",
-                    help="exit non-zero on any MISS (default: only on control failure)")
+                    help="exit non-zero on any MISS or GAP-CLOSED (default: only "
+                         "on control failure); KNOWN-GAP never fails it")
     ap.add_argument("--summary",
                     help="append a markdown verdict table to this path "
                          "(point it at $GITHUB_STEP_SUMMARY in CI)")
@@ -353,10 +406,11 @@ def main() -> int:
     results = []
     print(f"Red-team detection audit — {len(cases)} case(s)\n")
     for case in cases:
-        r = run_case(case)
+        r = _apply_known_gap(case, run_case(case))
         results.append(r)
         icon = {"PASS": "ok  ", "MISS": "MISS", "FALSE-POSITIVE": "FP  ",
-                "UNDER-SEVERITY": "SEV ", "UNSAFE-CORPUS": "!!!!"}.get(r["verdict"], "??  ")
+                "UNDER-SEVERITY": "SEV ", "UNSAFE-CORPUS": "!!!!",
+                "KNOWN-GAP": "KGAP", "GAP-CLOSED": "DONE"}.get(r["verdict"], "??  ")
         tag = " (control)" if r["control"] else ""
         print(f"  [{icon}] {r['id']}{tag}\n         {r['detail']}")
 
@@ -365,9 +419,17 @@ def main() -> int:
     misses = [r for r in results
               if not r["control"] and r["verdict"] in ("MISS", "UNDER-SEVERITY")]
     unsafe = [r for r in results if r["verdict"] == "UNSAFE-CORPUS"]
+    known = [r for r in results if r["verdict"] == "KNOWN-GAP"]
+    closed = [r for r in results if r["verdict"] == "GAP-CLOSED"]
 
-    print(f"\n{len(results) - len(misses) - len(bad_controls)}/{len(results)} pass, "
+    ok = len(results) - len(misses) - len(bad_controls) - len(known) - len(closed)
+    print(f"\n{ok}/{len(results)} pass, "
           f"{len(misses)} gap(s), {len(bad_controls)} control failure(s)")
+    if known:
+        print(f"KNOWN GAP ({len(known)}): " + ", ".join(r["id"] for r in known))
+    if closed:
+        print(f"GAP CLOSED ({len(closed)}), remove known_gap from: "
+              + ", ".join(r["id"] for r in closed))
 
     if bad_controls:
         print("\nCONTROL FAILURE — the audit cannot vouch for its own verdicts:")
@@ -380,7 +442,7 @@ def main() -> int:
         print(f"\nReport written to {args.json}")
 
     if args.summary:
-        _write_summary(args.summary, results, misses, bad_controls)
+        _write_summary(args.summary, results, misses, bad_controls, known, closed)
 
     if misses:
         print(f"\nGaps ({len(misses)}):")
@@ -397,7 +459,7 @@ def main() -> int:
 
     if unsafe or bad_controls:
         return 2
-    return 1 if (misses and args.strict) else 0
+    return 1 if ((misses or closed) and args.strict) else 0
 
 
 if __name__ == "__main__":
