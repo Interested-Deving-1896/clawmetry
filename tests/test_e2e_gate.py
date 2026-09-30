@@ -12,8 +12,12 @@ import on every 3.9 install.
 """
 from __future__ import annotations
 
+import datetime as dt
+import io
+import json
 import os
 import sys
+import urllib.error
 
 import pytest
 
@@ -345,3 +349,262 @@ def test_no_next_link_ends_pagination():
 def test_off_origin_next_link_is_not_followed(target):
     link = f'<{target}>; rel="next"'
     assert e2e_gate._next_page_url(link, PAGE1) is None
+
+
+# ---------------------------------------------------------------------------
+# A reporter that posts "pending" and then never returns a verdict.
+#
+# The 8090 App stopped finalising drift-bot after 2026-09-27T20:53Z. It kept
+# posting "Drift Bot is analyzing the changed files..." and never replaced it,
+# so `skip_if_unreported` did not apply -- a status WAS matched, it simply had
+# no verdict. The gate read that as still running, waited the full 3600s and
+# failed, on every open pull request at once, because the stall was in a shared
+# third-party service and not in anybody's diff.
+#
+# The subtle half: the App re-posts `pending` on each CI re-trigger as a NEW
+# entry. Aging the newest entry would let a stuck reporter reset its own clock
+# forever, so a stall is dated from the OLDEST entry of the undecided run.
+# ---------------------------------------------------------------------------
+STALE = e2e_gate.STALE_PENDING_SECS
+IN_PROGRESS = {"name": "drift-bot", "status": "in_progress", "conclusion": None}
+
+
+def _ago(secs):
+    stamp = dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=secs)
+    return stamp.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def entry(state, age_secs, context="drift-bot"):
+    """One status as the LIST endpoint returns it (created_at == updated_at)."""
+    written = _ago(age_secs)
+    return {"context": context, "state": state, "created_at": written, "updated_at": written}
+
+
+def _serve(combined, listed, seen=None):
+    """Stub urlopen, dispatching on which status endpoint was asked for.
+
+    The two endpoints answer differently and the gate reads both for different
+    reasons, so a stub that cannot tell them apart would not test anything.
+    """
+    class _Resp:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def read(self):
+            return json.dumps(self._payload).encode()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def fake(req, *a, **kw):
+        url = req.full_url
+        if seen is not None:
+            seen.append(url)
+        return _Resp(listed if "/statuses" in url else combined)
+
+    return fake
+
+
+def combined_of(*entries):
+    """The combined endpoint's envelope: one status per context, latest wins."""
+    return {"statuses": [dict(e) for e in entries]}
+
+
+def shape(monkeypatch, combined, listed, seen=None):
+    monkeypatch.setattr(e2e_gate.urllib.request, "urlopen", _serve(combined, listed, seen))
+    return e2e_gate.list_commit_statuses("o/r", "deadbeef", "tok")
+
+
+def _all_green_runs(except_label=None):
+    """One successful check run per required leg, derived from the spec list.
+
+    Built from REQUIRED_SPECS rather than a hand-kept list of names, so a spec
+    added to the gate cannot leave this test asserting over a stale universe.
+    """
+    runs = []
+    for spec in REQUIRED_SPECS:
+        if spec.label == except_label:
+            continue
+        for leg in range(spec.min_count):
+            runs.append(run(spec.pattern.replace("*", f"leg{leg}"), run_id=len(runs) + 1))
+    return runs
+
+
+# ── the stall itself ────────────────────────────────────────────────────────
+
+def test_fresh_pending_status_still_makes_the_gate_wait(monkeypatch):
+    """A reporter that is simply still working must not be skipped."""
+    fresh = entry("pending", 60)
+    shaped = shape(monkeypatch, combined_of(fresh), [fresh])
+    assert shaped == [IN_PROGRESS]
+    assert state_of(evaluate(REQUIRED_SPECS, shaped), "Drift Bot") == "pending"
+
+
+def test_status_undecided_past_the_window_is_treated_as_unreported(monkeypatch):
+    old = entry("pending", STALE + 60)
+    assert shape(monkeypatch, combined_of(old), [old]) == []
+    assert state_of(evaluate(REQUIRED_SPECS, []), "Drift Bot") == "passed"
+
+
+def test_a_reposted_pending_cannot_reset_its_own_clock(monkeypatch):
+    """The regression a first cut of this fix missed.
+
+    The combined endpoint shows only the newest entry, a minute old. The history
+    shows the context has been undecided for hours. The history wins.
+    """
+    newest = entry("pending", 60)
+    listed = [newest, entry("pending", STALE + 3600)]
+    assert shape(monkeypatch, combined_of(newest), listed) == []
+
+
+def test_a_run_of_fresh_reposts_still_waits(monkeypatch):
+    newest = entry("pending", 30)
+    listed = [newest, entry("pending", 90)]
+    assert shape(monkeypatch, combined_of(newest), listed) == [IN_PROGRESS]
+
+
+def test_a_stall_is_dated_from_the_latest_verdict_not_the_first_ever(monkeypatch):
+    """pending -> failure -> pending is aged from the NEW pending only.
+
+    A re-run after a red result starts a fresh clock; the ancient pending that
+    preceded that verdict says nothing about the current attempt.
+    """
+    newest = entry("pending", 60)
+    listed = [newest, entry("failure", 7200), entry("pending", STALE + 99999)]
+    assert shape(monkeypatch, combined_of(newest), listed) == [IN_PROGRESS]
+
+
+# ── what must never be softened ─────────────────────────────────────────────
+
+@pytest.mark.parametrize("state,conclusion", [("failure", "failure"), ("error", "failure")])
+def test_a_red_status_still_blocks_the_merge_at_any_age(monkeypatch, state, conclusion):
+    """Staleness is only ever read off a status with no verdict.
+
+    FLYWHEEL 1f calls a red drift-bot non-negotiable, and an old red one is
+    still red. `error` is the transport-level failure and must not soften.
+    """
+    for age in (60, STALE + 99999):
+        red = entry(state, age)
+        shaped = shape(monkeypatch, combined_of(red), [red])
+        assert shaped == [{"name": "drift-bot", "status": "completed", "conclusion": conclusion}]
+        assert state_of(evaluate(REQUIRED_SPECS, shaped), "Drift Bot") == "failed"
+
+
+def test_an_old_success_is_not_aged_out(monkeypatch):
+    ok = entry("success", STALE + 99999)
+    assert shape(monkeypatch, combined_of(ok), [ok]) == [
+        {"name": "drift-bot", "status": "completed", "conclusion": "success"}
+    ]
+
+
+def test_a_spec_without_skip_if_unreported_stays_pending_when_stalled(monkeypatch):
+    """Dropping a stale status must not invent a pass for a mandatory check."""
+    spec = Spec("Syntax & Lint", "Syntax & Lint")
+    assert not spec.skip_if_unreported
+    old = entry("pending", STALE + 60, context="Syntax & Lint")
+    assert shape(monkeypatch, combined_of(old), [old]) == []
+    assert state_of(evaluate([spec], []), "Syntax & Lint") == "pending"
+
+
+def test_a_stalled_reporter_does_not_wedge_the_whole_gate():
+    """The regression in full: every other check green, drift-bot skipped."""
+    results = evaluate(REQUIRED_SPECS, _all_green_runs(except_label="Drift Bot"))
+    assert [r.spec.label for r in results if r.state != "passed"] == []
+
+
+# ── failing towards waiting, never towards merging ──────────────────────────
+
+def test_an_unreadable_timestamp_never_skips_a_check(monkeypatch):
+    for raw in (None, "", "not-a-date", "2026-09-30T02:44:16+00:00"):
+        assert e2e_gate._status_written_at({"created_at": raw}) is None
+    bare = {"context": "drift-bot", "state": "pending"}
+    assert shape(monkeypatch, combined_of(bare), [bare]) == [IN_PROGRESS]
+    # One unreadable entry inside the run discards the whole run's age, so the
+    # gate waits rather than skipping on a partial clock.
+    listed = [entry("pending", 60), bare, entry("pending", STALE + 9999)]
+    assert shape(monkeypatch, combined_of(entry("pending", 60)), listed) == [IN_PROGRESS]
+
+
+def test_updated_at_is_the_fallback_when_created_at_is_absent():
+    assert e2e_gate._status_written_at({"updated_at": _ago(300)}) is not None
+    assert e2e_gate._status_written_at({}) is None
+
+
+def test_a_context_missing_from_the_history_page_is_not_aged(monkeypatch):
+    """The list endpoint is newest-first GLOBALLY, so a page can omit a context.
+
+    Absence must mean "no age known" -> keep waiting, never "stale" -> skip.
+    """
+    pending = entry("pending", STALE + 9999)
+    assert shape(monkeypatch, combined_of(pending), []) == [IN_PROGRESS]
+
+
+def test_a_failed_history_read_leaves_the_status_pending(monkeypatch):
+    """If only the history call dies, the gate must still wait, not skip."""
+    def fake(req, *a, **kw):
+        if "/statuses" in req.full_url:
+            raise urllib.error.HTTPError(req.full_url, 503, "nope", {}, io.BytesIO(b"down"))
+
+        class _R:
+            def read(self):
+                return json.dumps(combined_of(entry("pending", STALE + 9999))).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        return _R()
+
+    monkeypatch.setattr(e2e_gate.urllib.request, "urlopen", fake)
+    assert e2e_gate.list_commit_statuses("o/r", "sha", "tok") == [IN_PROGRESS]
+
+
+def test_a_failed_status_read_returns_nothing_rather_than_a_verdict(monkeypatch):
+    def boom(req, *a, **kw):
+        raise urllib.error.HTTPError(req.full_url, 503, "nope", {}, io.BytesIO(b"down"))
+
+    monkeypatch.setattr(e2e_gate.urllib.request, "urlopen", boom)
+    assert e2e_gate.list_commit_statuses("o/r", "sha", "tok") == []
+
+
+# ── shape of the reads themselves ───────────────────────────────────────────
+
+def test_current_state_comes_from_the_combined_endpoint(monkeypatch):
+    """Both endpoints are read, each for what only it can answer.
+
+    The combined endpoint is documented to give one status per context; the
+    list endpoint gives the history a stall is dated from. Reading current
+    state off the list endpoint would risk a context whose latest entry fell
+    off the page.
+    """
+    seen = []
+    old = entry("pending", STALE + 60)
+    shape(monkeypatch, combined_of(old), [old], seen)
+    assert any(u.endswith("/status?per_page=100") for u in seen), seen
+    assert any("/statuses?per_page=100" in u for u in seen), seen
+
+
+def test_history_is_read_only_when_something_is_undecided(monkeypatch):
+    """No pending status means no reason to pay for the second call."""
+    seen = []
+    ok = entry("success", 60)
+    shape(monkeypatch, combined_of(ok), [ok], seen)
+    assert not any("/statuses" in u for u in seen), seen
+
+
+def test_history_is_read_once_even_with_several_stalled_contexts(monkeypatch):
+    seen = []
+    a = entry("pending", STALE + 60, context="drift-bot")
+    b = entry("pending", STALE + 60, context="other-bot")
+    assert shape(monkeypatch, combined_of(a, b), [a, b], seen) == []
+    assert len([u for u in seen if "/statuses" in u]) == 1, seen
+
+
+def test_the_staleness_window_is_far_wider_than_observed_run_times():
+    """Guard the constant: 1.3 min was the slowest real finalisation measured."""
+    assert e2e_gate.STALE_PENDING_SECS >= 600
