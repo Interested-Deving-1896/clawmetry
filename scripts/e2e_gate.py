@@ -29,6 +29,7 @@ drive it over synthetic check-run payloads with no network.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import fnmatch
 import json
 import os
@@ -40,6 +41,20 @@ from dataclasses import dataclass, field
 
 POLL_INTERVAL = 30
 DEFAULT_MAX_WAIT = 3000  # 50 min default; workflow sets 3600 (60 min)
+
+# How long a commit status may sit *undecided* before the gate stops treating it
+# as "still running". A reporter that posts `pending` and then never returns a
+# verdict is, from here, indistinguishable from one that never posted at all --
+# and the gate already has an answer for never-posted (`skip_if_unreported`).
+# Without this window the stalled case instead burns the whole MAX_WAIT and then
+# fails, which is how one third-party App going dark wedges every pull request
+# in the repository rather than just its own check.
+#
+# 1200s is deliberately generous. Over the 14 most recent merges where the 8090
+# App did finalise (#6160-#6189), drift-bot went pending->success in 0.4-1.3
+# min, so 20 min is ~15x the slowest real run and a genuinely working reporter
+# is never cut short. Tunable for a reporter that is legitimately slower.
+STALE_PENDING_SECS = int(os.environ.get("STALE_PENDING_SECS", "1200"))
 
 # GitHub treats skipped/neutral as non-blocking; match that.
 PASSING = {"success", "skipped", "neutral"}
@@ -317,6 +332,84 @@ _STATUS_STATE_TO_CONCLUSION = {
 }
 
 
+def _status_written_at(status):
+    """When a commit status was written, or ``None`` if we cannot tell.
+
+    A re-post is a *new entry* in the statuses list rather than an update to an
+    existing one (the 8090 App re-posts `pending` on each CI re-trigger, and
+    every entry comes back with ``created_at == updated_at``), so ``created_at``
+    is the meaningful stamp and ``updated_at`` is only a fallback.
+
+    An unparseable stamp returns ``None``, and every caller treats that as "not
+    stale". An unreadable clock must never be the reason the gate stops waiting.
+    """
+    raw = status.get("created_at") or status.get("updated_at")
+    if not raw:
+        return None
+    try:
+        return dt.datetime.strptime(raw, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=dt.timezone.utc
+        )
+    except (TypeError, ValueError):
+        return None
+
+
+def _get_json(url, token, what):
+    """GET and parse JSON, or ``None`` if the call failed."""
+    req = urllib.request.Request(url, headers=_headers(token))
+    try:
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as exc:
+        print(f"  warn: {what} API {exc.code}: {exc.read()[:200]!r}")
+        return None
+
+
+def _undecided_since_by_context(repo, sha, token):
+    """Map each undecided context to when it last stopped producing verdicts.
+
+    Read from the *list* endpoint, which returns one entry per post rather than
+    one per context. That history is the only place the answer exists: the 8090
+    App re-posts "Drift Bot is analyzing the changed files..." on every CI
+    re-trigger as a NEW entry with its own ``created_at``, so on the wedged
+    heads the newest entry was minutes old while the context had in fact been
+    undecided for ten hours. Aging the newest entry would let a stuck reporter
+    reset its own clock forever and the window would never close.
+
+    Entries come back newest-first. Per context, walk from the newest until a
+    real verdict appears and keep the oldest undecided stamp seen -- so a
+    context that went pending -> failure -> pending is aged from the latest
+    pending only. A context with an unreadable stamp is omitted, and so is one
+    this page does not reach; every caller treats absence as "not stale", so a
+    short page can only ever make the gate wait, never merge.
+    """
+    data = _get_json(
+        f"https://api.github.com/repos/{repo}/commits/{sha}/statuses?per_page=100",
+        token,
+        "commit-statuses",
+    )
+    if not isinstance(data, list):
+        return {}
+
+    since, settled = {}, set()
+    for entry in data:
+        context = entry.get("context") or ""
+        if not context or context in settled:
+            continue
+        if _STATUS_STATE_TO_CONCLUSION.get(entry.get("state")) is not None:
+            settled.add(context)
+            continue
+        stamp = _status_written_at(entry)
+        if stamp is None:
+            # An unreadable clock must never be the reason the gate stops
+            # waiting, so stop aging this context and discard what we had.
+            settled.add(context)
+            since.pop(context, None)
+            continue
+        since[context] = stamp
+    return since
+
+
 def list_commit_statuses(repo, sha, token):
     """Fetch commit statuses for a SHA, shaped like check runs.
 
@@ -327,17 +420,21 @@ def list_commit_statuses(repo, sha, token):
     it non-negotiable.
 
     The combined endpoint already collapses to the most recent status per
-    context, so no extra de-duplication is needed here.
+    context, so no extra de-duplication is needed here. Current state still
+    comes from it and nothing about that path changed: it is documented to
+    report one status per context, whereas the newest 100 entries of the list
+    endpoint are not guaranteed to include every context's latest. The list
+    endpoint is read separately, and only to date a stall.
     """
-    url = f"https://api.github.com/repos/{repo}/commits/{sha}/status?per_page=100"
-    req = urllib.request.Request(url, headers=_headers(token))
-    try:
-        with urllib.request.urlopen(req) as resp:
-            data = json.loads(resp.read())
-    except urllib.error.HTTPError as exc:
-        print(f"  warn: commit-status API {exc.code}: {exc.read()[:200]!r}")
+    data = _get_json(
+        f"https://api.github.com/repos/{repo}/commits/{sha}/status?per_page=100",
+        token,
+        "commit-status",
+    )
+    if data is None:
         return []
 
+    undecided = None
     shaped = []
     for status in data.get("statuses", []):
         context = status.get("context") or ""
@@ -349,8 +446,32 @@ def list_commit_statuses(repo, sha, token):
             # "pending", or anything GitHub adds later: not yet decided. Report
             # it as still running so the gate WAITS instead of passing on a
             # status that has not been posted yet.
+            #
+            # Unless it has been undecided past any plausible run time, in which
+            # case the reporter has stopped answering and waiting cannot change
+            # the outcome. Drop it so it reads as unreported: a spec carrying
+            # `skip_if_unreported` is then skipped by the existing rule in
+            # evaluate(), and a spec without that flag stays pending exactly as
+            # before, because the gate never invents a pass for a check nobody
+            # has opined on.
+            if undecided is None:
+                undecided = _undecided_since_by_context(repo, sha, token)
+            since = undecided.get(context)
+            if since is not None:
+                age = (dt.datetime.now(dt.timezone.utc) - since).total_seconds()
+                if age > STALE_PENDING_SECS:
+                    print(
+                        f"  warn: commit status {context!r} has been undecided "
+                        f"since {since:%Y-%m-%dT%H:%M:%SZ} ({age / 60:.0f} min, "
+                        f"limit {STALE_PENDING_SECS / 60:.0f} min); treating it "
+                        f"as unreported"
+                    )
+                    continue
             shaped.append({"name": context, "status": "in_progress", "conclusion": None})
         else:
+            # A verdict is a verdict at any age. A red drift-bot blocks however
+            # old it is -- FLYWHEEL 1f calls that non-negotiable, and staleness
+            # is only ever read off a status that has declined to decide.
             shaped.append({"name": context, "status": "completed", "conclusion": conclusion})
     return shaped
 
