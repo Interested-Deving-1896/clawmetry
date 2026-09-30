@@ -19,9 +19,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set working directory
 WORKDIR /app
 
-# Copy requirements first for better caching
+# Copy requirements first for better caching.
+#
+# Installed from a hash-pinned set rather than the `>=` ranges in
+# requirements.txt: the base image above is pinned by digest so an identical
+# build pulls identical bytes, and a live resolve on this layer gave that back.
+# requirements.txt is still the manifest of record -- the set is generated from
+# it, and tests/test_docker_runtime_pin.py fails if the two drift apart. See
+# that file's header for why it is separate from requirements.txt.
+#
+# requirements.txt is still COPYed rather than dropped: it was in the image
+# before this change, so removing it would be an unrelated behaviour change.
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY .github/requirements/docker-runtime.txt /tmp/docker-runtime.txt
+RUN pip install --no-cache-dir --require-hashes -r /tmp/docker-runtime.txt \
+    && rm -f /tmp/docker-runtime.txt
 
 # OTLP protobuf support, baked in rather than left to the [otel] extra.
 # This image is what deploy/self-hosted/docker-compose.yml builds, and the

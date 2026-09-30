@@ -31,6 +31,10 @@ def _wire(monkeypatch, tmp_path, has_openclaw=True, prev=None):
                         {"fails": 0, "until": 0.0})
     monkeypatch.setattr(approvals, "_openclaw_env_and_bin",
                         lambda: (("/usr/local/bin/openclaw" if has_openclaw else None), {}))
+    monkeypatch.setattr(approvals, "_EXEC_POSTURE_CHECK", {"at": 0.0})
+    # Live posture unreadable by default: the historical state-file-only
+    # behaviour. Drift tests below install a real posture.
+    monkeypatch.setattr(approvals, "_openclaw_exec_posture", lambda: None)
     applied = []
     monkeypatch.setattr(approvals, "_apply_openclaw_exec_preset",
                         lambda preset: (applied.append(preset), True)[1])
@@ -689,3 +693,139 @@ class _NeverThread:
 
     def start(self):
         pass
+
+
+# ── live posture drift (vivekchand/clawmetry-pro#259) ────────────────────────
+_REAL_POSTURE = approvals._openclaw_exec_posture
+
+
+def _scope(security, ask, fallback="deny", label="tools.exec"):
+    """One scope as `openclaw exec-policy show --json` emits it (2026.9.3)."""
+    return {"scopeLabel": label, "agentId": "main",
+            "security": {"requested": security, "effective": security},
+            "ask": {"requested": ask, "effective": ask},
+            "askFallback": {"effective": fallback}}
+
+
+def _live_posture(monkeypatch, *scopes):
+    """Serve `scopes` through the real parser, the way the CLI would."""
+    live = {"scopes": list(scopes)}
+    calls = []
+
+    def _cmd(args):
+        calls.append(args)
+        return True, {"effectivePolicy": {"scopes": live["scopes"]}}, ""
+    monkeypatch.setattr(approvals, "_run_openclaw_approval_command", _cmd)
+    monkeypatch.setattr(approvals, "_openclaw_exec_posture", _REAL_POSTURE)
+    return live, calls
+
+
+def _audits(monkeypatch):
+    from clawmetry import audit
+    seen = []
+    monkeypatch.setattr(audit, "audit_event",
+                        lambda action, **kw: seen.append((action, kw)))
+    return seen
+
+
+CAUTIOUS = ("allowlist", "on-miss", "deny")
+
+
+def test_out_of_band_ask_off_is_reapplied_and_audited(monkeypatch, tmp_path):
+    """AML.CS0050 S06: exec.approvals.set {"ask": "off"} after we applied
+    cautious. The next check must notice and put the gate back."""
+    applied, state = _wire(monkeypatch, tmp_path, prev="cautious")
+    _live_posture(monkeypatch, _scope("full", "off"))
+    seen = _audits(monkeypatch)
+    approvals.sync_openclaw_exec_policy([RM])
+    assert applied == ["cautious"]
+    assert state.read_text() == "cautious"
+    assert [a for a, _ in seen] == ["guard.exec_approval_drift"]
+    relaxed = seen[0][1]["metadata"]["relaxed_scopes"]
+    assert relaxed == [{"scope": "tools.exec", "security": "full",
+                        "ask": "off", "askFallback": "deny"}]
+
+
+def test_one_relaxed_agent_scope_is_drift(monkeypatch, tmp_path):
+    applied, _ = _wire(monkeypatch, tmp_path, prev="cautious")
+    _live_posture(monkeypatch, _scope(*CAUTIOUS),
+                  _scope("full", "off", label="agent:openclaw"))
+    _audits(monkeypatch)
+    approvals.sync_openclaw_exec_policy([RM])
+    assert applied == ["cautious"]
+
+
+def test_gated_posture_is_left_alone(monkeypatch, tmp_path):
+    applied, _ = _wire(monkeypatch, tmp_path, prev="cautious")
+    _live_posture(monkeypatch, _scope(*CAUTIOUS))
+    seen = _audits(monkeypatch)
+    approvals.sync_openclaw_exec_policy([RM])
+    assert applied == [] and seen == []
+
+
+def test_unreadable_posture_is_not_drift(monkeypatch, tmp_path):
+    applied, _ = _wire(monkeypatch, tmp_path, prev="cautious")
+    monkeypatch.setattr(approvals, "_run_openclaw_approval_command",
+                        lambda args: (False, None, "openclaw command timed out"))
+    monkeypatch.setattr(approvals, "_openclaw_exec_posture", _REAL_POSTURE)
+    approvals.sync_openclaw_exec_policy([RM])
+    assert applied == []
+
+
+def test_posture_check_is_throttled(monkeypatch, tmp_path):
+    applied, _ = _wire(monkeypatch, tmp_path, prev="cautious")
+    live, calls = _live_posture(monkeypatch, _scope(*CAUTIOUS))
+    approvals.sync_openclaw_exec_policy([RM])
+    live["scopes"] = [_scope("full", "off")]
+    _audits(monkeypatch)
+    approvals.sync_openclaw_exec_policy([RM])  # same tick: no second read
+    assert len(calls) == 1 and applied == []
+    approvals._EXEC_POSTURE_CHECK["at"] -= approvals._EXEC_POSTURE_CHECK_INTERVAL_S
+    approvals.sync_openclaw_exec_policy([RM])
+    assert len(calls) == 2 and applied == ["cautious"]
+
+
+def test_handset_deny_all_is_never_relaxed_to_cautious(monkeypatch, tmp_path):
+    applied, state = _wire(monkeypatch, tmp_path)
+    _live_posture(monkeypatch, _scope("deny", "off"))
+    approvals.sync_openclaw_exec_policy([RM])
+    assert applied == []
+    assert state.read_text() == approvals._EXEC_POLICY_HELD
+    # ...and when the policy goes away we don't relax it to yolo either.
+    approvals.sync_openclaw_exec_policy([])
+    assert applied == []
+
+
+def test_held_posture_relaxed_later_is_reasserted(monkeypatch, tmp_path):
+    applied, state = _wire(monkeypatch, tmp_path, prev=approvals._EXEC_POLICY_HELD)
+    _live_posture(monkeypatch, _scope("full", "off"))
+    _audits(monkeypatch)
+    approvals.sync_openclaw_exec_policy([RM])
+    assert applied == ["cautious"]
+    assert state.read_text() == "cautious"
+
+
+def test_ungated_posture_on_first_pass_applies_cautious(monkeypatch, tmp_path):
+    applied, _ = _wire(monkeypatch, tmp_path)
+    seen = _audits(monkeypatch)
+    _live_posture(monkeypatch, _scope("full", "off"))
+    approvals.sync_openclaw_exec_policy([RM])
+    assert applied == ["cautious"]
+    assert seen == []  # first apply is not drift
+
+
+def test_scope_gated_matches_documented_semantics():
+    g = approvals._exec_scope_gated
+    assert g(_scope("deny", "off"))
+    assert g(_scope("allowlist", "on-miss", "deny"))
+    assert g(_scope("allowlist", "off"))            # misses are blocked
+    assert g(_scope("allowlist", "always", "allowlist"))
+    assert not g(_scope("allowlist", "on-miss", "full"))  # unanswered → runs
+    assert g(_scope("full", "always", "deny"))
+    assert not g(_scope("full", "on-miss"))
+    assert not g(_scope("full", "off"))
+    assert not g({"scopeLabel": "x"})                # unknown is not gated
+    # askFallback omitted → OpenClaw's default, deny
+    sc = _scope("allowlist", "on-miss")
+    del sc["askFallback"]
+    assert g(sc)

@@ -313,6 +313,18 @@ jobs:
       - name: Self-hosted image publishing stays wired
         run: python3 -m pytest tests/test_selfhosted_image_publish.py -q
 
+      # The root Dockerfile installs its runtime dependencies from the
+      # hash-pinned .github/requirements/docker-runtime.txt rather than
+      # resolving requirements.txt's ranges at build time. That pin costs a
+      # second file that can drift, and the drift is silent in one direction:
+      # a dependency added to requirements.txt just never reaches the image,
+      # and `docker build` still succeeds. Nothing else in CI builds this
+      # Dockerfile -- container-image.yml builds the self-hosted release
+      # image, not this one -- so this guard is the only thing that notices.
+      # Named explicitly because this job runs FILE LISTS.
+      - name: Docker runtime pin still matches requirements.txt
+        run: python3 -m pytest tests/test_docker_runtime_pin.py -q
+
       # docs/INGEST.md is GENERATED from clawmetry/ingest_contract.py, the same
       # way MODULE_MAP.md is generated from the tree. A generated doc with no
       # drift check is a hand-maintained doc that nobody knows is stale, which
@@ -357,11 +369,14 @@ jobs:
       # LISTS -- a signature added without a line here is checked by nothing.
       # Verified to go RED by removing core.fsmonitor from repo_scan._EXEC_KEYS.
       # The corpus payloads are inert markers; the runner fails a case that
-      # actually executes one.
+      # actually executes one. --strict is safe because a verified-but-open gap
+      # carries "known_gap" (reported, never failing); any other MISS is a real
+      # regression, and a known gap that starts passing fails until the flag
+      # is removed.
       - name: Red-team detection corpus
         run: |
           python3 -m pytest tests/test_redteam_corpus.py -q
-          python3 scripts/redteam/audit.py
+          python3 scripts/redteam/audit.py --strict
 
       # Non-security digests (dedup ids, trace ids, change-detection hashes)
       # must go through clawmetry.nonsecret_hash. A bare hashlib.md5/sha1
@@ -1012,6 +1027,7 @@ jobs:
             tests/test_detectors_ngram.py \
             tests/test_detectors_secret_value_corpus.py \
             tests/test_detector_evasion.py \
+            tests/test_detector_package_source.py \
             tests/test_detectors_swarm_gaps.py \
             tests/test_detectors_coordinated_action.py \
             tests/test_guard_escalation_ladder.py \
@@ -1236,6 +1252,10 @@ jobs:
       # network_egress first-time severity to info and by hand-editing the doc.
       - name: ATLAS OpenClaw replay (stage outcomes pinned)
         run: python3 -m pytest tests/test_atlas_openclaw_replay.py -v --tb=short
+      # The exec-approval gate FM-1 drives, including the live-posture drift
+      # check that re-applies it (vivekchand/clawmetry-pro#259).
+      - name: OpenClaw exec-approval gate and posture drift
+        run: python3 -m pytest tests/test_openclaw_exec_policy_gate.py -v --tb=short
       - name: ATLAS OpenClaw scorecard is regenerated and current
         run: |
           python3 scripts/gen_atlas_openclaw_scorecard.py --check
