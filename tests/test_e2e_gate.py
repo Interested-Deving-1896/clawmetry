@@ -130,7 +130,7 @@ def test_in_progress_replacement_beats_stale_cancellation():
 def test_stale_cancellation_never_outranks_a_real_failure():
     """Priority must require BOTH completed AND a definitive conclusion.
 
-    Found by mutation testing: changing ``status == "completed" and conclusion
+    Found by mutation testing: changing ``status == \"completed\" and conclusion
     in DEFINITIVE`` to ``or`` survived the original suite, because the cases it
     covered happened to reach the same verdict either way. This one does not.
     A cancelled run with a HIGHER id must still lose to a genuine failure --
@@ -211,6 +211,7 @@ def test_syntax_and_lint_failure_blocks_the_merge():
         "MOAT Verifier",
         "Entitlement API tests",
         "Wheel install & assets",
+        "Store invariants",
     ],
 )
 def test_l0_additions_are_still_required(label):

@@ -172,7 +172,7 @@ _DEPENDABOT_SKIP = frozenset([
 ])
 
 
-def resolve_specs(pr_actor: str) -> list:
+def resolve_specs(pr_actor):
     """Return the effective spec list for the given PR actor."""
     if pr_actor != "dependabot[bot]":
         return REQUIRED_SPECS
