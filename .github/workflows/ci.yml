@@ -286,6 +286,14 @@ jobs:
       - name: Quarantine pipeline JUnit parsing
         run: python3 -m pytest tests/test_auto_quarantine.py -q
 
+      # The two git hooks ClawMetry writes into the user's own repository, and
+      # the mode they land at. Named here because this job runs FILE LISTS,
+      # not `pytest tests/`: this file existed with 27 passing cases and ran
+      # in no job at all, so the mode the hooks were installed with was
+      # asserted by nothing that ever executed.
+      - name: Commit-trace git hooks (install, idempotence, hook file mode)
+        run: python3 -m pytest tests/test_trace_stamp.py -q
+
       - name: Published provider pricing and cache accounting
         run: python3 -m pytest tests/test_providers_pricing.py tests/test_pricing_accuracy.py tests/test_price_book.py tests/test_price_book_usage.py -q
 
