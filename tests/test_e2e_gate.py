@@ -130,7 +130,7 @@ def test_in_progress_replacement_beats_stale_cancellation():
 def test_stale_cancellation_never_outranks_a_real_failure():
     """Priority must require BOTH completed AND a definitive conclusion.
 
-    Found by mutation testing: changing ``status == "completed" and conclusion
+    Found by mutation testing: changing ``status == \"completed\" and conclusion
     in DEFINITIVE`` to ``or`` survived the original suite, because the cases it
     covered happened to reach the same verdict either way. This one does not.
     A cancelled run with a HIGHER id must still lose to a genuine failure --
@@ -211,6 +211,7 @@ def test_syntax_and_lint_failure_blocks_the_merge():
         "MOAT Verifier",
         "Entitlement API tests",
         "Wheel install & assets",
+        "Store invariants",
     ],
 )
 def test_l0_additions_are_still_required(label):
@@ -397,7 +398,7 @@ def _all_green_runs(except_label=None):
     return runs
 
 
-# ── the stall itself ────────────────────────────────────────────────────────
+# ── the stall itself ────────────────────────────────────────────────────────────────────────────
 
 def test_fresh_pending_status_still_makes_the_gate_wait(monkeypatch):
     """A reporter that is simply still working must not be skipped."""
@@ -441,7 +442,7 @@ def test_a_stall_is_dated_from_the_latest_verdict_not_the_first_ever(monkeypatch
     assert shape(monkeypatch, combined_of(newest), listed) == [IN_PROGRESS]
 
 
-# ── what must never be softened ─────────────────────────────────────────────
+# ── what must never be softened ─────────────────────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("state,conclusion", [("failure", "failure"), ("error", "failure")])
 def test_a_red_status_still_blocks_the_merge_at_any_age(monkeypatch, state, conclusion):
@@ -479,7 +480,7 @@ def test_a_stalled_reporter_does_not_wedge_the_whole_gate():
     assert [r.spec.label for r in results if r.state != "passed"] == []
 
 
-# ── failing towards waiting, never towards merging ──────────────────────────
+# ── failing towards waiting, never towards merging ────────────────────────────────────────────────────────────────
 
 def test_an_unreadable_timestamp_never_skips_a_check(monkeypatch):
     for raw in (None, "", "not-a-date", "2026-09-30T02:44:16+00:00"):
@@ -500,7 +501,7 @@ def test_updated_at_is_the_fallback_when_created_at_is_absent():
 def test_a_context_missing_from_the_history_page_is_not_aged(monkeypatch):
     """The list endpoint is newest-first GLOBALLY, so a page can omit a context.
 
-    Absence must mean "no age known" -> keep waiting, never "stale" -> skip.
+    Absence must mean \"no age known\" -> keep waiting, never \"stale\" -> skip.
     """
     pending = entry("pending", STALE + 9999)
     assert shape(monkeypatch, combined_of(pending), []) == [IN_PROGRESS]
@@ -536,7 +537,7 @@ def test_a_failed_status_read_returns_nothing_rather_than_a_verdict(monkeypatch)
     assert e2e_gate.list_commit_statuses("o/r", "sha", "tok") == []
 
 
-# ── shape of the reads themselves ───────────────────────────────────────────
+# ── shape of the reads themselves ────────────────────────────────────────────────────────────────────────────────
 
 def test_current_state_comes_from_the_combined_endpoint(monkeypatch):
     """Both endpoints are read, each for what only it can answer.
