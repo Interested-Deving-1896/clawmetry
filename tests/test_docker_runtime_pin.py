@@ -29,14 +29,20 @@ REQUIREMENTS = os.path.join(REPO_ROOT, "requirements.txt")
 PINNED = os.path.join(REPO_ROOT, ".github", "requirements", "docker-runtime.txt")
 DOCKERFILE = os.path.join(REPO_ROOT, "Dockerfile")
 
-# `name>=1.2,<2 ; marker  # comment`
-_REQ = re.compile(
-    r"^(?P<name>[A-Za-z0-9._-]+)"
-    r"(?P<specs>(?:\s*[<>=!~]=?\s*[^,;#\s]+\s*,?)*)"
-    r"(?:;\s*(?P<marker>[^#]+?))?\s*(?:#.*)?$"
-)
-_SPEC = re.compile(r"(?P<op>[<>=!~]=?)\s*(?P<version>[^,\s]+)")
-_PIN = re.compile(r"^(?P<name>[A-Za-z0-9._-]+)==(?P<version>[^\s\\]+)\s*\\?\s*$")
+# A requirements line (`name>=1.2,<2 ; marker  # comment`) is taken apart in
+# explicit steps rather than by one pattern over the whole line. One pattern
+# needs a repeated specifier group, and the operator class [<>=!~] overlaps the
+# version class it is followed by, so a run like `!!!!` can be divided between
+# them exponentially many ways: on a line the pattern ultimately rejects, that
+# is catastrophic backtracking, and it was measured at 14s for a 39-character
+# string before this was split up (CodeQL "Inefficient regular expression").
+#
+# Each pattern below is anchored, applied once per step, and consumes at least
+# one character, so a line costs time linear in its length no matter what it
+# contains.
+_NAME = re.compile(r"^[A-Za-z0-9._-]+")
+_SPEC = re.compile(r"^\s*(?P<op>[<>=!~]=?)\s*(?P<version>[^,;\s]+)\s*,?")
+_PIN = re.compile(r"^(?P<name>[A-Za-z0-9._-]+)==(?P<version>[^\s\\]+)$")
 _PY_MARKER = re.compile(
     r"""python_version\s*(?P<op>[<>=!]=?)\s*['"](?P<version>[0-9.]+)['"]"""
 )
@@ -121,15 +127,27 @@ def parse_requirements():
     entries = []
     with open(REQUIREMENTS, encoding="utf-8") as handle:
         for raw in handle:
-            line = raw.strip()
-            if not line or line.startswith("#") or line.startswith("-"):
+            # Comment off, then the environment marker, then name, then each
+            # specifier in turn -- see the patterns above for why it is stepwise.
+            line = raw.split("#", 1)[0].strip()
+            if not line or line.startswith("-"):
                 continue
-            match = _REQ.match(line)
-            assert match, "unparsed requirements.txt line: %r" % line
-            specs = _SPEC.findall(match.group("specs") or "")
-            entries.append(
-                (match.group("name"), specs, (match.group("marker") or "").strip())
-            )
+            body, _, marker = line.partition(";")
+            body = body.strip()
+            name_match = _NAME.match(body)
+            assert name_match, "unparsed requirements.txt line: %r" % line
+            rest = body[name_match.end():]
+            specs = []
+            while rest.strip():
+                spec_match = _SPEC.match(rest)
+                assert spec_match, (
+                    "unparsed specifier %r in requirements.txt line: %r" % (rest, line)
+                )
+                specs.append(
+                    (spec_match.group("op"), spec_match.group("version"))
+                )
+                rest = rest[spec_match.end():]
+            entries.append((name_match.group(0), specs, marker.strip()))
     return entries
 
 
@@ -143,6 +161,10 @@ def parse_pinned():
             line = raw.strip()
             if not line or line.startswith("#"):
                 continue
+            # A continued line ends in a backslash; drop it first so the
+            # patterns above can stay anchored at both ends.
+            if line.endswith("\\"):
+                line = line[:-1].rstrip()
             if line.startswith("--hash="):
                 assert current, "--hash line before any pin: %r" % line
                 hashes[current] = hashes.get(current, 0) + 1
