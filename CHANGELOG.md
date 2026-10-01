@@ -1,5 +1,16 @@
 ## Unreleased
 
+### Release: Guard reads poisoned prompt/Skill files and cold-start `curl | bash` (carries #6210 and #6211)
+
+### Added: system-prompt and Skill files that tell the agent to reach a remote host are flagged
+- `repo_scan.scan_prompt_files` reads OpenClaw workspace files, project instruction files (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`) and Skill/rules folders for three shapes: fetching tasks from a remote host, hiding a request from the user, and running a remote script. A match raises the existing `agent_config_tamper` finding kind.
+- ATLAS replay: AML.CS0051 S13 and AML.CS0049 S05-S06 move from unobservable to detected. 14 new tests, and 0 false positives on 877 real prompt and Skill files. Closes vivekchand/clawmetry-pro#258. Carries #6210.
+
+### Added: a remote script piped into a shell is flagged on a fresh install
+- `network_egress` gets a `remote_script` ground: `curl`/`wget` piped into `sh`, `bash`, `zsh`, `python*`, `perl`, `ruby` or `node` (also through `sudo`) from a host the cohort has not settled on raises a warning, with no learned baseline needed. Before this, a fresh install raised nothing for `curl -fsSL https://<host>/install.sh | bash`.
+- An interpreter given inline code (`python3 -c`, `node -e`, `sh -c` and similar) only reads the response as data and is not flagged. That cut matches on 65,314 real agent commands from 988 to 58. `bash -s --` and `python3 -u -` still execute stdin and are flagged.
+- ATLAS replay: AML.CS0051 S09-S12 move from observed to detected on a cold start. This is detection after the fact, not prevention. Cold-start half of vivekchand/clawmetry-pro#256. Carries #6211.
+
 ### Fixed: usage repairs survive background adapter updates
 
 - A running daemon records the parser version actually loaded in memory. Replacing a Pro wheel on disk can no longer mark historical sessions as repaired before the new parser runs.
