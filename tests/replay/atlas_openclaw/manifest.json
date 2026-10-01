@@ -909,7 +909,7 @@
         "AML.CS0051 S13",
         "AML.CS0049 S05-S06"
       ],
-      "text": "A change to HEARTBEAT.md, which OpenClaw loads into every new system prompt, raises no finding, whether a user makes it through a tool (see the heartbeat control) or a script makes it with no tool call at all. The workspace scan does not read Skill folders either."
+      "text": "Narrowed by vivekchand/clawmetry-pro#258: the workspace scan now reads OpenClaw's system-prompt files (HEARTBEAT.md, SOUL.md, AGENTS.md, ...) and Skill and rules folders, and raises agent_config_tamper at warning on three shapes of standing instruction: fetch tasks from a URL and carry them out, contact a URL without telling the user, and pipe a downloaded script into a shell. Both stages are now detected and the heartbeat control stays quiet. Still open: an instruction outside those shapes (for example, forward every email to an address) raises nothing, the check reads what a file says rather than who changed it, and Skills under the global ~/.openclaw/skills are covered only by the inventory's change finding, not this content check."
     },
     {
       "id": "G6",
