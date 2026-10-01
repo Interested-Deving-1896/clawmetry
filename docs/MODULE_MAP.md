@@ -4,7 +4,7 @@
 > `python3 scripts/gen_module_map.py` (CI fails on drift via
 > `tests/test_module_map_drift.py`).
 
-291 modules, 86 Flask blueprints. `CLAUDE.md` carries a short curated table of the ones you reach for most often; this is the whole list.
+294 modules, 86 Flask blueprints. `CLAUDE.md` carries a short curated table of the ones you reach for most often; this is the whole list.
 
 Size bands are deliberately coarse so this file does not churn on every PR: **small** is under 200 lines, **medium** under 1k, **large** under 5k, **huge** is 5k and up.
 
@@ -163,6 +163,7 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/connector_health.py` | small | Connector liveness — turn the daemon's ``connector.health`` signal stream into a per-channel ok/degraded/down verdict. |
 | `clawmetry/context_coverage.py` | medium | Which context-blowout signals we can actually see, per runtime. |
 | `clawmetry/context_windows.py` | medium | Context-window sizing across every runtime ClawMetry ingests. |
+| `clawmetry/cost_anomaly.py` | small | Current usage-value alerts from one cached, bounded daily-rollup read. |
 | `clawmetry/cost_basis.py` | medium | What kind of money a cost figure is. |
 | `clawmetry/cost_basis_surfaces.py` | medium | Financial-basis entries for the cost surfaces #5975 did not reach. |
 | `clawmetry/cost_optimizer_advice.py` | medium | Cost Optimizer advice: observed provider routes, experiments, and cost basis. |
@@ -199,6 +200,7 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/event_shape.py` | small | ONE normalizer for every stored event shape. |
 | `clawmetry/event_shape_classify.py` | medium | Event-shape classifier implementation (private to :mod:`clawmetry.event_shape`). |
 | `clawmetry/extensions.py` | medium | ClawMetry extension/plugin system. |
+| `clawmetry/family_usage.py` | small | Reconcile derived family-runtime usage without changing transcript identity. |
 | `clawmetry/field_report.py` | medium | Field-failure reports from the sync daemon (Requirement: Daemon Field-Failure Reporting, AC-FFR-005). |
 | `clawmetry/fleet_install.py` | medium | register the collector for shared and virtual desktops (multi-session Windows hosts, pooled images, shared Linux hosts). |
 | `clawmetry/flow_trace.py` | medium | Flow trace assembly for the Harness Engineering tab (REQ-HB-006). |
@@ -307,6 +309,7 @@ The pip-installable package: CLI, sync daemon, DuckDB store, detectors, enforcem
 | `clawmetry/trial_enforcement.py` | medium | Trial-end hard-block layer. |
 | `clawmetry/update_guard.py` | small | Crash-loop rollback guard for daemon self-update (firmware-OTA style). |
 | `clawmetry/update_respawn.py` | medium | Windows out-of-process updater. |
+| `clawmetry/usage_snapshot.py` | small | Calendar-period usage for hosted runtime filters, from one rollup read. |
 | `clawmetry/waste_flags.py` | small | OSS delegating shim after the impl moved to clawmetry-pro. |
 | `clawmetry/watchdog.py` | medium | macOS "app-vanished" watchdog. |
 | `clawmetry/winconsole.py` | small | clawmetry.winconsole — stop Windows console windows flashing. |
