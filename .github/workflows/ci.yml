@@ -1006,6 +1006,7 @@ jobs:
             tests/test_openclaw_detection_real.py \
             tests/test_openclaw_doctor_cache.py \
             tests/test_repo_scan_daemon_wiring.py \
+            tests/test_prompt_file_scan.py \
             tests/test_guard_workspace_kinds.py \
             tests/test_agent_supply_chain_inventory.py \
             tests/test_guard_checks.py \
