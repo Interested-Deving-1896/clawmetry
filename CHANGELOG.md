@@ -11,6 +11,13 @@
 - An interpreter given inline code (`python3 -c`, `node -e`, `sh -c` and similar) only reads the response as data and is not flagged. That cut matches on 65,314 real agent commands from 988 to 58. `bash -s` (with the end-of-options separator) and `python3 -u -` still execute stdin and are flagged.
 - ATLAS replay: AML.CS0051 S09-S12 move from observed to detected on a cold start. This is detection after the fact, not prevention. Cold-start half of vivekchand/clawmetry-pro#256. Carries #6211.
 
+### Added: local assessment privacy with scoped restoration
+
+- Assessment integrations can mask complete bounded JSON requests before transport receives them, retain temporary restoration maps only on the local machine, and restore recognized placeholders only in the matching scope and explanation field. Recognized secrets are removed irreversibly.
+- Each dispatch checks current consent, policy, scope and egress settings. Supported identifier formats and coverage limits are explicit; requests that require unsupported coverage are rejected. This primitive does not activate managed assessments or corrective recovery.
+- Shared redaction now captures complete credentials with underscores and hyphens, country-length IBANs beside prose, and case-insensitive national identifiers. Ambiguous numeric candidates and scan boundaries no longer expose the reproduced identifier suffixes.
+- Verified with 240 local privacy, redaction and egress tests, independent review, cross-platform CI and the required aggregate gate. Carries #6227.
+
 ### Fixed: usage repairs survive background adapter updates
 
 - A running daemon records the parser version actually loaded in memory. Replacing a Pro wheel on disk can no longer mark historical sessions as repaired before the new parser runs.
