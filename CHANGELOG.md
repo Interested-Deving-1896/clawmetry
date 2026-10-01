@@ -1,5 +1,19 @@
 ## Unreleased
 
+### Fixed: usage repairs survive background adapter updates
+
+- A running daemon records the parser version actually loaded in memory. Replacing a Pro wheel on disk can no longer mark historical sessions as repaired before the new parser runs.
+- After restart, the corrected parser repairs selected historical sessions, including sessions incorrectly marked by the earlier upgrade path. Repeated ingest keeps totals stable and preserves transcript contents and integrity records.
+- Verified with 57 focused regression tests and an independent two-process upgrade check. Carries #6221 and completes the coordinated accounting repair with Pro 0.7.33.
+
+### Fixed: growing agent sessions no longer inflate reported usage value
+
+- A session whose cumulative estimate grows from $10 to $12 now contributes $12, rather than adding each lifetime estimate. The next ingest repairs selected historical sessions and their daily totals while preserving transcript contents and integrity records.
+- Codex accounting uses owned response records once each, retaining their dates, models and cache token breakdowns. Forked history and duplicate records are excluded. This requires the coordinated Pro 0.7.33 adapter update.
+- Codex no longer inherits another runtime's subscription label. Local and hosted Cost cards use matching calendar periods and runtime-specific coverage. GPT-6 Astra uses verified model, cache and per-response long-context rates.
+- Active usage-anomaly banners refresh their amounts from current totals, use the preceding seven complete days as baseline, and explicitly label the all-runtime estimate. Historical alerts and configured budget enforcement remain intact.
+- Verified with regression tests, independent reconciliation of 107 real Codex rollouts, and repeated real-session ingest through DuckDB, the usage API and encrypted-snapshot construction. Carries #6215.
+
 ### Release: OpenClaw exec approval turned off out of band is put back; a tool argument that installs a package from a path is flagged (2026-09-30)
 - **Carries:** #6186, #6196 and #6203. The #6203 and #6186 entries follow.
 - #6196 floors `certifi` at the release that drops the distrusted root, so a fresh install cannot resolve an older bundle.
