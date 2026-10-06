@@ -81,6 +81,10 @@ ERR_OFFLINE = ("We could not reach ClawMetry just now, so nothing was sent. "
 ERR_DISABLED = ("Bug reporting is turned off on this install "
                 "(CLAWMETRY_SUPPORT_URL is empty). Email hello@clawmetry.com "
                 "and we will pick it up there.")
+ERR_MISCONFIGURED = ("This install points bug reports somewhere we cannot "
+                     "reach (CLAWMETRY_SUPPORT_URL is not an http address), so "
+                     "nothing was sent. Email hello@clawmetry.com and we will "
+                     "pick it up there.")
 
 
 def _version() -> str:
@@ -198,8 +202,8 @@ def _post_to_cloud(payload: dict) -> tuple[dict, int]:
                  "User-Agent": f"clawmetry/{_version() or 'dev'}"},
         method="POST")
     try:
-        # nosec B310 - the URL is CLOUD_INTAKE_URL, checked above to be
-        # http(s); it is never built from request data.
+        # CLOUD_INTAKE_URL is checked above to be http(s) and is never built
+        # from request data.
         with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:  # nosec B310
             body = json.loads(resp.read().decode("utf-8") or "{}")
             return (body if isinstance(body, dict) else {}), resp.status
@@ -230,6 +234,9 @@ def api_bug_report():
 
     if not CLOUD_INTAKE_URL:
         return jsonify({"ok": False, "error": ERR_DISABLED}), 503
+    if not _intake_url_ok(CLOUD_INTAKE_URL):
+        log.error("[bug-report] CLAWMETRY_SUPPORT_URL is not an http(s) URL")
+        return jsonify({"ok": False, "error": ERR_MISCONFIGURED}), 503
 
     ident = _node_identity()
     payload = {
@@ -294,7 +301,7 @@ def api_bug_report_status(ticket):
     if not CLOUD_INTAKE_URL:
         return jsonify({"ok": False, "error": ERR_DISABLED}), 503
     if not _intake_url_ok(CLOUD_INTAKE_URL):
-        return jsonify({"ok": False, "error": ERR_DISABLED}), 503
+        return jsonify({"ok": False, "error": ERR_MISCONFIGURED}), 503
     url = CLOUD_INTAKE_URL.rstrip("/") + "/" + ticket
     req = urllib.request.Request(
         url, headers={"User-Agent": f"clawmetry/{_version() or 'dev'}"})

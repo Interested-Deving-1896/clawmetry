@@ -278,7 +278,12 @@ def test_a_non_http_intake_url_is_refused_rather_than_opened(client, monkeypatch
         monkeypatch.setattr(support, "CLOUD_INTAKE_URL", bad)
         resp = client.post("/api/bug-report", json={"title": "x"})
         assert resp.status_code == 503, bad
-        assert "nothing was sent" in resp.get_json()["error"].lower()
+        msg = resp.get_json()["error"]
+        assert "nothing was sent" in msg.lower()
+        # A misconfigured intake is not an offline one: telling this person to
+        # check their connection sends them to fix the wrong thing.
+        assert "connection" not in msg.lower()
+        assert "CLAWMETRY_SUPPORT_URL" in msg
     assert support._intake_url_ok("https://app.clawmetry.com/api/bug-report")
     assert support._intake_url_ok("http://127.0.0.1:8977/api/bug-report")
     assert not support._intake_url_ok("file:///etc/passwd")
