@@ -48,6 +48,19 @@ CLOUD_INTAKE_URL = os.environ.get(
 
 _TIMEOUT = 12
 
+_ALLOWED_SCHEMES = ("https://", "http://")
+
+
+def _intake_url_ok(url: str) -> bool:
+    """True when the configured intake is an http(s) URL.
+
+    CLAWMETRY_SUPPORT_URL is operator-settable and urlopen honours any
+    scheme it is handed, so a stray ``file://`` would turn a bug report
+    into a local file read. Checked at every use, not just at import,
+    because the module constant can be monkeypatched in tests.
+    """
+    return isinstance(url, str) and url.startswith(_ALLOWED_SCHEMES)
+
 MAX_TITLE = 160
 MAX_BODY = 5000
 SEVERITIES = ("blocking", "major", "normal", "minor")
@@ -56,6 +69,8 @@ SEVERITIES = ("blocking", "major", "normal", "minor")
 # this is the backstop for a caller that is not our dialog. 2.6 MB of base64
 # is ~1.9 MB of image, which is a generous full-window retina screenshot.
 MAX_SCREENSHOT_CHARS = 2_600_000
+_TICKET_RE = re.compile(r"^CM-[0-9A-HJ-NP-Z]{8}$")
+
 _SCREENSHOT_PREFIX = re.compile(r"^data:image/(png|jpeg|webp);base64,[A-Za-z0-9+/=\s]+$")
 
 # Human sentences for every failure path. The user never sees a status
@@ -173,6 +188,9 @@ def collect_diagnostics(client: dict = None) -> dict:
 
 def _post_to_cloud(payload: dict) -> tuple[dict, int]:
     """POST the report to the intake. Returns (body, http_status)."""
+    if not _intake_url_ok(CLOUD_INTAKE_URL):
+        log.error("[bug-report] refusing a non-http(s) intake URL")
+        return {}, 0
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
         CLOUD_INTAKE_URL, data=data,
@@ -180,7 +198,9 @@ def _post_to_cloud(payload: dict) -> tuple[dict, int]:
                  "User-Agent": f"clawmetry/{_version() or 'dev'}"},
         method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
+        # nosec B310 - the URL is CLOUD_INTAKE_URL, checked above to be
+        # http(s); it is never built from request data.
+        with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:  # nosec B310
             body = json.loads(resp.read().decode("utf-8") or "{}")
             return (body if isinstance(body, dict) else {}), resp.status
     except urllib.error.HTTPError as exc:
@@ -267,13 +287,21 @@ def api_bug_report_status(ticket):
     """Look up a ticket's status through the intake, so the local dashboard
     can show "Fixed in 0.12.9xx" next to a report the user filed weeks ago."""
     ticket = (ticket or "").strip().upper()[:20]
+    if not _TICKET_RE.match(ticket):
+        return jsonify({"ok": False,
+                        "error": "That does not look like a ticket id. They "
+                                 "look like CM-4F2K9Q1X."}), 400
     if not CLOUD_INTAKE_URL:
+        return jsonify({"ok": False, "error": ERR_DISABLED}), 503
+    if not _intake_url_ok(CLOUD_INTAKE_URL):
         return jsonify({"ok": False, "error": ERR_DISABLED}), 503
     url = CLOUD_INTAKE_URL.rstrip("/") + "/" + ticket
     req = urllib.request.Request(
         url, headers={"User-Agent": f"clawmetry/{_version() or 'dev'}"})
     try:
-        with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
+        # nosec B310 - same checked http(s) base; the ticket is matched
+        # against the ticket pattern before it reaches the path.
+        with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:  # nosec B310
             body = json.loads(resp.read().decode("utf-8") or "{}")
             return jsonify(body if isinstance(body, dict) else {})
     except urllib.error.HTTPError as exc:

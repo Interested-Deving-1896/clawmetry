@@ -103,6 +103,7 @@ One module per feature, each owning one or more Flask blueprints. New endpoints 
 | `routes/skills.py` | medium | `bp_skills` | `/api/skills` | Skills fidelity telemetry endpoints (GH #687). |
 | `routes/sla.py` | medium | `bp_sla` | `/api/sla` | SLA policy CRUD, compliance status, and breach firing. |
 | `routes/spend_flow.py` | small | `bp_spend_flow` | `/api/spend-flow` | node-wide AI spend flow (the "where does the money go" Sankey). |
+| `routes/support.py` | medium | `bp_support` | `/api/bug-report` | "Report a bug" intake for the local dashboard. |
 | `routes/tool_catalog.py` | medium | `bp_tool_catalog` | `/api/mcp-servers`, `/api/tool-catalog` | interactive tool catalog + provenance (PRD P1-3). |
 | `routes/tracing.py` | large | `bp_tracing` | `/api/trace`, `/api/traces` | Phoenix/Arize-style tracing endpoints. |
 | `routes/trail.py` | small | `bp_trail` | `/api/trail` | decision-trail coverage, declared per runtime. |
