@@ -300,3 +300,15 @@ def test_a_bogus_ticket_never_reaches_the_url_path(client, monkeypatch):
         resp = client.get("/api/bug-report/" + bad)
         assert resp.status_code in (400, 404), bad
     assert not called, "a malformed ticket was fetched anyway"
+
+
+def test_reopening_shows_the_form_not_the_last_receipt():
+    """A fresh click on Report a bug means "I want to report a bug". Leaving
+    the previous receipt up also leaves a keyboard user with nowhere to land,
+    because the field that would take focus is hidden behind it."""
+    js = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                           "clawmetry", "static", "js", "bug-report.js"),
+              encoding="utf-8").read()
+    body = js.split("window.openBugModal", 1)[1].split("window.closeBugModal", 1)[0]
+    assert "resetBugForm" in body, "openBugModal leaves a stale receipt up"
+    assert "preventScroll" in js, "focusing the first field scrolls the dialog"

@@ -100,6 +100,15 @@
     var overlay = $('bug-overlay');
     if (!overlay) return;
     _lastFocus = document.activeElement;
+    // Opening from the sidebar means "I want to report a bug", not "show me
+    // the receipt from last time". The ticket is not lost: it is listed under
+    // Your earlier reports, and it was emailed. Leaving the receipt up also
+    // left a keyboard user with nowhere to land, because the form it would
+    // focus is hidden behind it.
+    var receipt = $('bug-receipt');
+    if (receipt && !receipt.hidden) {
+      window.resetBugForm();
+    }
     _idemKey = newIdemKey();
     overlay.classList.add('open');
     renderMyReports();
