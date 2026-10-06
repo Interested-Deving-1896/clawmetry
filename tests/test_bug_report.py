@@ -267,3 +267,31 @@ def test_the_dialog_offers_all_three_ways_to_attach_one():
     for hook in ("'paste'", "'drop'", "input.click()"):
         assert hook in js, f"{hook} is not wired"
     assert "MAX_EDGE" in js, "images are sent at full size"
+
+
+# ── the intake URL is operator-settable, so it is not trusted ────────────
+def test_a_non_http_intake_url_is_refused_rather_than_opened(client, monkeypatch):
+    """CLAWMETRY_SUPPORT_URL comes from the environment and urlopen honours
+    whatever scheme it is handed. A file:// intake would turn a bug report
+    into a local file read."""
+    for bad in ("file:///etc/passwd", "ftp://example.com/x", "gopher://x"):
+        monkeypatch.setattr(support, "CLOUD_INTAKE_URL", bad)
+        resp = client.post("/api/bug-report", json={"title": "x"})
+        assert resp.status_code == 503, bad
+        assert "nothing was sent" in resp.get_json()["error"].lower()
+    assert support._intake_url_ok("https://app.clawmetry.com/api/bug-report")
+    assert support._intake_url_ok("http://127.0.0.1:8977/api/bug-report")
+    assert not support._intake_url_ok("file:///etc/passwd")
+    assert not support._intake_url_ok(None)
+
+
+def test_a_bogus_ticket_never_reaches_the_url_path(client, monkeypatch):
+    """The ticket lands in a URL we then fetch, so it is pattern-checked
+    before it gets there rather than after."""
+    called = []
+    monkeypatch.setattr(support.urllib.request, "urlopen",
+                        lambda *a, **k: called.append(a) or None)
+    for bad in ("../../admin", "CM-%2e%2e", "not-a-ticket", ""):
+        resp = client.get("/api/bug-report/" + bad)
+        assert resp.status_code in (400, 404), bad
+    assert not called, "a malformed ticket was fetched anyway"

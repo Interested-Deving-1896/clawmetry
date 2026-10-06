@@ -45,12 +45,16 @@ SEVERITY_LABEL = {
 
 
 def _request(method: str, url: str, payload: dict = None) -> dict:
+    # CLAWMETRY_API_BASE is settable from the workflow env; urlopen honours
+    # whatever scheme it is given, so pin it to http(s) before the call.
+    if not url.startswith(("https://", "http://")):
+        raise ValueError("sync URL must be http(s)")
     data = json.dumps(payload).encode() if payload is not None else None
     req = urllib.request.Request(
         url, data=data, method=method,
         headers={"X-Internal-Token": TOKEN, "Content-Type": "application/json",
                  "User-Agent": "clawmetry-bug-sync/1.0"})
-    with urllib.request.urlopen(req, timeout=30) as resp:
+    with urllib.request.urlopen(req, timeout=30) as resp:  # nosec B310 - scheme checked above
         body = resp.read().decode("utf-8") or "{}"
     parsed = json.loads(body)
     return parsed if isinstance(parsed, dict) else {}
