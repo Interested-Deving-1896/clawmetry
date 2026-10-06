@@ -1,0 +1,50 @@
+name: bug-report-sync
+
+# Bridges user bug reports (filed through the dashboard's "Report a bug"
+# dialog) to this public tracker, and carries the outcome back: closing an
+# issue as completed flips the reporter's ticket to "fixed" and emails them.
+#
+# Actions' own GITHUB_TOKEN is write-scoped to this repo for the length of
+# one job, which is why the issue is filed here rather than from the cloud
+# service -- no long-lived PAT has to exist anywhere.
+#
+# The founder is emailed by the intake the instant a report lands, so
+# nothing urgent waits on this schedule.
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'List what would be filed without filing it'
+        type: boolean
+        default: false
+
+permissions:
+  issues: write
+
+concurrency:
+  group: bug-report-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    # A fork has neither the shared token nor our tracker.
+    if: github.repository == 'vivekchand/clawmetry'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/bug_report_sync.py
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Sync reports and fixes
+        env:
+          CLAWMETRY_BUGSYNC_TOKEN: ${{ secrets.CLAWMETRY_BUGSYNC_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+        run: python3 scripts/bug_report_sync.py

@@ -148,6 +148,7 @@ from routes.physical_ai import bp_physical_ai
 from routes.public_api import bp_public_api
 from routes.apikeys_admin import bp_apikeys_admin
 from routes.update_check import bp_update_check, start_update_check_thread
+from routes.support import bp_support
 from routes.workspaces import bp_workspaces
 from routes.bootstrap import bp_bootstrap
 from routes.insights import bp_insights
@@ -6565,6 +6566,7 @@ def detect_config(args=None):
     app.register_blueprint(bp_security)
     app.register_blueprint(bp_sessions)
     app.register_blueprint(bp_sla)
+    app.register_blueprint(bp_support)
     app.register_blueprint(bp_agentops)
     app.register_blueprint(bp_tracing)
     app.register_blueprint(bp_trail)
@@ -7177,6 +7179,7 @@ DASHBOARD_HTML = r"""
 <script src="{{ url_for('static', filename='js/trail.js', v=asset_version|default(version, true)) }}" defer></script>
 <script src="{{ url_for('static', filename='js/compliance.js', v=asset_version|default(version, true)) }}" defer></script>
 <script src="{{ url_for('static', filename='js/price-book.js', v=asset_version|default(version, true)) }}" defer></script>
+<script src="{{ url_for('static', filename='js/bug-report.js', v=asset_version|default(version, true)) }}" defer></script>
 <!-- Vendored + pinned (no external CDN, no supply-chain risk): marked renders
      transcript markdown, DOMPurify sanitizes it before it touches innerHTML.
      See cmSafeMarkdown() in app.js — never call marked.parse() into the DOM directly.
@@ -7262,6 +7265,7 @@ DASHBOARD_HTML = r"""
     <div class="nav-tab" id="crons-tab" onclick="switchTab('crons')">Crons</div>
     <div class="nav-tab" onclick="switchTab('memory')">Memory</div>
     <div class="nav-tab" onclick="switchTab('security')">Security</div>
+    <div class="nav-tab" onclick="openBugModal()" title="Something in ClawMetry itself is wrong? Tell the people who build it">Report a bug</div>
     <div class="nav-tab" id="nemoclaw-tab" onclick="switchTab('nemoclaw')" style="display:none;">NemoClaw</div>
     <!-- History tab hidden until mature -->
     <!-- <div class="nav-tab" onclick="switchTab('history')">History</div> -->
@@ -7512,6 +7516,20 @@ DASHBOARD_HTML = r"""
         <span class="left-nav-label">NemoClaw</span>
       </div>
     </div>
+    {# Report a bug: pinned to the bottom of the nav so it is reachable from
+       every tab, on localhost and on the hosted dashboard alike. Deliberately
+       not a tab - it opens the dialog in partials/bug-modal.html and leaves
+       the screen the person was on untouched, because what they are looking
+       at IS the report. #}
+    <div class="left-nav-footer">
+      <div class="left-nav-item left-nav-report" role="button" tabindex="0"
+           onclick="openBugModal()"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openBugModal();}"
+           title="Something in ClawMetry itself is wrong? Tell the people who build it">
+        <span class="left-nav-icon" aria-hidden="true">⚑</span>
+        <span class="left-nav-label">Report a bug</span>
+      </div>
+    </div>
   </aside>
   <main class="app-shell-content">
 {% endif %}
@@ -7669,6 +7687,7 @@ DASHBOARD_HTML = r"""
 {% include 'partials/onboarding-modal.html' %}
 {% include 'partials/selfhost-modal.html' %}
 {% include 'partials/budget-modal.html' %}
+{% include 'partials/bug-modal.html' %}
 
 <!-- Component Detail Modal -->
 <div class="comp-modal-overlay" id="comp-modal-overlay" onclick="if(event.target===this)closeCompModal()">
