@@ -53,6 +53,10 @@ def _headline(working, waiting, live_known, runtime):
     assert "_rtScoped" in block, "the scoped-naming logic is gone from the hero"
     harness = """
 var _liveRt = %s, _working = %d, _waiting = %d, _liveKnown = %s, busy = _working > 0;
+/* The evidence-freshness gate lives in the same block; these tests cover the
+   BACKED path, so the evidence is current and the gate is open. Its own
+   behaviour is pinned by tests/test_hero_refuses_unbacked_realtime_claim.py. */
+var _live = {staleReason: '', processesLive: 0, evidenceAge: 5};
 function _cmRuntimeLabel(k){ return ({codex:'Codex', claude_code:'Claude Code'})[k] || k; }
 %s
 console.log(JSON.stringify({headline: headline}));
