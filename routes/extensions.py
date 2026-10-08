@@ -12,7 +12,18 @@ the in-memory state of the loader so the dashboard, ``clawmetry status``, and
 shell wrappers can read it directly. No entitlement check is required: knowing
 which plugins are loaded is diagnostic, not gated. Pure read.
 
-Blueprint: ``bp_extensions``.
+The ``navigation`` key is the seam the Physical AI switch arrives through.
+The registered endpoint names are handed to the plugin so it can confirm its
+own route is really registered before advertising it; that list is an
+existence check, never an access-control input. Anything able to register a
+``clawmetry.extensions`` entry point already executes code in this process,
+so the plugin is trusted here and the defence is against malformed data:
+``clawmetry/static/js/app.js`` takes at most eight entries, requires ``href``
+to match a rooted relative path, and truncates the label. A plugin that names
+a route the user cannot reach therefore renders a dead link, not an exposure.
+
+Blueprint: ``bp_extensions``. The decision above is recorded under
+"Decisions on the OSS seams this feature touches" in the SO-101 blueprint.
 """
 
 from __future__ import annotations
