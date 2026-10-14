@@ -2005,7 +2005,15 @@ def _register_launchd(config: dict) -> bool:
         # Never claim it is syncing when launchd did not take the job —
         # a false "Running in the background" is how a dead daemon stays
         # invisible for hours (founder live-hit 2026-10-14).
+        #
+        # Say that nothing is registered RIGHT NOW, because the reload
+        # unloaded the old job before trying to load the new one. The
+        # previous code could not make things worse (it never unloaded);
+        # this one can, for as long as it takes to try again, so the
+        # operator is told rather than left to infer it.
         print("  ⚠️   Could not start the background helper.")
+        print("      No sync daemon is registered right now, so nothing")
+        print("      is being collected until this succeeds.")
         print(f"      Check the log: {LOG_FILE}")
         print("      Then try again: clawmetry sync --restart")
         return False

@@ -102,6 +102,10 @@ def test_register_launchd_never_claims_success_when_launchd_refused(
     assert "Running in the background" not in out, out
     assert "syncing to the cloud" not in out, out
     assert "clawmetry sync --restart" in out, out
+    # The reload unloaded the old job before failing to load the new one,
+    # so nothing is registered at this moment. The old code could not make
+    # things worse because it never unloaded; this one can, so say it.
+    assert "registered right now" in out, out
 
 
 def test_register_launchd_reports_success_when_it_took(
