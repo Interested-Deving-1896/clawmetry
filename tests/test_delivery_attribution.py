@@ -82,6 +82,22 @@ def test_pr_url_carries_its_own_repo():
     assert (prs[0]["ref"], prs[0]["repo"]) == ("42", "own/repo")
 
 
+def test_a_url_that_merely_appears_is_explored_not_reviewed():
+    """Reviewing is an action. A link in a comment or an output line is
+    evidence the pull request was seen, nothing more, and collapsing the two
+    is what makes the role column stop meaning anything."""
+    seen = attribution.extract_session_delivery(_newest_first([
+        {"event_type": "tool_result", "ts": "2026-10-15T10:00:00Z",
+         "data": {"content": "see https://github.com/own/repo/pull/42"}}]), "s1")
+    assert [a for a in seen["artifacts"] if a["kind"] == "pr"][0]["role"] \
+        == attribution.ROLE_EXPLORED
+
+    acted = attribution.extract_session_delivery(
+        _newest_first([_call("gh pr diff 42 --repo own/repo")]), "s1")
+    assert [a for a in acted["artifacts"] if a["kind"] == "pr"][0]["role"] \
+        == attribution.ROLE_REVIEWED
+
+
 def test_read_only_verb_is_a_review_not_authorship():
     out = attribution.extract_session_delivery(
         _newest_first([_call("gh pr checks 7 --repo own/repo")]), "s1")
@@ -89,15 +105,51 @@ def test_read_only_verb_is_a_review_not_authorship():
     assert prs[0]["role"] == attribution.ROLE_REVIEWED
 
 
-def test_git_write_promotes_a_reviewed_pr_to_authored():
-    """Viewing a PR in a session that also committed is authoring work."""
+def test_a_commit_elsewhere_does_not_make_a_viewed_pr_authored():
+    """Role is what the session did TO THAT pull request, nothing else.
+
+    An earlier version promoted every referenced PR to "authored" whenever
+    the session ran any git write anywhere. On a real node almost every
+    session commits something, so the column read "authored" on all 100
+    rows: it claimed authorship of pull requests the session had only looked
+    at, and a column whose value never varies tells a reader nothing.
+    """
     out = attribution.extract_session_delivery(_newest_first([
         _call("gh pr view 7 --repo own/repo"),
-        _call("git commit -m 'fix'"),
+        _call("git commit -m 'fix' && git push origin feat/x"),
     ]), "s1")
     prs = [a for a in out["artifacts"] if a["kind"] == "pr"]
-    assert prs[0]["role"] == attribution.ROLE_AUTHORED
-    assert "git_write" in prs[0]["source"]
+    assert prs[0]["role"] == attribution.ROLE_REVIEWED
+
+
+def test_roles_stay_distinct_within_one_session():
+    """The column has to be able to say different things about two PRs."""
+    out = attribution.extract_session_delivery(_newest_first([
+        _call("gh pr view 7 --repo own/repo"),
+        _call("gh pr merge 8 --repo own/repo --squash"),
+        _call("git commit -m 'fix'"),
+    ]), "s1")
+    roles = {a["ref"]: a["role"] for a in out["artifacts"] if a["kind"] == "pr"}
+    assert roles == {"7": attribution.ROLE_REVIEWED,
+                     "8": attribution.ROLE_AUTHORED}
+
+
+def test_evidence_leads_with_the_reference_not_its_surroundings():
+    """A PR URL inside a tool RESULT has no command around it, so a centred
+    window led with whatever JSON preceded it. The claim comes first."""
+    noise = '{"role": "tool", "content": "' + "x" * 400
+    out = attribution.extract_session_delivery(_newest_first([{
+        "event_type": "tool_result", "ts": "2026-10-15T10:00:00Z",
+        "cost_usd": None,
+        "data": {"content": noise
+                 + " https://github.com/own/repo/pull/4242 and then more text"},
+    }]), "s1")
+    prs = [a for a in out["artifacts"] if a["kind"] == "pr"]
+    assert prs and prs[0]["ref"] == "4242"
+    ev = prs[0]["evidence"]
+    assert "github.com/own/repo/pull/4242" in ev
+    assert ev.index("github.com") < 40, (
+        f"the reference must lead the snippet, got: {ev[:80]!r}")
 
 
 def test_sole_repo_fills_a_bare_pr_but_lowers_confidence():
