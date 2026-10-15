@@ -521,6 +521,46 @@ def test_evidence_reads_as_the_command_not_as_json(store):
         assert noise not in ev, f"evidence leaked payload structure: {noise}"
 
 
+def test_a_rules_change_recomputes_sessions_that_never_moved(store, monkeypatch):
+    """The migration guard.
+
+    The watermark compares event counts, so it only ever notices a session
+    that GREW. When the extraction or role rules change, a dormant session
+    keeps the answer the old rules gave it and the table holds two meanings
+    at once with nothing to tell them apart. That is not hypothetical: the
+    role fix that made this column mean anything would have reached none of
+    the rows already stored.
+    """
+    events = [_call("gh pr edit 1 --repo own/repo"), _usage(1.0)]
+    for i, ev in enumerate(events):
+        store.ingest(dict(ev, id=f"e{i}", session_id="s1", node_id="node-a",
+                          agent_id="main", agent_type="openclaw"))
+    store.flush()
+
+    pending = store.sessions_pending_attribution()
+    assert [p["session_id"] for p in pending] == ["s1"], \
+        "a session never attributed must pend"
+    _attribute(store, "s1", events)
+    assert store.sessions_pending_attribution() == [], \
+        "an unchanged session under the same rules must not be re-read"
+
+    monkeypatch.setattr(attribution, "RULES_VERSION", "99-newer")
+    pending = store.sessions_pending_attribution()
+    assert [p["session_id"] for p in pending] == ["s1"], \
+        "a rules bump must bring the untouched session back for recomputation"
+
+    # And once recomputed under the new rules it settles again.
+    _attribute(store, "s1", events)
+    assert store.sessions_pending_attribution() == []
+
+
+def test_the_rules_version_is_a_plain_string_that_can_only_move_forward(store):
+    """It is compared as a value, not parsed, so anything non-empty works;
+    an empty one would make every session pend forever."""
+    assert isinstance(attribution.RULES_VERSION, str)
+    assert attribution.RULES_VERSION.strip()
+
+
 def test_empty_store_is_an_honest_empty_not_an_error(store):
     out = store.query_delivery(kind="pr")
     assert out["available"] is True

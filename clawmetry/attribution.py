@@ -75,6 +75,14 @@ MAX_EVENT_TEXT = 20_000
 #: handful of arguments; a pathological payload will not turn the pass into a
 #: regex benchmark.
 MAX_TEXTS_PER_EVENT = 12
+
+#: Bump whenever extraction, role or cost-split SEMANTICS change, so stored
+#: rows computed under the old rules are recomputed instead of persisting
+#: forever. Without it the watermark only notices a session that GREW, and a
+#: dormant session keeps its old answer: the table would hold a mix of
+#: semantics with nothing to tell them apart. Bumped to 2 when role stopped
+#: being promoted session-wide and a bare URL stopped counting as a review.
+RULES_VERSION = "2"
 # Per-session caps. A session that names 500 PRs is a digest cron, not a
 # delivery; truncating keeps one pathological row from dominating the table.
 MAX_PRS_PER_SESSION = 64
