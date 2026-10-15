@@ -34,6 +34,26 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(ci.affected_runtimes(['README.md', 'CHANGELOG.md'], self.runtimes), [])
         self.assertEqual(ci.affected_runtimes(['docs/schema.md'], self.runtimes), sorted(self.runtimes))
 
+    def test_openclaw_special_suites_narrow_and_non_python_lookalikes_do_not(self):
+        for name in ci.OPENCLAW_EXTRA_TESTS:
+            self.assertEqual(ci.affected_runtimes(['tests/' + name], self.runtimes), ['openclaw'])
+        for name in ['test_codex_adapter_old', 'test_codex_adapter.md']:
+            self.assertEqual(ci.affected_runtimes(['tests/' + name], self.runtimes), sorted(self.runtimes))
+
+    def test_selection_and_discovery_use_identical_test_patterns(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / 'tests').mkdir()
+            for name in ['test_codex_adapter.py', 'test_codex_adapter_replay.py',
+                         'test_adapter_codex.py', 'test_codex_runtime_adapter.py',
+                         *ci.OPENCLAW_EXTRA_TESTS]:
+                path = root / 'tests' / name
+                path.touch()
+            for runtime in self.runtimes:
+                for path in ci.runtime_tests(root, runtime):
+                    relative = Path(path).relative_to(root).as_posix()
+                    self.assertEqual(ci.affected_runtimes([relative], self.runtimes), [runtime])
+
     def test_paths_cannot_escape_checkout(self):
         for path in ['/tmp/a.py', '../a.py']:
             with self.assertRaises(ValueError):

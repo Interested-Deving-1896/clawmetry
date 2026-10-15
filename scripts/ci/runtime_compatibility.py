@@ -17,6 +17,13 @@ import sys
 from xml.parsers import expat
 
 OPERATING_SYSTEMS = ('ubuntu-latest', 'windows-latest', 'macos-latest')
+OPENCLAW_EXTRA_TESTS = ('test_openclaw_list_events.py', 'test_openclaw_replay_events.py')
+
+
+def runtime_test_patterns(runtime: str) -> tuple:
+    patterns = (f'test_{runtime}_adapter*.py', f'test_adapter_{runtime}.py',
+                f'test_{runtime}_runtime_adapter.py')
+    return patterns + (OPENCLAW_EXTRA_TESTS if runtime == 'openclaw' else ())
 
 
 def private_environment() -> dict:
@@ -91,9 +98,7 @@ def affected_runtimes(paths: list, runtimes: dict) -> list:
                     or str(path) == f'clawmetry/adapters/{runtime}.py'
                     or str(path).startswith(f'tests/fixtures/runtimes/{runtime}/')
                     or (path.parent == PurePosixPath('tests') and
-                        (path.name == f'test_adapter_{runtime}.py'
-                         or path.name == f'test_{runtime}_runtime_adapter.py'
-                         or path.name.startswith(f'test_{runtime}_adapter')))):
+                        any(path.match(pattern) for pattern in runtime_test_patterns(runtime)))):
                 found.add(runtime)
         if not found:
             return sorted(runtimes)
@@ -122,9 +127,7 @@ def fingerprint(oss: Path, pro: Path) -> str:
 
 def runtime_tests(root: Path, runtime: str) -> list:
     tests = root / 'tests'
-    return sorted({str(p) for pattern in
-                   (f'test_{runtime}_adapter*.py', f'test_adapter_{runtime}.py',
-                    f'test_{runtime}_runtime_adapter.py')
+    return sorted({str(p) for pattern in runtime_test_patterns(runtime)
                    for p in tests.glob(pattern) if p.is_file()})
 
 
@@ -165,10 +168,11 @@ def executed_cases(path: Path) -> int:
 def run_runtime(oss: Path, pro: Path, runtime: str, private_logs: Path) -> dict:
     """Run one suite in a fresh process, retaining raw output only on the runner."""
     tests = runtime_tests(pro, runtime) + runtime_tests(oss, runtime)
-    # OpenClaw uses a wider OSS family rather than test_openclaw_adapter.py.
-    if runtime == 'openclaw':
-        tests += [str(oss / 'tests' / name) for name in
-                  ('test_openclaw_list_events.py', 'test_openclaw_replay_events.py')]
+    # Both established OpenClaw OSS suites are mandatory, even if another
+    # matching file exists. Discovery and impact selection share one pattern set.
+    if runtime == 'openclaw' and not all(
+            (oss / 'tests' / name).is_file() for name in OPENCLAW_EXTRA_TESTS):
+        return {'runtime': runtime, 'mode': 'fixture/unit', 'status': 'missing-coverage'}
     if not tests:
         return {'runtime': runtime, 'mode': 'fixture/unit', 'status': 'missing-coverage'}
     private_logs.mkdir(parents=True, exist_ok=True)
