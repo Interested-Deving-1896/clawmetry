@@ -9564,8 +9564,11 @@ class LocalStore(AgentMetaMixin, ProjectsMixin, TrailStoreMixin, IncidentStoreMi
         try:
             with self._write_lock:
                 self._conn.execute(
-                    "DELETE FROM session_artifacts WHERE session_id = ? "
-                    "AND agent_type = ?", [sid, atype])
+                    "DELETE FROM session_artifacts WHERE session_id = ?",
+                    [sid])
+                self._conn.execute(
+                    "DELETE FROM session_attribution_state WHERE "
+                    "session_id = ? AND agent_type <> ?", [sid, atype])
                 if rows:
                     self._conn.executemany(
                         "INSERT INTO session_artifacts ("

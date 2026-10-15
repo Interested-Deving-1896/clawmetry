@@ -561,6 +561,50 @@ def test_the_rules_version_is_a_plain_string_that_can_only_move_forward(store):
     assert attribution.RULES_VERSION.strip()
 
 
+def test_the_runtime_comes_from_the_session_id_not_the_event_column(store):
+    """The runtime switcher contract, at the source.
+
+    ``events.agent_type`` reads 'openclaw' for almost every event on a real
+    multi-runtime node (77,323 of 77,474 on the node this was measured on)
+    while the session ids said claude_code, codex, cursor and five more.
+    Filing artifacts under the column left the Delivered tab empty under
+    every runtime the switcher offers.
+    """
+    from clawmetry import sync as _sync
+
+    # The id prefix wins over a column that says otherwise.
+    assert _sync._attribution_runtime(
+        "codex:01a0feac", {"agent_type": "openclaw"}) == "codex"
+    assert _sync._attribution_runtime(
+        "claude_code:abc", {"agent_type": "openclaw"}) == "claude_code"
+    # A bare id genuinely is OpenClaw's, and the column still answers.
+    assert _sync._attribution_runtime("plain-uuid", {}) == "openclaw"
+    assert _sync._attribution_runtime(
+        "plain-uuid", {"agent_type": "nemoclaw"}) == "nemoclaw"
+
+
+def test_refiling_a_session_under_a_new_runtime_leaves_no_duplicate(store):
+    """The migration this correction needs.
+
+    A recomputation that derives a different runtime than the stored one must
+    REPLACE the session's rows, not add a second set beside them. Deleting by
+    (session_id, agent_type) would have left the old 'openclaw' rows in place
+    and doubled every figure on the tab.
+    """
+    events = [_call("gh pr edit 1 --repo own/repo"), _usage(6.0)]
+    _attribute(store, "s1", events, runtime="openclaw")
+    assert store.query_delivery(kind="pr")["totals"]["attributed_usd"] == 6.0
+
+    _attribute(store, "s1", events, runtime="codex")
+    out = store.query_delivery(kind="pr")
+    assert len(out["rows"]) == 1, "the old runtime's row must be gone"
+    assert out["totals"]["attributed_usd"] == 6.0, "cost must not double"
+    assert store.query_delivery(kind="pr", runtime="codex")["rows"]
+    assert store.query_delivery(kind="pr", runtime="openclaw")["rows"] == []
+    # And exactly one state row survives, so the remainder is not counted twice.
+    assert store._delivery_totals()["unattributed_usd"] == 0.0
+
+
 def test_empty_store_is_an_honest_empty_not_an_error(store):
     out = store.query_delivery(kind="pr")
     assert out["available"] is True

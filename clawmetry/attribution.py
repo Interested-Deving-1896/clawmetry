@@ -81,8 +81,12 @@ MAX_TEXTS_PER_EVENT = 12
 #: forever. Without it the watermark only notices a session that GREW, and a
 #: dormant session keeps its old answer: the table would hold a mix of
 #: semantics with nothing to tell them apart. Bumped to 2 when role stopped
-#: being promoted session-wide and a bare URL stopped counting as a review.
-RULES_VERSION = "2"
+#: being promoted session-wide and a bare URL stopped counting as a review,
+#: and to 3 when the runtime stopped being read from ``events.agent_type``
+#: (which says 'openclaw' for almost everything) and started coming from the
+#: session id prefix, so every stored row is refiled under the runtime the
+#: switcher actually offers.
+RULES_VERSION = "3"
 # Per-session caps. A session that names 500 PRs is a digest cron, not a
 # delivery; truncating keeps one pathological row from dominating the table.
 MAX_PRS_PER_SESSION = 64
