@@ -98,3 +98,14 @@ The exact workflow diff adds `tests/test_node_activity_collector_clarity.py` to 
 Independently executed `python3 scripts/check_ci_test_coverage.py --check`: **PASS, 384 listed / 902 unlisted, maximum 902 unchanged**. Independently executed the exact amended four-module pytest command with explicit scratch audit/store paths: **95 passed in 3.64 seconds**. The command uses `--noconftest`, preserving the existing isolated test boundary. `git diff --check` passed. The new file is executed by an existing CI step rather than merely added to a parser allowlist.
 
 **Verdict: APPROVED.** Blocking: 0. Advisory: 0. This approval covers the CI registration and plan update only; it makes no new installed or hosted release claim. Reviewer made no workflow or product edit.
+
+
+## Round 6: Independent rebased acceptance-manifest bucket review
+
+Reviewer: node_ui. Reviewed the complete acceptance manifest and coverage-baseline delta against fresh main `b763676bd858b37af005335525abc0a6e08ef5fc` (Asimov PR 6442), and compared every new criterion with the saved, read-back-verified approved Factory addition. No product or acceptance-record edit by reviewer.
+
+Deterministic JSON comparison proves that all 475 fresh-main criteria remain an identical ordered prefix, including the newly merged Asimov criteria. Every existing manifest metadata field, in-repository prefix and external prefix is unchanged. Exactly eleven CLARITY entries are appended, without duplicates; each ID and full text exactly matches `/tmp/clawmetry-node-qa/node-clarity-requirement-addition-approved.md`, with the correct Factory requirement ID.
+
+The baseline changes only `covered_count` from 407 to 418 and `total_count` from 475 to 486. Its comment metadata and exact list of 68 uncovered criterion IDs are unchanged; no existing uncovered item or coverage requirement is removed. Independently ran `python3 scripts/check_ac_coverage.py --check`: **PASS, 418/486 covered, 68 uncovered, ratchet holding**. `git diff --check` passed.
+
+**Verdict: APPROVED.** Blocking: 0. Advisory: 0. The fresh-main manifest is preserved intact and the exact approved eleven criteria are added without weakening the ratchet. Prior implementation and CI-registration approvals remain separate; actual installed/hosted release acceptance is still pending its delivery evidence.

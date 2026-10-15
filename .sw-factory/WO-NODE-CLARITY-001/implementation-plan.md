@@ -45,3 +45,5 @@ Final live proof: owned harmless process plus loopback TCP listener, actual meas
 Final combined pre-PR suite after all review fixes: **96 passed**. Independent collector and frontend buckets both APPROVED; official installed/hosted acceptance remains pending.
 
 CI follow-up: the test-file coverage ratchet found that the new collector regression module was not explicitly named in a workflow. Added it to the existing Node observation/governance/lifecycle job, without changing assertions, gates or the unlisted baseline. The failing CI log supplies the red-before evidence. Product source is unchanged.
+
+Rebased onto fresh main b763676bd8 after Asimov merged. Only the shared acceptance manifest/baseline conflicted; retained every main criterion and prefix unchanged, then appended the exact eleven approved CLARITY criteria. Coverage is418/486 with the same68uncovered. Independent manifest review APPROVED (Round6). Re-ran all96 focused checks including normal shared Chromium successfully. Packaged product bytes are unchanged by rebase.
