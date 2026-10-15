@@ -322,3 +322,13 @@ Inspected the installed psutil 7.2.2 source directly: `process_iter` retains Pro
 - Total advisory: 0.
 - **Verdict:** APPROVED for the minimal PID cache correction.
 - This review covers the two-file source correction and its regression. Prior release and hosted verification gates remain applicable.
+
+## Round 9: Independent relay test audit isolation review
+
+Reviewed the two-line fixture correction in `tests/test_node_activity_wiring.py`. The relay fixture now receives `tmp_path` and sets `CLAWMETRY_AUDIT_DB` to its own temporary database before dispatching any action. Inspected `clawmetry.audit._path` and `_connect`: the override is resolved for each connection, so it remains effective even when the audit module was imported earlier. The fixture still uses the stub node store and changes no production behavior.
+
+Validation: `CLAWMETRY_AUDIT_DB=/tmp/clawmetry-node-review-audit.db python3 -m pytest tests/test_node_activity_wiring.py -q` passed with 17 tests. The explicit outer override also isolates any audit work outside the fixture during this review run. No broader unisolated suite was run.
+
+- Total blocking: 0.
+- Total advisory: 0.
+- **Verdict:** APPROVED for the test-only audit isolation correction.

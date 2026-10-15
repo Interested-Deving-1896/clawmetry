@@ -21,8 +21,9 @@ def server():
 
 
 @pytest.fixture
-def relay(monkeypatch):
+def relay(monkeypatch, tmp_path):
     from clawmetry import sync, local_store
+    monkeypatch.setenv("CLAWMETRY_AUDIT_DB", str(tmp_path / "relay-audit.db"))
 
     class Store:
         def __init__(self):

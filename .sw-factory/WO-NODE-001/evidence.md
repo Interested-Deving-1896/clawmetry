@@ -2,7 +2,7 @@
 
 ## Local implementation
 
-- 65 focused collector, store, route, sealed relay, frontend, navigation and existing Guard checks passed after the final cancellation correction.
+- 66 focused collector, store, route, sealed relay, frontend, navigation and existing Guard checks passed after the final cancellation correction.
 - Workflow/module verification: 725 passed, 462 skipped. The skipped workflow cases are existing condition-dependent command checks, not node feature failures.
 - Acceptance manifest: 24 new Factory criteria mirrored, all referenced by meaningful feature tests. Overall gate: 374/442 covered; remaining 68 are existing uncovered criteria.
 - English mechanical subset, daemon method allowlist, Python compilation, app.js syntax, generated module map and diff whitespace checks passed.
@@ -19,3 +19,5 @@ Browser checks at 320 and 360 pixels found no page-level horizontal overflow in 
 ## Remaining release evidence
 
 Feature PR, release PR, published wheel, cloud pin/deploy, released daemon snapshot and hosted browser checks will be added after those steps complete. Local tests do not substitute for release verification.
+
+Relay unit tests explicitly isolate the audit database as well as their store. CI caught two abbreviated module references in the architecture guide; both now use their actual package paths. The module-reference regression was run again after that correction.
