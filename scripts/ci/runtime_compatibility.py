@@ -174,6 +174,15 @@ def prepare(oss: Path, pro: Path, private_logs: Path) -> dict:
     # Pytest must exercise the installed wheel, not an implicit source import
     # from the private checkout that happens to sit beside its tests.
     (pro / 'clawmetry_pro').rename(pro / '_candidate_source_not_importable')
+    with (private_logs / 'installation.log').open('ab') as log:
+        subprocess.run([sys.executable, '-c', (
+            'import importlib.metadata as m; from pathlib import Path; '
+            'import clawmetry_pro as p; '
+            'assert not Path(p.__file__).resolve().is_relative_to(Path.cwd()); '
+            'assert p.__version__ == m.version("clawmetry-pro"); '
+            'assert any(e.name == "clawmetry_pro" and callable(e.load()) '
+            'for e in m.entry_points(group="clawmetry.extensions"))'
+        )], cwd=pro, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=60)
     return {'wheel_sha256': hashlib.sha256(wheels[0].read_bytes()).hexdigest()}
 
 

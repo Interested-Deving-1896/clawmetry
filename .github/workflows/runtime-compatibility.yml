@@ -38,7 +38,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: runtime-compatibility-${{ github.event.client_payload.pull_request || github.event.pull_request.number || github.ref }}
+  group: runtime-compatibility-${{ github.event_name == 'repository_dispatch' && 'pro' || 'oss' }}-${{ github.event.client_payload.pull_request || github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -127,6 +127,15 @@ jobs:
           name: runtime-selection-${{ github.run_id }}-${{ github.run_attempt }}
           path: runtime-selection.json
           retention-days: 1
+      - name: Remove private planning files
+        if: always()
+        run: |
+          python - <<'PY'
+          import os, shutil
+          from pathlib import Path
+          shutil.rmtree('pro', ignore_errors=True)
+          shutil.rmtree(Path(os.environ['RUNNER_TEMP']) / 'private-runtime-logs', ignore_errors=True)
+          PY
 
   compatibility:
     needs: plan
