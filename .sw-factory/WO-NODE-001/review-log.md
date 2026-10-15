@@ -303,3 +303,22 @@ Reviewed the parent's recorded evidence: an actual harmless selected-file change
 - Total advisory: 1 optional dedicated nonce-store helper from the integration review; no required product work remains from that advisory.
 - **Verdict:** APPROVED for feature PR submission and green-CI review.
 - This approval is not a shipment claim. Remaining delivery gates are feature PR checks/merges, a separate OSS release PR, published-wheel inspection, cloud pin/deploy and actual hosted-node verification. The cloud feature PR must remain unmerged until the parent confirms its required OSS release is available and the cloud pin is verified.
+
+## Round 8: Independent PID reuse cache correction review
+
+### Scope And Alignment
+
+Reviewed only the uncommitted correction in `clawmetry/node_activity.py` and `tests/test_node_activity.py` against AC-OBS-NODE-002.4 and the blueprint requirement that process identity includes a fresh creation token. The collector obtains the existing iterator and invokes its supported `cache_clear` operation when callable before each process scan. Alternate sensors without that optional method retain their prior behavior. The existing source-level exception handler still reports an incomplete scan if collection fails.
+
+Inspected the installed psutil 7.2.2 source directly: `process_iter` retains Process objects in its module cache, and `Process.create_time` retains its first result. Clearing that cache at this boundary ensures the new scan builds fresh Process identities. The patch adds no process control, private data export, dependency or per-process CPU behavior.
+
+### Tests And Verification
+
+`python3 -m pytest tests/test_node_activity.py tests/test_node_activity_wiring.py -q` passed with 33 tests. The new regression models the actual library cache behavior: creation time remains stale until the iterator cache is cleared, the initial scan stays quiet, and a reused PID then produces a distinct start identity and separate added/removed records. It also verifies clearing happens on each scan. Existing tests cover sensors without `cache_clear`, source gaps and bounded process collection.
+
+### Round 8 Verdict
+
+- Total blocking: 0.
+- Total advisory: 0.
+- **Verdict:** APPROVED for the minimal PID cache correction.
+- This review covers the two-file source correction and its regression. Prior release and hosted verification gates remain applicable.

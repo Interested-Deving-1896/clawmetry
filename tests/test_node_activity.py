@@ -324,3 +324,35 @@ def test_bounded_process_candidates_keep_recent_work_not_first_pids(tmp_path, mo
     assert body["coverage"]["processes"]["truncated"] is True
     assert body["summary"]["process_count"] is None
     assert body["coverage"]["sensitive_files"]["state"] == "complete"
+
+
+def test_process_iterator_cache_is_cleared_before_each_identity_scan(store, tmp_path):
+    """AC-OBS-NODE-002.4: fresh creation times survive library Process caching."""
+    sensor = Sensor()
+
+    class CachedIterator:
+        def __init__(self):
+            self.actual_start = 100
+            self.cached = None
+            self.clears = 0
+
+        def cache_clear(self):
+            self.cached = None
+            self.clears += 1
+
+        def __call__(self, attrs, ad_value=None):
+            if self.cached is None:
+                self.cached = Obj(info={"pid": 10, "ppid": 1, "name": "ordinary-process",
+                                        "create_time": self.actual_start, "memory_info": Obj(rss=40)})
+            return iter([self.cached])
+
+    sensor.process_iter = CachedIterator()
+    baseline = store.record_node_activity(observe(sensor, tmp_path))
+    assert baseline["events"] == []
+    previous_id = baseline["processes"][0]["id"]
+    sensor.process_iter.actual_start = 200
+    reused = store.record_node_activity(observe(sensor, tmp_path, now=1030))
+    assert reused["processes"][0]["id"] != previous_id
+    assert reused["processes"][0]["started_at"] == 200000
+    assert {event["kind"] for event in reused["events"]} == {"process_added", "process_removed"}
+    assert sensor.process_iter.clears == 2

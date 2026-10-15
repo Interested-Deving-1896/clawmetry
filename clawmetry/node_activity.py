@@ -162,9 +162,15 @@ def collect_node_activity(*, preferences=None, node_id="", now=None, psutil_modu
         rows, partial, truncated = [], False, False
         try:
             if source == "processes":
+                # psutil retains Process objects and their cached creation
+                # times across iterations. Refresh before checking PID reuse.
+                process_iter = sensor.process_iter
+                clear_cache = getattr(process_iter, "cache_clear", None)
+                if callable(clear_cache):
+                    clear_cache()
                 process_deadline = min(deadline - 0.75, time.monotonic() + 1.5)
                 candidates = 0
-                for proc in sensor.process_iter(["pid", "ppid", "name", "create_time", "memory_info"], ad_value=None):
+                for proc in process_iter(["pid", "ppid", "name", "create_time", "memory_info"], ad_value=None):
                     if cap <= 0 or candidates >= MAX_PROCESS_CANDIDATES or time.monotonic() > process_deadline:
                         truncated = True
                         break
