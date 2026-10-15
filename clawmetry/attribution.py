@@ -639,6 +639,27 @@ def _extends_without_separator(short_tail: str, long_tail: str) -> bool:
     return long_tail[len(short_tail)] not in _NAME_SEPARATORS
 
 
+#: A pytest node id: ``path::test_name[the parameter]``. What follows is a
+#: SPECIMEN a test was parametrised with, not a command anyone ran.
+_RE_TEST_NODE_ID = re.compile(r"::test_[A-Za-z0-9_]+\[")
+
+
+def _inside_test_node_id(text: str, start: int) -> bool:
+    """True when the match sits inside a pytest node id's parameter.
+
+    Four live branch rows read ``feat/x-feat/x`` and
+    ``fix/home-session-activity-fix/home-session-activity``: a node id repeats
+    the parameter after the test name, so the doubled name is the id's own
+    shape rather than anything a session pushed. The agent runs this
+    repository's tests all day, so its output is in the stream it reads.
+
+    Only the match's own line is examined, so a test id elsewhere in the
+    snippet cannot disqualify a real command.
+    """
+    line_start = text.rfind("\n", 0, start) + 1
+    return bool(_RE_TEST_NODE_ID.search(text, line_start, start))
+
+
 def _is_placeholder_repo(name: str) -> bool:
     """True when *name* is a stand-in for an account rather than one."""
     name = str(name or "").strip().strip("/").rstrip(".,;:!?)]}\"'")
@@ -746,6 +767,8 @@ def _find_pr_refs(text: str) -> list[dict]:
         verb = m.group(1).lower()
         if verb not in _GH_PR_VERBS:
             continue
+        if _inside_test_node_id(text, m.start()):
+            continue
         role = ROLE_AUTHORED if verb in _GH_PR_AUTHOR_VERBS else ROLE_REVIEWED
         raw_repo = _repo_for_match(text, m.start(), m.end())
         if _is_placeholder_repo(raw_repo):
@@ -806,6 +829,8 @@ def _find_branch_refs(text: str) -> list[dict]:
     for pattern, source, conf in ((_RE_BRANCH_NEW, "branch_created", 1.0),
                                   (_RE_BRANCH_PUSH, "branch_pushed", 0.9)):
         for m in pattern.finditer(text):
+            if _inside_test_node_id(text, m.start()):
+                continue
             # _clean_branch sees the RAW capture: the trailing "/" is the
             # signal that this was ``release/<slug>`` in a doc, and stripping
             # it first turned the placeholder into the branch "release".

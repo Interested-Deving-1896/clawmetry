@@ -1369,5 +1369,30 @@ def test_placeholder_rows_do_not_block_the_bare_fold():
     assert prs[0]["repo"] == "nordwind/clawmetry"
 
 
+def test_a_parametrised_test_id_is_not_a_branch():
+    """Four live rows read ``feat/x-feat/x`` and
+    ``fix/home-session-activity-fix/home-session-activity``.
+
+    A pytest node id repeats its parameter after the test name, so the doubled
+    name is the id's own shape. The agent runs this repository's tests all day,
+    so their output is in the stream it reads.
+    """
+    events = [_call(
+        "tests/test_delivery_attribution.py::test_a_real_branch_is_still_recorded"
+        "[git push origin hotfix-login-hotfix-login] PASSED [100%]")]
+    out = attribution.extract_session_delivery(_newest_first(events), "s1")
+    assert [a for a in out["artifacts"] if a["kind"] == "branch"] == []
+
+
+def test_a_real_command_beside_test_output_is_still_read():
+    """Only the match's OWN line disqualifies it, so a node id elsewhere in
+    the snippet cannot delete a branch the session really pushed."""
+    events = [_call("tests/test_x.py::test_y[git push origin specimen] PASSED\n"
+                    "git push origin feat/real-work")]
+    out = attribution.extract_session_delivery(_newest_first(events), "s1")
+    branches = sorted(a["ref"] for a in out["artifacts"] if a["kind"] == "branch")
+    assert branches == ["feat/real-work"], branches
+
+
 def test_rules_version_moved_to_eight():
     assert int(attribution.RULES_VERSION) >= 8
