@@ -1000,3 +1000,59 @@ def test_the_rules_version_moved_so_existing_rows_are_refiled():
     a semantics fix that does not move ``RULES_VERSION`` reaches no existing
     install. Three was the shipped value."""
     assert int(attribution.RULES_VERSION) >= 4
+
+
+# ── A branch must be a branch ───────────────────────────────────────────────
+#
+# The five most common "branches" on the live tab were `refs/tags`, `from`,
+# `feat`, `2` and `release`: a tag prefix, two words of prose, a shell
+# redirect and a documentation placeholder. Every branch on that node that
+# was real carried a `/`.
+
+@pytest.mark.parametrize("command", [
+    "git push origin refs/tags/v1.2.3",          # a tag is not a branch
+    "git push -q 2>&1 | tail -3",                # `2` was a shell redirect
+    "git checkout -b release/<slug> origin/main",  # a docs placeholder
+    "git checkout -B feat/<slug> origin/main",
+    "the step runs `git push -f origin` from inside the cloud checkout",
+])
+def test_these_are_not_branches(command):
+    out = attribution.extract_session_delivery(
+        _newest_first([_call(command)]), "s1")
+    assert [a for a in out["artifacts"] if a["kind"] == "branch"] == []
+
+
+@pytest.mark.parametrize("command,expected", [
+    ("git push -f origin feat/so101-physical-ai", "feat/so101-physical-ai"),
+    ("git checkout -b fix/home-session-activity", "fix/home-session-activity"),
+    ("git push origin HEAD:auto/pin-clawmetry-0.12.906",
+     "auto/pin-clawmetry-0.12.906"),
+    ("git push origin refs/heads/feat/x", "feat/x"),
+    ("git push origin hotfix-login", "hotfix-login"),
+])
+def test_a_real_branch_is_still_recorded(command, expected):
+    out = attribution.extract_session_delivery(
+        _newest_first([_call(command)]), "s1")
+    assert [a["ref"] for a in out["artifacts"]
+            if a["kind"] == "branch"] == [expected]
+
+
+@pytest.mark.parametrize("candidate", [
+    "origin/main",                 # a git ref, listed as a file 18 times
+    "vivekchand/clawmetry-cloud",  # a repository, listed as a file 10 times
+    "/search",                     # a URL path
+    "/heading",                    # an ARIA role out of a selector
+    "s/last",                      # a sed expression
+])
+def test_an_extensionless_name_needs_to_be_a_rooted_path(candidate):
+    assert attribution._clean_path(candidate) == ""
+
+
+@pytest.mark.parametrize("candidate", [
+    "/Users/vivek/projects/clawmetry",
+    "/dev/null",
+    "../clawmetry-cloud",
+    "./scripts/build.sh",
+])
+def test_a_rooted_path_without_an_extension_is_still_a_path(candidate):
+    assert attribution._clean_path(candidate) == candidate

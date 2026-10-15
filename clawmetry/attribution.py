@@ -86,7 +86,7 @@ MAX_TEXTS_PER_EVENT = 12
 #: (which says 'openclaw' for almost everything) and started coming from the
 #: session id prefix, so every stored row is refiled under the runtime the
 #: switcher actually offers.
-RULES_VERSION = "4"
+RULES_VERSION = "5"
 # Per-session caps. A session that names 500 PRs is a digest cron, not a
 # delivery; truncating keeps one pathological row from dominating the table.
 MAX_PRS_PER_SESSION = 64
@@ -187,8 +187,12 @@ RESERVED_GITHUB_OWNERS = frozenset((
 _RE_BRANCH_NEW = re.compile(
     r"\bgit\s+(?:checkout|switch)\s+(?:-b|-c|-B)\s+([A-Za-z0-9._/\-]{1,120})"
 )
+# The remote is a remote NAME, not any non-space run: ``\S+`` let
+# ``git push -q 2>&1 | tail -3`` nominate ``2`` as a branch, and it reached
+# the tab.
 _RE_BRANCH_PUSH = re.compile(
-    r"\bgit\s+push\s+(?:--?[A-Za-z0-9-]+\s+)*\S+\s+(?:HEAD:)?([A-Za-z0-9._/\-]{1,120})"
+    r"\bgit\s+push\s+(?:--?[A-Za-z0-9-]+\s+)*[A-Za-z0-9_.\-]+\s+"
+    r"(?:HEAD:)?([A-Za-z0-9._/\-]{1,120})"
 )
 # ``git commit`` prints ``[branch-name a1b2c3d] subject``. That is the only
 # place a commit sha we CAUSED appears, so we read it from result text and
@@ -659,7 +663,10 @@ def _find_branch_refs(text: str) -> list[dict]:
     for pattern, source, conf in ((_RE_BRANCH_NEW, "branch_created", 1.0),
                                   (_RE_BRANCH_PUSH, "branch_pushed", 0.9)):
         for m in pattern.finditer(text):
-            name = m.group(1).strip("/.")
+            # _clean_branch sees the RAW capture: the trailing "/" is the
+            # signal that this was ``release/<slug>`` in a doc, and stripping
+            # it first turned the placeholder into the branch "release".
+            name = _clean_branch(m.group(1)).strip(".")
             if not name or name in ("HEAD", "origin", "main", "master"):
                 # main/master are shared trunks, not a unit of delivery.
                 continue
@@ -925,11 +932,48 @@ def _clean_path(name: str) -> str:
         return ""
     if base.lower() in _EXTENSIONLESS:
         return out
-    # A path is credible when it has a directory part or a real extension.
-    if "/" in out:
-        return out
     stem, dot, ext = base.rpartition(".")
     if dot and stem and ext and ext.isalnum() and len(ext) <= 12:
+        return out
+    # No extension. Only an explicitly rooted path is still credible, and
+    # only with more than one segment: ``origin/main`` and
+    # ``vivekchand/clawmetry-cloud`` are a git ref and a repository, not
+    # files, and ``/search`` / ``/heading`` are an ARIA role and a URL path.
+    # All four were listed as files the session wrote.
+    rooted = out.startswith(("/", "./", "../", "~/"))
+    if rooted and out.strip("/").count("/") >= 1:
+        return out
+    return ""
+
+
+def _clean_branch(name: str) -> str:
+    """A branch we are prepared to name, or ``""``.
+
+    Measured on the live tab, where the five most common "branches" were
+    ``refs/tags``, ``from``, ``feat``, ``2`` and ``release`` — a tag prefix,
+    two words of prose, a shell redirect and a documentation placeholder
+    (``git checkout -b release/<slug>`` captures ``release/``, because ``<``
+    cannot be in a branch name). Every branch on that node that was real
+    carried a ``/``.
+
+    So: a tag is not a branch, a trailing ``/`` is a placeholder, and a name
+    with no separator at all is a word that happened to follow ``git push``.
+    A branch like ``staging`` is dropped by that last rule; a missing row is
+    recoverable and a fabricated one teaches the reader that the table
+    guesses.
+    """
+    out = str(name or "").strip()
+    if out.startswith("refs/tags/") or out == "refs/tags":
+        return ""        # a tag is not a unit of delivery
+    if out.startswith("refs/heads/"):
+        out = out[len("refs/heads/"):]
+    if not out or out.endswith("/") or out.startswith("-"):
+        return ""
+    if "/" in out:
+        return out
+    # No path separator: accept only something that still reads as a branch
+    # name rather than as the next word in a sentence.
+    if len(out) >= 4 and "-" in out and out[0].isalpha():
         return out
     return ""
 
