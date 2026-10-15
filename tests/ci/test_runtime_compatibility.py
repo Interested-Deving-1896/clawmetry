@@ -1,6 +1,7 @@
 import importlib.util
 from pathlib import Path
 import tempfile
+import subprocess
 import unittest
 from unittest import mock
 
@@ -82,6 +83,14 @@ class ExecutionTests(unittest.TestCase):
                     self.assertIn('stdout', call.kwargs)
                 self.assertIn('https://github.com/vivekchand/clawmetry-pro.git', calls[1].args[0])
                 self.assertNotIn('private-value', (root / 'logs/checkout.log').read_text())
+                git_env = calls[-1].kwargs['env']
+            # Git matches URL path components, so omitting .git from the
+            # credential scope silently prevents authentication on real fetches.
+            match = subprocess.run(['git', 'config', '--get-urlmatch', 'http.extraheader',
+                                    'https://github.com/vivekchand/clawmetry-pro.git'],
+                                   env=git_env, capture_output=True, text=True)
+            self.assertEqual(match.returncode, 0)
+            self.assertEqual(match.stdout.strip(), git_env['GIT_CONFIG_VALUE_0'])
 
     def test_checkout_failure_withholds_raw_git_output(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -123,10 +132,15 @@ class ExecutionTests(unittest.TestCase):
             root = Path(temp)
             (root / 'tests').mkdir()
             (root / 'tests/test_codex_adapter.py').write_text('')
-            with mock.patch.object(ci.subprocess, 'run') as run, mock.patch.dict(ci.os.environ, {'GITHUB_TOKEN': 'private-value'}):
+            with mock.patch.object(ci.subprocess, 'run') as run, mock.patch.dict(
+                    ci.os.environ, {'GITHUB_TOKEN': 'private-value',
+                                    'GITHUB_STEP_SUMMARY': '/tmp/public-summary',
+                                    'GITHUB_OUTPUT': '/tmp/public-outputs'}):
                 run.return_value.returncode = 1
                 result = ci.run_runtime(root, root, 'codex', root / 'logs')
                 self.assertNotIn('GITHUB_TOKEN', run.call_args.kwargs['env'])
+                self.assertNotIn('GITHUB_STEP_SUMMARY', run.call_args.kwargs['env'])
+                self.assertNotIn('GITHUB_OUTPUT', run.call_args.kwargs['env'])
                 self.assertNotIn('private-value', str(result))
                 self.assertEqual(set(result), {'runtime', 'mode', 'status'})
                 self.assertEqual(result['status'], 'failed')

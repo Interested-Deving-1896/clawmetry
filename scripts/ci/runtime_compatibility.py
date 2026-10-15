@@ -19,6 +19,15 @@ from xml.parsers import expat
 OPERATING_SYSTEMS = ('ubuntu-latest', 'windows-latest', 'macos-latest')
 
 
+def private_environment() -> dict:
+    """Withhold credentials and GitHub file-command channels from private code."""
+    file_commands = {'GITHUB_ENV', 'GITHUB_PATH', 'GITHUB_OUTPUT',
+                     'GITHUB_STEP_SUMMARY', 'GITHUB_STATE'}
+    return {k: v for k, v in os.environ.items()
+            if k not in file_commands
+            and not any(x in k.upper() for x in ('TOKEN', 'SECRET', 'API_KEY', 'PASSWORD'))}
+
+
 def checkout_private(pro: Path, sha: str, private_logs: Path) -> dict:
     """Fetch a fixed repository without exposing private commit titles or auth."""
     if not re.fullmatch('[0-9a-f]{40}', sha):
@@ -28,10 +37,10 @@ def checkout_private(pro: Path, sha: str, private_logs: Path) -> dict:
         raise ValueError('Private candidate read credentials are required')
     pro.mkdir(parents=True, exist_ok=False)
     private_logs.mkdir(parents=True, exist_ok=True)
-    env = os.environ.copy()
+    env = private_environment()
     # Transient environment configuration is not written to .git/config.
     env.update(GIT_CONFIG_COUNT='1',
-               GIT_CONFIG_KEY_0='http.https://github.com/vivekchand/clawmetry-pro.extraheader',
+               GIT_CONFIG_KEY_0='http.https://github.com/vivekchand/clawmetry-pro.git.extraheader',
                GIT_CONFIG_VALUE_0='AUTHORIZATION: basic ' + base64.b64encode(
                    ('x-access-token:' + token).encode()).decode(),
                GIT_TERMINAL_PROMPT='0')
@@ -167,8 +176,7 @@ def run_runtime(oss: Path, pro: Path, runtime: str, private_logs: Path) -> dict:
     junit = private_logs / f'{runtime}.xml'
     # Avoid putting credentials into subprocess environments even if a caller
     # accidentally supplied them to orchestration. These suites use local stores.
-    env = {k: v for k, v in os.environ.items()
-           if not any(x in k.upper() for x in ('TOKEN', 'SECRET', 'API_KEY', 'PASSWORD'))}
+    env = private_environment()
     env['CM_CONFORMANCE_RUNTIME'] = runtime
     with log.open('wb') as output:
         try:
@@ -201,12 +209,14 @@ def prepare(oss: Path, pro: Path, private_logs: Path) -> dict:
             [sys.executable, '-m', 'pip', 'wheel', '--no-deps', str(pro), '-w', str(wheel_dir)],
         ]
         for command in commands:
-            subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=600)
+            subprocess.run(command, env=private_environment(), stdout=log,
+                           stderr=subprocess.STDOUT, check=True, timeout=600)
         wheels = list(wheel_dir.glob('clawmetry_pro-*.whl'))
         if len(wheels) != 1:
             raise ValueError('Candidate build did not produce exactly one Pro wheel')
         subprocess.run([sys.executable, '-m', 'pip', 'install', '--no-deps', str(wheels[0])],
-                       stdout=log, stderr=subprocess.STDOUT, check=True, timeout=120)
+                       env=private_environment(), stdout=log, stderr=subprocess.STDOUT,
+                       check=True, timeout=120)
     # Pytest must exercise the installed wheel, not an implicit source import
     # from the private checkout that happens to sit beside its tests.
     (pro / 'clawmetry_pro').rename(pro / '_candidate_source_not_importable')
@@ -218,7 +228,8 @@ def prepare(oss: Path, pro: Path, private_logs: Path) -> dict:
             'assert p.__version__ == m.version("clawmetry-pro"); '
             'assert any(e.name == "clawmetry_pro" and callable(e.load()) '
             'for e in m.entry_points(group="clawmetry.extensions"))'
-        )], cwd=pro, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=60)
+        )], cwd=pro, env=private_environment(), stdout=log,
+                       stderr=subprocess.STDOUT, check=True, timeout=60)
     return {'wheel_sha256': hashlib.sha256(wheels[0].read_bytes()).hexdigest()}
 
 
