@@ -357,3 +357,16 @@ Validation: `CLAWMETRY_AUDIT_DB=/tmp/clawmetry-node-packaging-review-audit.db py
 - Total advisory: 0.
 - **Verdict:** APPROVED for the reviewed packaging correction.
 - No implementation edits, commit or push were made by this reviewer. Existing release and hosted verification gates remain required.
+
+## Round 12: Independent read deadline, freshness and navigation expectation review
+
+Reviewed the pending `node-activity.js`, `test_node_activity_js.js` and `test_trail_tab_template.py` diff. Each GET now owns a 15-second deadline on its existing controller. The deadline aborts the request, recomputes retained evidence age immediately, and displays a scoped unavailable message. Ordinary read errors also age the retained observation. Navigation clears the old deadline and changes the generation; obsolete requests cannot paint, clear a newer request or restart stopped polling. The still-owned request clears its deadline in `finally` and schedules the existing recovery poll. No new periodic poller, host read or mutation behavior is added.
+
+The tests model the clock and verify stale evidence during a hung read, its deadline abort, pending-state cleanup, a later successful recovery, ordinary error aging and node-switch deadline cleanup. The Trail test change only adds the already-rendered Node activity tab to the Monitoring order and reachability expectations; it preserves the existing navigation assertions.
+
+Validation with an isolated audit override: `CLAWMETRY_AUDIT_DB=/tmp/clawmetry-node-round12-audit.db python3 -m pytest --noconftest -q tests/test_node_activity_frontend.py tests/test_node_activity_browser.py tests/test_trail_tab_template.py` passed (12 tests). `node --check clawmetry/static/js/node-activity.js`, `git diff --check` and `python3 scripts/check_english.py` passed. No production audit database was used, and no implementation edits, commit or push were made by this reviewer.
+
+- Total blocking: 0.
+- Total advisory: 0.
+- **Verdict:** APPROVED for the read lifecycle correction and navigation test expectation update.
+- Release, deployment and actual hosted verification remain the parent's delivery gates.

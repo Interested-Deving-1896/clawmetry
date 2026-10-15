@@ -3,7 +3,7 @@
   'use strict';
   var state = {data:null, scope:null, generation:0, pending:null, controller:null, timer:null,
     replay:null, selected:null, view:'observe', lastLoaded:0, bound:false, mutation:false,
-    mutationRequest:null, unconfirmed:null};
+    mutationRequest:null, unconfirmed:null, readRequest:null};
   var UNCONFIRMED='Save not confirmed. The change may still apply. Refresh this node before you retry.';
   var PREFS = [
     ['enabled','Node monitoring','Collect node observations. Turn this off to stop all collection.'],
@@ -170,6 +170,7 @@
   function schedule() {clearTimeout(state.timer);state.timer=null;if(active())state.timer=setTimeout(function(){load(true);},window.CLOUD_MODE?15000:10000);}
   function invalidate() {
     state.generation++;if(state.controller)state.controller.abort();state.controller=null;state.pending=null;
+    if(state.readRequest){clearTimeout(state.readRequest.timeout);state.readRequest=null;}
     var write=state.mutationRequest;
     if(write){
       state.unconfirmed={scope:write.scope,message:UNCONFIRMED};
@@ -189,17 +190,31 @@
     if(state.pending)return state.pending;
     if(!force&&Date.now()-state.lastLoaded<5000){schedule();return;}
     var generation=state.generation, controller=new AbortController();state.controller=controller;
+    var read={controller:controller,timeout:null,timedOut:false};state.readRequest=read;
+    function readError(message){
+      if(!valid(generation,key))return;
+      if(state.data)summary(state.data);
+      status(message,'warning');
+    }
+    read.timeout=setTimeout(function(){
+      if(state.readRequest!==read)return;
+      read.timedOut=true;controller.abort();
+      readError('The node did not respond in time. Current activity cannot be verified. Refresh to try again.');
+    },15000);
     var pending=(async function(){
       try {
         var response=await fetch('/api/node-activity?limit=100',{signal:controller.signal}),data=await response.json();
         if(!valid(generation,key))return;
+        if(controller.signal.aborted)return;
         if(!response.ok)throw new Error(data.detail||data.message||data.error||data.reason||'The recorded observations could not be loaded.');
         if(!data||typeof data!=='object')throw new Error('The node returned an unreadable observation.');
         state.data=data;state.lastLoaded=Date.now();render(data);
       } catch(error) {
-        if(error.name!=='AbortError'&&valid(generation,key))status(error.message||'The node did not return observations. Try Refresh.','warning');
+        if(read.timedOut)readError('The node did not respond in time. Current activity cannot be verified. Refresh to try again.');
+        else if(error.name!=='AbortError')readError(error.message||'The node did not return observations. Try Refresh.');
       } finally {
-        if(state.generation===generation&&state.scope===key){state.pending=null;state.controller=null;schedule();}
+        clearTimeout(read.timeout);
+        if(state.readRequest===read){state.readRequest=null;state.pending=null;state.controller=null;schedule();}
       }
     })();state.pending=pending;return pending;
   }

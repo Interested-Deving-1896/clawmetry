@@ -5,10 +5,11 @@ const vm = require('node:vm');
 const source = fs.readFileSync(require('node:path').join(__dirname, '../clawmetry/static/js/node-activity.js'), 'utf8');
 function harness() {
   const listeners = {}, timers = new Map(), delays = new Map(), requests = [], nodes = new Map(); let seq = 0;
+  let now=Date.now();class ClockDate extends Date {static now(){return now;}}
   const context = {
     document: {hidden: false, activeElement: null, getElementById: id => nodes.get(id) || null,
       querySelectorAll: () => [], addEventListener: (name, fn) => {listeners[name] = fn;}},
-    AbortController, Date, JSON, Number, String, Array, Object, Promise, console,
+    AbortController, Date:ClockDate, JSON, Number, String, Array, Object, Promise, console,
     localStorage: {getItem: () => null},
     setTimeout: (fn,delay) => {timers.set(++seq, fn);delays.set(seq,delay); return seq;}, clearTimeout: id => timers.delete(id),
     fetch: (url, opts) => new Promise((resolve,reject) => requests.push({url, opts, resolve,reject})),
@@ -16,10 +17,10 @@ function harness() {
     addEventListener: (name, fn) => {listeners[name] = fn;}
   };
   context.window = context; vm.createContext(context); vm.runInContext(source, context);
-  const payload = (name, events = []) => ({available: true, node: {hostname: name}, collected_at: Date.now(),
+  const payload = (name, events = []) => ({available: true, node: {hostname: name}, collected_at: ClockDate.now(),
     summary: {cpu_percent: null, process_count: null}, samples: [], coverage: {}, preferences: {}, events});
   const answer = (request, body, ok = true) => request.resolve({ok, json: async () => body});
-  return {context, requests, timers, delays, listeners, nodes, payload, answer};
+  return {context, requests, timers, delays, listeners, nodes, payload, answer,advance:ms=>{now+=ms;}};
 }
 async function run() {
   let h = harness(), c = h.context;
@@ -52,9 +53,12 @@ async function run() {
 
   h = harness(); c = h.context;
   const old = c.loadNodeActivity();
+  const oldReadDeadline=c.cmNodeActivity.getState().readRequest.timeout;
   c.CLOUD_MODE = true; c.CLOUD_NODE_ID = 'new-node';
   const fresh = c.loadNodeActivity();
   assert.equal(h.requests.length, 2); assert.equal(h.requests[0].opts.signal.aborted, true);
+  assert.equal(h.timers.has(oldReadDeadline),false,'switching nodes removes the obsolete read deadline');
+  assert.notEqual(c.cmNodeActivity.getState().readRequest.timeout,oldReadDeadline);
   h.answer(h.requests[1], h.payload('new')); await fresh;
   h.answer(h.requests[0], h.payload('old')); await old;
   assert.equal(c.cmNodeActivity.getState().data.node.hostname, 'new', 'old node responses cannot paint');
@@ -144,6 +148,35 @@ async function run() {
   assert.equal(h.requests[1].url,'/api/node-activity?limit=100','an old node form triggers a fresh read, never a write to the new node');
   assert.equal(c.cmNodeActivity.getState().mutation,false);
   h.answer(h.requests[1],h.payload('new-selection'));await c.loadNodeActivity();
+
+  h=harness();c=h.context;
+  const freshness={textContent:'',parentNode:{dataset:{}}},readStatus={textContent:'',dataset:{}};
+  h.nodes.set('na-freshness',freshness);h.nodes.set('na-status',readStatus);
+  const firstRead=c.loadNodeActivity();h.answer(h.requests[0],h.payload('read-node'));await firstRead;
+  assert.equal(freshness.parentNode.dataset.fresh,'true');
+  h.advance(130000);h.timers.get(c.cmNodeActivity.getState().timer)();
+  const stalled=c.cmNodeActivity.getState().pending,readDeadline=c.cmNodeActivity.getState().readRequest.timeout;
+  assert.equal(h.delays.get(readDeadline),15000,'read deadlines are independent from the 45-second write deadline');
+  h.advance(15000);h.timers.get(readDeadline)();
+  assert.equal(h.requests[1].opts.signal.aborted,true,'a hanging GET is aborted at the read deadline');
+  assert.equal(freshness.parentNode.dataset.fresh,'false','timeout recomputes freshness from the last real observation');
+  assert.match(freshness.textContent,/stale/);
+  assert.match(readStatus.textContent,/did not respond in time/);
+  h.requests[1].reject(Object.assign(new Error('aborted'),{name:'AbortError'}));await stalled;
+  assert.equal(c.cmNodeActivity.getState().pending,null);
+  assert.equal(h.timers.has(readDeadline),false);
+  assert.notEqual(c.cmNodeActivity.getState().timer,null,'a timed-out read schedules recovery');
+  h.timers.get(c.cmNodeActivity.getState().timer)();
+  const recovered=c.cmNodeActivity.getState().pending;
+  h.answer(h.requests[2],h.payload('recovered-node'));await recovered;
+  assert.equal(c.cmNodeActivity.getState().data.node.hostname,'recovered-node');
+  assert.equal(freshness.parentNode.dataset.fresh,'true','a later valid read restores actual freshness');
+  h.advance(130000);h.timers.get(c.cmNodeActivity.getState().timer)();
+  const failed=c.cmNodeActivity.getState().pending;
+  h.requests[3].reject(new Error('The node connection is unavailable.'));await failed;
+  assert.match(freshness.textContent,/stale/,'ordinary connection errors also age retained evidence');
+  assert.equal(freshness.parentNode.dataset.fresh,'false');
+  assert.match(readStatus.textContent,/connection is unavailable/);
   console.log('Node activity JS contracts and lifecycle passed.');
 }
 run().catch(error => {console.error(error); process.exit(1);});
