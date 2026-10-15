@@ -1,0 +1,148 @@
+#!/usr/bin/env python3
+"""List the HTTP routes this repo registers, and which ones a release ADDED.
+
+**Why this exists.** clawmetry-cloud refuses to boot when an installed OSS
+route has no ``cloud_route_policy`` entry — deliberately, because an
+unclassified route might serve a cloud tenant data it should not. That
+fail-closed design makes an OSS release that adds a route deadlock the two
+cloud pull requests against each other:
+
+* the auto-pin PR (``chore: auto-pin clawmetry==X``) goes red on every check
+  that constructs the app, all on the same ``enforcer.py: sys.exit(1)``;
+* the PR carrying the policy entry is red against the OLD pin, because its
+  entry points at a route the installed OSS does not have yet.
+
+Each needs the other, so neither can go green alone. The fix is one line of
+process — fold the Dockerfile bump into the policy PR — but it reads as a
+catastrophe: ~18 failing checks on a pin that changed a version string.
+
+``auto-deploy-cloud.yml`` runs this with ``--added-since`` so the pin PR says
+so in its own body instead of leaving the next reader to rediscover it.
+
+Routes are read with :mod:`ast`, not a regex: a decorator argument is a
+literal in the tree and guessing at it from text mis-reads f-strings and
+multi-line calls.
+"""
+
+from __future__ import annotations
+
+import argparse
+import ast
+import os
+import subprocess
+import sys
+
+#: Where HTTP routes live. ``routes/`` is one Blueprint per feature;
+#: ``dashboard.py`` still carries a few inline ``@app.route`` registrations.
+ROUTE_SOURCES = ("routes", "dashboard.py", "dashboard_claudecode.py")
+
+#: Decorator attribute names that register a route. ``add_url_rule`` is a
+#: plain call rather than a decorator and is handled alongside them.
+ROUTE_DECORATORS = ("route", "get", "post", "put", "patch", "delete")
+
+
+def _rules_from_source(source: str, origin: str) -> set[str]:
+    """Every route rule registered in one module's source."""
+    out: set[str] = set()
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        print(f"warning: cannot parse {origin}", file=sys.stderr)
+        return out
+    for node in ast.walk(tree):
+        calls = []
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            calls = [d for d in node.decorator_list if isinstance(d, ast.Call)]
+        elif isinstance(node, ast.Call):
+            calls = [node]
+        for call in calls:
+            func = call.func
+            if not isinstance(func, ast.Attribute):
+                continue
+            if func.attr not in ROUTE_DECORATORS + ("add_url_rule",):
+                continue
+            if not call.args:
+                continue
+            first = call.args[0]
+            if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                if first.value.startswith("/"):
+                    out.add(first.value)
+    return out
+
+
+def _read(path: str, ref: str | None) -> str | None:
+    """A file's contents at *ref*, or from the working tree when ref is None."""
+    if ref is None:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                return fh.read()
+        except OSError:
+            return None
+    try:
+        return subprocess.run(
+            ["git", "show", f"{ref}:{path}"],
+            capture_output=True, text=True, check=True).stdout
+    except subprocess.CalledProcessError:
+        return None  # the file did not exist at that ref
+
+
+def _paths(ref: str | None) -> list[str]:
+    """The route-bearing files at *ref* (or in the working tree)."""
+    if ref is None:
+        found = []
+        for src in ROUTE_SOURCES:
+            if os.path.isdir(src):
+                found += [os.path.join(src, f) for f in sorted(os.listdir(src))
+                          if f.endswith(".py")]
+            elif os.path.isfile(src):
+                found.append(src)
+        return found
+    done = subprocess.run(["git", "ls-tree", "-r", "--name-only", ref],
+                          capture_output=True, text=True)
+    if done.returncode != 0:
+        # A traceback in a release workflow reads as "the tooling broke", which
+        # is the one message this script must never send. Return nothing and
+        # let the caller report the bad ref.
+        return []
+    listing = done.stdout.splitlines()
+    return [p for p in listing
+            if p.endswith(".py")
+            and (p.startswith("routes/") or p in ROUTE_SOURCES)]
+
+
+def routes_at(ref: str | None = None) -> set[str]:
+    """Every route rule registered at *ref* (default: the working tree)."""
+    out: set[str] = set()
+    for path in _paths(ref):
+        source = _read(path, ref)
+        if source:
+            out |= _rules_from_source(source, f"{ref or 'worktree'}:{path}")
+    return out
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--added-since", metavar="REF",
+                    help="print only the routes that REF does not have")
+    ap.add_argument("--ref", help="read routes at this ref instead of the "
+                                  "working tree")
+    args = ap.parse_args()
+
+    current = routes_at(args.ref)
+    if args.added_since:
+        before = routes_at(args.added_since)
+        if not before:
+            # An empty 'before' would report every route as new, which in the
+            # pin PR reads as "this release added 300 routes". A bad ref has
+            # to be loud, not plausible.
+            print(f"error: no routes found at {args.added_since!r} — "
+                  "is the ref fetched?", file=sys.stderr)
+            return 2
+        current -= before
+    for rule in sorted(current):
+        print(rule)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
