@@ -14,6 +14,7 @@ from pathlib import Path, PurePosixPath
 import re
 import subprocess
 import sys
+import time
 from xml.parsers import expat
 
 OPERATING_SYSTEMS = ('ubuntu-latest', 'windows-latest', 'macos-latest')
@@ -165,37 +166,53 @@ def executed_cases(path: Path) -> int:
     return count
 
 
-def run_runtime(oss: Path, pro: Path, runtime: str, private_logs: Path) -> dict:
-    """Run one suite in a fresh process, retaining raw output only on the runner."""
-    tests = runtime_tests(pro, runtime) + runtime_tests(oss, runtime)
+def run_runtime(oss: Path, pro: Path, runtime: str, private_logs: Path,
+                require_pro_tests: bool = False) -> dict:
+    """Keep repository conftests isolated and retain raw output privately."""
+    groups = [(label, root, runtime_tests(root, runtime))
+              for label, root in [('pro', pro), ('oss', oss)]]
+    if require_pro_tests and not groups[0][2]:
+        return {'runtime': runtime, 'mode': 'fixture/unit', 'status': 'missing-coverage'}
     # Both established OpenClaw OSS suites are mandatory, even if another
     # matching file exists. Discovery and impact selection share one pattern set.
     if runtime == 'openclaw' and not all(
             (oss / 'tests' / name).is_file() for name in OPENCLAW_EXTRA_TESTS):
         return {'runtime': runtime, 'mode': 'fixture/unit', 'status': 'missing-coverage'}
-    if not tests:
+    if not any(tests for _, _, tests in groups):
         return {'runtime': runtime, 'mode': 'fixture/unit', 'status': 'missing-coverage'}
     private_logs.mkdir(parents=True, exist_ok=True)
-    log = private_logs / f'{runtime}.log'
-    junit = private_logs / f'{runtime}.xml'
     # Avoid putting credentials into subprocess environments even if a caller
     # accidentally supplied them to orchestration. These suites use local stores.
     env = private_environment()
     env['CM_CONFORMANCE_RUNTIME'] = runtime
-    with log.open('wb') as output:
-        try:
-            process = subprocess.run(
-                [sys.executable, '-m', 'pytest', *tests, '--tb=no', '-q', '--import-mode=importlib',
-                 f'--junitxml={junit}'],
-                cwd=pro, env=env, stdout=output, stderr=subprocess.STDOUT, timeout=300)
-            status = 'failed'
-            if process.returncode == 0 and junit.exists():
-                try:
-                    status = 'passed' if executed_cases(junit) else 'unverified'
-                except (ValueError, expat.ExpatError):
-                    status = 'failed'
-        except subprocess.TimeoutExpired:
-            status = 'timed-out'
+    statuses = []
+    deadline = time.monotonic() + 300
+    for label, root, tests in groups:
+        if not tests:
+            continue
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            statuses.append('timed-out')
+            continue
+        log = private_logs / f'{runtime}-{label}.log'
+        junit = private_logs / f'{runtime}-{label}.xml'
+        junit.unlink(missing_ok=True)
+        with log.open('wb') as output:
+            try:
+                process = subprocess.run(
+                    [sys.executable, '-m', 'pytest', *tests, '--tb=no', '-q', '--import-mode=importlib',
+                     f'--junitxml={junit}'],
+                    cwd=root, env=env, stdout=output, stderr=subprocess.STDOUT, timeout=remaining)
+                status = 'failed'
+                if process.returncode == 0 and junit.exists():
+                    try:
+                        status = 'passed' if executed_cases(junit) else 'unverified'
+                    except (ValueError, expat.ExpatError):
+                        status = 'failed'
+            except subprocess.TimeoutExpired:
+                status = 'timed-out'
+        statuses.append(status)
+    status = next((s for s in ('timed-out', 'failed', 'unverified') if s in statuses), 'passed')
     # Do not publish node ids, assertion strings, traceback locals or fixture text.
     return {'runtime': runtime, 'mode': 'fixture/unit', 'status': status}
 
@@ -218,7 +235,7 @@ def prepare(oss: Path, pro: Path, private_logs: Path) -> dict:
         wheels = list(wheel_dir.glob('clawmetry_pro-*.whl'))
         if len(wheels) != 1:
             raise ValueError('Candidate build did not produce exactly one Pro wheel')
-        subprocess.run([sys.executable, '-m', 'pip', 'install', '--no-deps', str(wheels[0])],
+        subprocess.run([sys.executable, '-m', 'pip', 'install', '--force-reinstall', '--no-deps', str(wheels[0])],
                        env=private_environment(), stdout=log, stderr=subprocess.STDOUT,
                        check=True, timeout=120)
     # Pytest must exercise the installed wheel, not an implicit source import
@@ -272,7 +289,8 @@ def main():
     selected = json.loads(args.selection.read_text())['runtimes']
     if not selected or any(x not in runtimes for x in selected):
         raise ValueError('Invalid runtime selection')
-    results = [run_runtime(args.oss, args.pro, name, args.private_logs) for name in selected]
+    results = [run_runtime(args.oss, args.pro, name, args.private_logs,
+                           require_pro_tests=runtimes[name]['tier'] == 'paid') for name in selected]
     args.output.write_text(json.dumps(results, sort_keys=True), encoding='utf-8')
     for result in results:
         print(f"{result['runtime']}: {result['status']} ({result['mode']})")

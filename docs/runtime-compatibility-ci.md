@@ -23,8 +23,15 @@ preparation checks installed-wheel metadata, the extension entry point and
 import location before testing. Private JUnit input is size-bounded, DTDs are
 rejected across XML encodings, and malformed reports fail verification.
 
+Pro and OSS suites execute in separate pytest processes with their own
+working directories and conftests, within one five-minute runtime deadline.
+Paid catalogue entries require a Pro-side suite. Every group must execute at
+least one case, and stale JUnit is removed before execution. The exact built
+Pro wheel is force-reinstalled even when its package version is unchanged.
+
 Successful results are keyed by both repositories' indexed file contents, the
-selected runtimes, operating system and interpreter series. A partial success
+selected runtimes, actual hosted OS image/platform/architecture and exact Python
+patch version. Image and interpreter updates invalidate reuse. A partial success
 cannot satisfy a full-catalogue run. Only a success marker is cached. Manual
 dispatch accepts an exact `pro_sha` (or resolves `main` once) and `force: true`
 bypasses result reuse for a fresh dependency/platform check.

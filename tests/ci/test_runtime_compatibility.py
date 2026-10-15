@@ -70,6 +70,39 @@ class SelectionTests(unittest.TestCase):
 
 
 class ExecutionTests(unittest.TestCase):
+    def test_paid_runtime_cannot_pass_using_only_a_bundled_oss_suite(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / 'oss/tests').mkdir(parents=True)
+            (root / 'oss/tests/test_codex_adapter.py').touch()
+            result = ci.run_runtime(root / 'oss', root / 'pro', 'codex', root / 'logs', require_pro_tests=True)
+            self.assertEqual(result['status'], 'missing-coverage')
+
+    def test_successful_exit_cannot_reuse_a_stale_junit_report(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / 'tests').mkdir()
+            (root / 'tests/test_codex_adapter.py').touch()
+            (root / 'logs').mkdir()
+            (root / 'logs/codex-pro.xml').write_text('<testsuite><testcase/></testsuite>')
+            with mock.patch.object(ci.subprocess, 'run', return_value=mock.Mock(returncode=0)):
+                self.assertEqual(ci.run_runtime(root, root, 'codex', root / 'logs')['status'], 'failed')
+    def test_repository_conftests_run_in_separate_processes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for label in ['oss', 'pro']:
+                (root / label / 'tests').mkdir(parents=True)
+                (root / label / 'tests/test_goose_adapter.py').touch()
+            def pytest(command, **kwargs):
+                paths = [Path(p) for p in command if p.endswith('.py')]
+                self.assertEqual({p.parents[1] for p in paths}, {kwargs['cwd']})
+                report = next(p.split('=', 1)[1] for p in command if p.startswith('--junitxml='))
+                Path(report).write_text('<testsuite><testcase/></testsuite>')
+                return mock.Mock(returncode=0)
+            with mock.patch.object(ci.subprocess, 'run', side_effect=pytest) as run:
+                result = ci.run_runtime(root / 'oss', root / 'pro', 'goose', root / 'logs')
+            self.assertEqual(result['status'], 'passed')
+            self.assertEqual(run.call_count, 2)
     def test_junit_entity_expansion_is_rejected_for_utf8_and_utf16(self):
         xml = '<!DOCTYPE x [<!ENTITY x "private">]><testsuite><testcase>&x;</testcase></testsuite>'
         with tempfile.TemporaryDirectory() as temp:
@@ -129,9 +162,11 @@ class ExecutionTests(unittest.TestCase):
             (root / 'tests/test_codex_adapter.py').write_text('')
             logs = root / 'logs'
             logs.mkdir()
-            (logs / 'codex.xml').write_text('<testsuites><testsuite><testcase><skipped/></testcase></testsuite></testsuites>')
-            with mock.patch.object(ci.subprocess, 'run') as run:
-                run.return_value.returncode = 0
+            def skipped(command, **kwargs):
+                report = next(p.split('=', 1)[1] for p in command if p.startswith('--junitxml='))
+                Path(report).write_text('<testsuites><testsuite><testcase><skipped/></testcase></testsuite></testsuites>')
+                return mock.Mock(returncode=0)
+            with mock.patch.object(ci.subprocess, 'run', side_effect=skipped):
                 self.assertEqual(ci.run_runtime(root, root, 'codex', logs)['status'], 'unverified')
 
     def test_unknown_file_changes_invalidate_success_fingerprint(self):

@@ -152,11 +152,24 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11'
+      - name: Identify the actual OS image and Python patch version
+        id: environment
+        run: |
+          python - <<'PY'
+          import hashlib, os, platform
+          identity = '\n'.join([os.environ.get('ImageOS', ''), os.environ.get('ImageVersion', ''),
+                                platform.platform(), platform.python_version(), platform.machine()])
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write('identity=' + hashlib.sha256(identity.encode()).hexdigest() + '\n')
+          PY
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         id: success
         with:
           path: ${{ runner.temp }}/runtime-success
-          key: runtime-compat-v1-${{ matrix.os }}-py311-${{ needs.plan.outputs.fingerprint }}-${{ github.event_name == 'workflow_dispatch' && inputs.force && github.run_id || 'reuse' }}
+          key: runtime-compat-v2-${{ matrix.os }}-${{ steps.environment.outputs.identity }}-${{ needs.plan.outputs.fingerprint }}-${{ github.event_name == 'workflow_dispatch' && inputs.force && github.run_id || 'reuse' }}
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         if: steps.success.outputs.cache-hit != 'true'
         with:
@@ -174,10 +187,6 @@ jobs:
         if: steps.success.outputs.cache-hit != 'true'
         with:
           name: runtime-selection-${{ github.run_id }}-${{ github.run_attempt }}
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-        if: steps.success.outputs.cache-hit != 'true'
-        with:
-          python-version: '3.11'
       - name: Install exact candidate wheel with private build logs
         if: steps.success.outputs.cache-hit != 'true'
         run: |
