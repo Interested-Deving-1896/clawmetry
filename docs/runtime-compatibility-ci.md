@@ -15,6 +15,14 @@ unknown paths select the entire catalogue. Only README.md, CHANGELOG.md and
 runtimes. Missing suites and entirely skipped suites fail rather than claim
 coverage. Each runtime has a five-minute execution limit.
 
+Suite discovery recognizes `test_<runtime>_adapter*.py`,
+`test_adapter_<runtime>.py` and `test_<runtime>_runtime_adapter.py` in both
+test roots. OpenClaw additionally runs OSS `test_openclaw_list_events.py` and
+`test_openclaw_replay_events.py`, matching its existing suite family. Candidate
+preparation checks installed-wheel metadata, the extension entry point and
+import location before testing. Private JUnit input is size-bounded, DTDs are
+rejected across XML encodings, and malformed reports fail verification.
+
 Successful results are keyed by both repositories' indexed file contents, the
 selected runtimes, operating system and interpreter series. A partial success
 cannot satisfy a full-catalogue run. Only a success marker is cached. Manual
