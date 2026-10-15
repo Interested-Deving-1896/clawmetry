@@ -1279,6 +1279,61 @@ def test_a_placeholder_command_is_a_specimen_not_a_delivery():
     assert out["unattributed_usd"] == 4.0
 
 
+def test_a_git_config_key_is_not_a_repository_name():
+    """``actions/checkout`` writes a config key on every CI run.
+
+    A build log in the stream carries
+    ``GIT_CONFIG_KEY_0='http.https://github.com/OWNER/NAME.extraheader'``, and
+    the live tab listed ``vivekchand/clawmetry-pro.extraheader`` and
+    ``vivekchand/clawmetry-pro.git.extraheader`` as two repositories. The
+    repository inside the key is real, so the variable is removed and the
+    sighting is kept rather than dropped.
+    """
+    for key in ("+ GIT_CONFIG_KEY_0='http.https://github.com/"
+                "nordwind/clawmetry-pro.extraheader",
+                "+ GIT_CONFIG_KEY_0='http.https://github.com/"
+                "nordwind/clawmetry-pro.git.extraheader"):
+        out = attribution.extract_session_delivery(_newest_first([
+            {"event_type": "tool_result", "ts": "2026-10-15T10:00:00Z",
+             "data": {"content": key}}]), "s1")
+        assert [a["ref"] for a in out["artifacts"] if a["kind"] == "repo"] \
+            == ["nordwind/clawmetry-pro"], key
+
+
+def test_only_gits_own_word_is_stripped_from_a_name():
+    """A vocabulary of one, deliberately.
+
+    git documents many variables for ``http.<url>.<variable>``, but
+    ``version``, ``proxy`` and ``sslverify`` are words a real repository name
+    could end with. Rewriting ``acmecorp/app.version`` to ``acmecorp/app``
+    would INVENT a repository, which is the failure this tab has been fixed
+    four times to avoid.
+    """
+    assert attribution._clean_repo("acmecorp/thing.extraheader") \
+        == "acmecorp/thing"
+    for kept in ("acmecorp/app.version", "acmecorp/mitm.proxy",
+                 "acmecorp/app.sslverify", "acmecorp/tool.useragent"):
+        assert attribution._clean_repo(kept) == kept, kept
+
+
+def test_a_github_product_page_is_not_a_repository():
+    """``github.com/resources/insights/<slug>`` is an article GitHub
+    publishes, and it reached the live tab as ``resources/insights``."""
+    for url in ("https://github.com/resources/insights/2026-pricing-changes",
+                "https://github.com/solutions/industries/healthcare",
+                "https://github.com/education/students"):
+        out = attribution.extract_session_delivery(_newest_first([
+            {"event_type": "tool_result", "ts": "2026-10-15T10:00:00Z",
+             "data": {"content": url}}]), "s1")
+        assert [a for a in out["artifacts"] if a["kind"] == "repo"] == [], url
+    # An owner that merely looks like a product word is still an owner.
+    out = attribution.extract_session_delivery(_newest_first([
+        {"event_type": "tool_result", "ts": "2026-10-15T10:00:00Z",
+         "data": {"content": "https://github.com/nordwind/resources"}}]), "s1")
+    assert [a["ref"] for a in out["artifacts"] if a["kind"] == "repo"] \
+        == ["nordwind/resources"]
+
+
 def test_a_documentation_example_list_is_not_a_repository():
     """``openai/openai`` reached the live tab in two sessions.
 

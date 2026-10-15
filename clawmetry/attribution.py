@@ -187,7 +187,28 @@ RESERVED_GITHUB_OWNERS = frozenset((
     # an account in a URL. ``user-attachments/assets`` (the image CDN path)
     # and ``assets-cdn/worker`` both reached the live tab as repositories.
     "assets-cdn", "codeload", "user-attachments",
+    # GitHub's own product and marketing pages. ``github.com/resources/
+    # insights/<slug>`` is an article, and it reached the live tab as the
+    # repository ``resources/insights``.
+    "copilot", "education", "git-guides", "mobile", "models", "newsroom",
+    "nonprofit", "premium-support", "resources", "shop", "social-impact",
+    "solutions", "why-github",
 ))
+
+#: The git config variable ``actions/checkout`` writes on every CI run, so a
+#: build log carries
+#: ``GIT_CONFIG_KEY_0='http.https://github.com/OWNER/NAME.extraheader'`` and the
+#: repository arrives with a config variable glued onto its name. The whole
+#: string is a config KEY, but the repository inside it is REAL, so the
+#: variable is removed and the sighting kept rather than dropped.
+#:
+#: A vocabulary of one, deliberately. git documents many variables for the
+#: ``http.<url>.<variable>`` section, but ``version``, ``proxy`` and
+#: ``sslverify`` are all words a real repository name could end with, and
+#: silently rewriting ``someone/app.version`` to ``someone/app`` would invent
+#: a repository: the failure this whole tab has been fixed four times to
+#: avoid. ``extraheader`` is git's own word and names no repository.
+GIT_HTTP_CONFIG_VARS = frozenset(("extraheader",))
 
 #: Owner halves that documentation, help text and test fixtures use as a
 #: stand-in for a real account. ``own/repo`` carried 14 pull-request rows and
@@ -787,6 +808,17 @@ def _clean_repo(name: str) -> str:
     owner, _, repo = name.partition("/")
     if not owner or not repo or "/" in repo:
         return ""
+    # A git config KEY, not a repository: ``actions/checkout`` writes
+    # ``http.https://github.com/OWNER/NAME.extraheader`` on every CI run. The
+    # repository inside the key is real, so the variable is removed and a
+    # ``.git`` it was sitting behind goes with it, rather than the sighting
+    # being dropped.
+    head, dot, tail = repo.rpartition(".")
+    if dot and tail.lower() in GIT_HTTP_CONFIG_VARS:
+        repo = head[:-4] if head.lower().endswith(".git") else head
+        if not repo:
+            return ""
+        name = f"{owner}/{repo}"
     low = owner.lower()
     if low in RESERVED_GITHUB_OWNERS or low in PLACEHOLDER_REPO_OWNERS:
         return ""
