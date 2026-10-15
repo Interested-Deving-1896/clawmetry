@@ -183,6 +183,10 @@ RESERVED_GITHUB_OWNERS = frozenset((
     "repos", "rest", "search", "security", "security-advisories", "sessions",
     "settings", "site-policy", "sponsors", "stars", "topics", "trending",
     "users", "watching",
+    # GitHub's own service namespaces on github.com, which look exactly like
+    # an account in a URL. ``user-attachments/assets`` (the image CDN path)
+    # and ``assets-cdn/worker`` both reached the live tab as repositories.
+    "assets-cdn", "codeload", "user-attachments",
 ))
 
 #: Owner halves that documentation, help text and test fixtures use as a

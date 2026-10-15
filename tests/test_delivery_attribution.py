@@ -1369,6 +1369,18 @@ def test_placeholder_rows_do_not_block_the_bare_fold():
     assert prs[0]["repo"] == "nordwind/clawmetry"
 
 
+def test_githubs_own_service_namespaces_are_not_accounts():
+    """``user-attachments/assets`` is the image CDN path and
+    ``assets-cdn/worker`` is GitHub's service worker. Both look exactly like
+    an account in a URL and both reached the live tab as repositories."""
+    for name in ("user-attachments/assets", "assets-cdn/worker",
+                 "codeload/thing"):
+        assert attribution._clean_repo(name) == "", name
+    out = attribution.extract_session_delivery(_newest_first([
+        _call("curl https://github.com/user-attachments/assets/abc123")]), "s1")
+    assert [a for a in out["artifacts"] if a["kind"] == "repo"] == []
+
+
 def test_a_parametrised_test_id_is_not_a_branch():
     """Four live rows read ``feat/x-feat/x`` and
     ``fix/home-session-activity-fix/home-session-activity``.
