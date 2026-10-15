@@ -343,3 +343,17 @@ Validation: `CLAWMETRY_AUDIT_DB=/tmp/clawmetry-node-round10-audit.db python3 -m 
 - Total advisory: 0.
 - **Verdict:** APPROVED for the minimal private node RPC read authorization correction.
 - No implementation edits were made by this reviewer. This approval does not broaden the reviewed legacy RPC surface or replace the release and hosted verification gates.
+
+
+## Round 11: Independent packaging closure review
+
+Scope: only the pending psutil additions in `.github/requirements/docker-runtime.txt`, `deploy/self-hosted/runtime-requirements.txt`, `.github/requirements/ci-wheel-install.txt`, `.github/requirements/ci-sync-test.txt`, `.github/requirements/overhead-bench.txt`, and the regeneration roots in `scripts/resolve_selfhosted_runtime_pins.py`.
+
+Each lock adds exactly the already approved `psutil==7.2.2` block from `ci-tests.txt`, including all 21 SHA-256 values. A deterministic comparison against HEAD confirmed that those lockfiles contain no other dependency edits, duplicate psutil declarations or changed versions. The resolver root now declares the same psutil floor as setup.py. Installed psutil 7.2.2 metadata declares Python >=3.6 and no runtime dependencies, so this addition does not create an omitted transitive closure.
+
+Validation: `CLAWMETRY_AUDIT_DB=/tmp/clawmetry-node-packaging-review-audit.db python3 -m pytest --noconftest -q tests/test_docker_runtime_pin.py tests/test_selfhosted_runtime_pin.py tests/test_python_pin_audit_coverage.py tests/test_unpinned_pip_installs_declared.py tests/test_selfhosted_image_publish.py` passed (39 tests). Resolver compilation and diff whitespace checks pass. The full-runtime CI lock candidates now include psutil. The latency-smoke and OSS golden-path files are explicitly partial environment sets followed by a normal dependency-resolving wheel install, so their omission does not cause the complete-closure or no-deps install failure addressed here. Parent separately verifies the official distribution hashes and target Linux architectures with the existing validator.
+
+- Total blocking: 0.
+- Total advisory: 0.
+- **Verdict:** APPROVED for the reviewed packaging correction.
+- No implementation edits, commit or push were made by this reviewer. Existing release and hosted verification gates remain required.
