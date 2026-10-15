@@ -4,6 +4,7 @@ AC-OBS-NODE-007.1: evidence, event story, resource measurement and scrubber shar
 AC-OBS-NODE-007.2: reduced motion retains evidence without a travel animation.
 AC-OBS-NODE-007.3: unavailable collection remains unknown with useful guidance.
 AC-OBS-NODE-007.4: each view fits a 320 pixel viewport without page overflow.
+AC-OBS-NODE-CLARITY-005.1: stale retained rows keep a direct coverage path.
 
 This isolated component check is not a release or hosted end-to-end proof.
 """
@@ -92,6 +93,18 @@ def test_node_activity_real_payload_at_narrow_width(_shared_chromium, tmp_path):
         page.locator('[data-na-view="govern"]').click()
         for name, coverage in payload["coverage"].items():
             assert f"Visible scope: {coverage['scope']}" in page.locator("#na-coverage").inner_text(), name
+        page.locator('[data-na-view="observe"]').click()
+        # AC-OBS-NODE-CLARITY-005.1: retained stale rows still need a coverage path.
+        stale_payload = json.loads(json.dumps(payload))
+        stale_payload["coverage"]["processes"] = {"state": "unavailable", "reason": "Permission denied."}
+        for row in stale_payload["processes"]:
+            row.update(stale=True, observed_at=1)
+        current["data"] = stale_payload
+        page.locator("#na-refresh").click()
+        page.wait_for_function("document.querySelector('#na-processes').textContent.includes('Stale observation')")
+        assert page.get_by_role("button", name="View process coverage", exact=True).count() == 1
+        page.get_by_role("button", name="View process coverage", exact=True).click()
+        assert page.locator('[data-na-panel="govern"]').is_visible()
         page.locator('[data-na-view="observe"]').click()
         current["data"] = unavailable("No stored observations are available. Open Govern to inspect collection.")
         page.locator("#na-refresh").click()

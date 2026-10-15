@@ -109,3 +109,18 @@ Deterministic JSON comparison proves that all 475 fresh-main criteria remain an 
 The baseline changes only `covered_count` from 407 to 418 and `total_count` from 475 to 486. Its comment metadata and exact list of 68 uncovered criterion IDs are unchanged; no existing uncovered item or coverage requirement is removed. Independently ran `python3 scripts/check_ac_coverage.py --check`: **PASS, 418/486 covered, 68 uncovered, ratchet holding**. `git diff --check` passed.
 
 **Verdict: APPROVED.** Blocking: 0. Advisory: 0. The fresh-main manifest is preserved intact and the exact approved eleven criteria are added without weakening the ratchet. Prior implementation and CI-registration approvals remain separate; actual installed/hosted release acceptance is still pending its delivery evidence.
+
+
+## Round 7: Fresh full frontend review after stale-only coverage navigation correction
+
+Reviewer: node_ui. Independently reviewed the full frontend JavaScript/template/CSS and focused frontend/browser tests again, including the new template buttons, browser regression and plan note. No product edit by reviewer.
+
+The concrete AC-OBS-NODE-CLARITY-005.1 gap is resolved: each inventory heading now has a permanently available native `button` with the existing `data-na-coverage` handler. Distinct accessible names identify process and listening-port coverage. The action is present when current rows exist, only stale retained rows exist, or the dynamic empty body is shown. It navigates to the existing Govern coverage view without a new handler, request, timer, CSS or capability claim. The flex heading already wraps at narrow widths; buttons retain normal keyboard activation and existing visible focus.
+
+The regression modifies the real collected/persisted component payload to mark all process rows stale and the process source unavailable, waits until stale evidence is actually rendered, then resolves the process button by its accessible name and verifies Govern is shown. The earlier empty-list coverage navigation and 320-pixel no-overflow checks remain intact. This fixture mutation is a state-boundary regression, not a claim of real permission failure or live delivery proof. Root's red-before browser failure is documented in the implementation plan.
+
+Fresh review also rechecked count fallback, source-state/empty explanations, CPU intervals/reasons, plain selected-event narrative, original evidence disclosure, escaped values, historical review state, reduced motion, replay and unchanged request lifecycles. No new blocker or advisory issue was found; the permanent coverage action closes the stale-only path while preserving these contracts.
+
+Independently reran the executed JavaScript/frontend suite: **1 passed**. Independently reran the real-collector normal shared Chromium component test through the safe server-override wrapper at **320 pixels: 1 passed**, including the stale-only process button and actual view navigation. Scratch audit/store, a dummy token and closed loopback URL were used; dashboard readiness probes are forbidden by the wrapper. JavaScript syntax, English extraction (4652 messages, zero mechanical findings) and diff whitespace passed.
+
+**Verdict: APPROVED.** Blocking: 0. Advisory: 0. This is fresh full frontend implementation/component approval, including the stale coverage correction. Official installed package and actual local/encrypted-hosted owned process/listener CPU evidence remain delivery gates; none is claimed by this component review.
