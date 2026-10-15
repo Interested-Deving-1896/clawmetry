@@ -9698,18 +9698,16 @@ class LocalStore(AgentMetaMixin, ProjectsMixin, TrailStoreMixin, IncidentStoreMi
             lim = max(1, min(int(limit), 500))
         except (TypeError, ValueError):
             lim = 100
-        where = ["sa.kind = ?"]
-        params: list[Any] = [want_kind]
-        if runtime:
-            where.append("sa.agent_type = ?")
-            params.append(str(runtime))
-        if since:
-            where.append("COALESCE(sa.last_ts, '') >= ?")
-            params.append(str(since))
-        clause = " AND ".join(where)
-        params.append(lim)
+        # Fully parameterized rather than a WHERE assembled from fragments:
+        # an absent filter binds '' and the predicate short-circuits, so the
+        # SQL text is a constant. That keeps the optional-filter behaviour
+        # identical while leaving no string-built query for a reader (or a
+        # static analyser) to have to verify.
+        rt = str(runtime or "")
+        since_s = str(since or "")
+        params: list[Any] = [want_kind, rt, rt, since_s, since_s, lim]
         try:
-            rows = self._fetch(f"""
+            rows = self._fetch("""
                 WITH agg AS (
                     SELECT sa.repo                        AS repo,
                            sa.ref                         AS ref,
@@ -9725,7 +9723,9 @@ class LocalStore(AgentMetaMixin, ProjectsMixin, TrailStoreMixin, IncidentStoreMi
                            MAX(sa.basis)                  AS basis,
                            MAX(sa.evidence)               AS evidence
                       FROM session_artifacts sa
-                     WHERE {clause}
+                     WHERE sa.kind = ?
+                       AND (? = '' OR sa.agent_type = ?)
+                       AND (? = '' OR COALESCE(sa.last_ts, '') >= ?)
                      GROUP BY sa.repo, sa.ref
                 ), pr_meta AS (
                     -- Pre-aggregated to ONE row per (repo, number) before it
@@ -9798,23 +9798,24 @@ class LocalStore(AgentMetaMixin, ProjectsMixin, TrailStoreMixin, IncidentStoreMi
         """
         totals = {"attributed_usd": 0.0, "unattributed_usd": 0.0,
                   "sessions_attributed": 0, "artifacts": 0}
-        where, params = "", []
-        if runtime:
-            where = " WHERE agent_type = ?"
-            params = [str(runtime)]
+        # Constant SQL with the optional runtime bound as a parameter that
+        # short-circuits when empty, rather than a WHERE concatenated per
+        # call. Same two queries either way, nothing string-built.
+        rt = str(runtime or "")
         try:
             row = self._fetch(
                 "SELECT COALESCE(SUM(cost_usd), 0), COUNT(DISTINCT session_id),"
                 " COUNT(*) FROM session_artifacts"
-                + (where + " AND kind = 'pr'" if where else " WHERE kind = 'pr'"),
-                params)
+                " WHERE kind = 'pr' AND (? = '' OR agent_type = ?)",
+                [rt, rt])
             if row:
                 totals["attributed_usd"] = round(float(row[0][0] or 0.0), 4)
                 totals["sessions_attributed"] = int(row[0][1] or 0)
                 totals["artifacts"] = int(row[0][2] or 0)
             row2 = self._fetch(
-                "SELECT COALESCE(SUM(unattributed_usd), 0) FROM "
-                "session_attribution_state" + where, params)
+                "SELECT COALESCE(SUM(unattributed_usd), 0) FROM"
+                " session_attribution_state WHERE (? = '' OR agent_type = ?)",
+                [rt, rt])
             if row2:
                 totals["unattributed_usd"] = round(float(row2[0][0] or 0.0), 4)
         except Exception as exc:  # noqa: BLE001

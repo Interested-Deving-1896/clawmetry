@@ -205,7 +205,7 @@ def _event_text(event: dict) -> str:
     """Bounded, searchable text for one event.
 
     We serialize ``data`` rather than hunting for specific keys because the
-    26 runtimes disagree on where a command lives (``input.command``,
+    supported runtimes disagree on where a command lives (``input.command``,
     ``arguments``, ``toolMetas[].args``, a ``tool_use`` content block). The
     refs we want are short and appear verbatim in all of them.
     """
