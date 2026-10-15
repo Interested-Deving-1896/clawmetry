@@ -87,7 +87,7 @@ MAX_TEXTS_PER_EVENT = 12
 #: (which says 'openclaw' for almost everything) and started coming from the
 #: session id prefix, so every stored row is refiled under the runtime the
 #: switcher actually offers.
-RULES_VERSION = "7"
+RULES_VERSION = "8"
 # Per-session caps. A session that names 500 PRs is a digest cron, not a
 # delivery; truncating keeps one pathological row from dominating the table.
 MAX_PRS_PER_SESSION = 64
@@ -184,6 +184,29 @@ RESERVED_GITHUB_OWNERS = frozenset((
     "settings", "site-policy", "sponsors", "stars", "topics", "trending",
     "users", "watching",
 ))
+
+#: Owner halves that documentation, help text and test fixtures use as a
+#: stand-in for a real account. ``own/repo`` carried 14 pull-request rows and
+#: $11.85 of real money on the live node: the agent had been editing and
+#: RUNNING this repository's own tests, and the extractor read the fixtures in
+#: them as delivered work. They are well-formed, so every shape test passes
+#: them.
+#:
+#: Checked on the OWNER half only, which is what makes this a fact rather than
+#: a guess: no real account is called ``owner`` or ``example``, while plenty of
+#: real repositories are named ``repo``, ``cli`` or ``docs``.
+PLACEHOLDER_REPO_OWNERS = frozenset((
+    "acme", "alice", "bar", "baz", "bob", "carol", "demo", "example",
+    "example-org", "foo", "gone", "me", "my-org", "myorg", "octocat", "org",
+    "organization", "other", "own", "owner", "placeholder", "sample",
+    "someone", "test", "testing", "user", "username", "you", "your-org",
+    "your-organization", "yourorg",
+))
+
+#: Characters a repository name uses to join two tokens. Where a longer name
+#: RESUMES a shorter one decides whether the short one was cut short or is a
+#: different repository: see :func:`_extends_without_separator`.
+_NAME_SEPARATORS = "-_."
 # Branch creation / push. ``-b``/``-c`` means the agent MADE the branch.
 _RE_BRANCH_NEW = re.compile(
     r"\bgit\s+(?:checkout|switch)\s+(?:-b|-c|-B)\s+([A-Za-z0-9._/\-]{1,120})"
@@ -594,6 +617,61 @@ def _command_window(text: str, pos: int) -> tuple[int, int]:
     return lo, hi
 
 
+def _extends_without_separator(short_tail: str, long_tail: str) -> bool:
+    """True when *long_tail* continues *short_tail* in the MIDDLE of a token.
+
+    This is the whole difference between a name that arrived cut short and a
+    different repository that merely starts the same way:
+
+    * ``clawm`` -> ``clawmetry`` resumes at ``e``, inside a word. A cut.
+    * ``clawmetry`` -> ``clawmetry-cloud`` resumes at ``-``, a token
+      boundary. Two repositories.
+
+    A plain prefix test cannot tell them apart, and shipping one deleted
+    ``vivekchand/clawmetry`` -- the busiest repository on the node -- from 49
+    sessions' Repositories lists, and re-labelled 71 pull requests and $348.74
+    as ``vivekchand/clawmetry-cloud`` while the evidence on the very same row
+    read ``--repo vivekchand/clawmetry``. A wrong repository is worse than a
+    blank one: it reads as an answer.
+    """
+    if long_tail == short_tail or not long_tail.startswith(short_tail):
+        return False
+    return long_tail[len(short_tail)] not in _NAME_SEPARATORS
+
+
+def _clean_repo(name: str) -> str:
+    """A repository name, or ``""`` when what arrived is not one.
+
+    Three shapes reached the live tab as repositories after the reserved-owner
+    fix, each well-formed enough that no shape test could object:
+
+    * **A placeholder** -- ``owner/repo``, ``OWNER/REPO``, ``own/repo``,
+      ``octocat/Hello-World``. Out of help text, docs and this repository's own
+      test fixtures. See :data:`PLACEHOLDER_REPO_OWNERS`.
+    * **A sentence's full stop glued on** -- ``vivekchand/clawmetry.`` and
+      ``julienXX/terminal-notifier.``, which GitHub will not accept as a name.
+      Left alone it also SPLITS one real repository across two rows.
+    * **A display truncation** -- ``mitre-atlas/atlas-...e``, cut in the
+      middle by whatever rendered it, so there is no name here to recover.
+    """
+    name = str(name or "").strip().strip("/")
+    # Prose punctuation, never an interior character: a name cannot end in
+    # any of these, so removing them loses nothing real.
+    name = name.rstrip(".,;:!?)]}\"'")
+    if "..." in name or "\u2026" in name:
+        return ""
+    owner, _, repo = name.partition("/")
+    if not owner or not repo or "/" in repo:
+        return ""
+    low = owner.lower()
+    if low in RESERVED_GITHUB_OWNERS or low in PLACEHOLDER_REPO_OWNERS:
+        return ""
+    # ``o/n``, ``a/b``, ``x/y``: a shape nobody ships real work under.
+    if len(owner) <= 2 and len(repo) <= 2:
+        return ""
+    return name
+
+
 def _repo_for_match(text: str, start: int, end: int) -> str:
     """The ``--repo owner/name`` that belongs to the command at this match.
 
@@ -610,7 +688,9 @@ def _repo_for_match(text: str, start: int, end: int) -> str:
         distance = abs((lo + m.start()) - end)
         if best_distance is None or distance < best_distance:
             best, best_distance = m.group(1), distance
-    return best
+    # A placeholder or a full stop reaches a pull request by THIS route, not
+    # through the repository bucket, so it has to be cleaned here too.
+    return _clean_repo(best)
 
 
 def _find_pr_refs(text: str) -> list[dict]:
@@ -631,7 +711,7 @@ def _find_pr_refs(text: str) -> list[dict]:
     for m in _RE_PR_URL.finditer(text):
         refs.append({
             "pr": m.group(2),
-            "repo": m.group(1),
+            "repo": _clean_repo(m.group(1)),
             "role": ROLE_EXPLORED,
             "confidence": 1.0,
             "evidence": _snippet_around(text, m.start(), m.end()),
@@ -667,9 +747,8 @@ def _find_repo_refs(text: str) -> list[dict]:
                             (_RE_REPO_REMOTE, "remote_url"),
                             (_RE_REPO_API, "api_url")):
         for m in pattern.finditer(text):
-            name = m.group(1).strip("/")
-            owner, _, repo = name.partition("/")
-            if not owner or not repo or owner.lower() in RESERVED_GITHUB_OWNERS:
+            name = _clean_repo(m.group(1))
+            if not name:
                 continue
             out.append({
                 "repo": name,
@@ -991,15 +1070,43 @@ def _whole_repo_name(name: str, known) -> str:
     owner, _, tail = str(name or "").partition("/")
     if not tail:
         return name
+    # It survived :func:`_drop_truncated_repos`, so it is a repository in its
+    # own right and there is nothing to repair. Without this, a pull request
+    # in ``clawmetry`` was re-filed under ``clawmetry-cloud``.
+    if name in known:
+        return name
     matches = {k for k in known
                if k != name
                and k.partition("/")[0] == owner
-               and k.partition("/")[2].startswith(tail)}
+               and _extends_without_separator(tail, k.partition("/")[2])}
     return matches.pop() if len(matches) == 1 else name
 
 
+def _is_cut_short(name: str, known) -> bool:
+    """True when *name* is some known repository with its end missing.
+
+    ``name in known`` settles it first: the bucket has already had its cut
+    names removed, so anything still in it is real.
+    """
+    if not name or name in known:
+        return False
+    owner, _, tail = name.partition("/")
+    if not tail:
+        return False
+    return any(k != name and k.partition("/")[0] == owner
+               and _extends_without_separator(tail, k.partition("/")[2])
+               for k in known)
+
+
 def _repair_pr_repos(prs: dict, repos: dict) -> dict:
-    """Re-key pull-request rows whose repository name arrived cut short."""
+    """Re-key pull-request rows whose repository name arrived cut short.
+
+    Repair when the whole name is known. When it is NOT -- ``vivekchand/c``
+    extends to five known names, so no single one can be chosen -- the row
+    keeps its number and LOSES the repository. Leaving the cut name in place
+    is what put six rows reading ``vivekchand/c`` on the live tab: the
+    ambiguous case was treated as nothing to do.
+    """
     known = {k[0] for k in repos}
     out: dict = {}
     for (repo, pr), row in prs.items():
@@ -1008,6 +1115,12 @@ def _repair_pr_repos(prs: dict, repos: dict) -> dict:
             row = dict(row)
             row["repo"] = whole
             row["source"] = f"{row.get('source') or 'pr'}+whole_name"
+        elif _is_cut_short(whole, known):
+            whole = ""
+            row = dict(row)
+            row["repo"] = ""
+            row["confidence"] = min(float(row.get("confidence") or 1.0), 0.6)
+            row["source"] = f"{row.get('source') or 'pr'}+cut_name_dropped"
         _fold_into(out, (whole, pr), row)
     return out
 
@@ -1038,7 +1151,7 @@ def _drop_truncated_repos(repos: dict) -> dict:
             if other == short:
                 continue
             o_owner, _, o_tail = other.partition("/")
-            if o_owner == owner and o_tail.startswith(tail):
+            if o_owner == owner and _extends_without_separator(tail, o_tail):
                 drop.add(short)
                 break
     return {k: v for k, v in repos.items() if k[0] not in drop}
