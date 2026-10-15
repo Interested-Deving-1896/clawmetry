@@ -237,13 +237,28 @@ jobs:
           # deadlock is about the gap between the installed wheel and this one,
           # which may span several releases.
           CURRENT=$(grep -oE 'clawmetry==[0-9.]+' clawmetry-cloud/Dockerfile | head -1 | cut -d= -f3)
+          # Depth 1 by default, so the tag's tree is not here. Fetching the
+          # tags brings the objects the comparison reads; a failure is not
+          # fatal because the guard below refuses to answer rather than
+          # answering wrongly.
           git fetch --tags --quiet origin || true
           BASE="v$CURRENT"
           if ! git rev-parse --verify --quiet "$BASE^{commit}" >/dev/null; then
             echo "::warning::no tag $BASE to compare against; skipping the new-route check"
             exit 0
           fi
-          ADDED=$(python3 scripts/list_oss_routes.py --added-since "$BASE" || true)
+          # Exit 2 means "could not tell", which is NOT the same as "none".
+          # Collapsing the two is how a shallow checkout would report a
+          # route-adding release as route-free and leave the deadlock
+          # unannounced — the exact silence this step exists to prevent.
+          set +e
+          ADDED=$(python3 scripts/list_oss_routes.py --added-since "$BASE")
+          RC=$?
+          set -e
+          if [ "$RC" -ne 0 ]; then
+            echo "::warning::could not compare routes against $BASE (exit $RC); the pin PR will not carry the new-route warning"
+            exit 0
+          fi
           if [ -z "$ADDED" ]; then
             echo "No new OSS routes since $BASE — the pin PR can merge on its own."
             exit 0

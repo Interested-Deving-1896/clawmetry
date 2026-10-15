@@ -36,6 +36,32 @@ def _run(*args):
     return done
 
 
+def _have(sha: str) -> bool:
+    """Make *sha* and its parent available, fetching them if they are not.
+
+    CI checks out at depth 1, so neither commit this test names is present
+    and both route sets come back empty. A targeted depth-2 fetch costs one
+    commit each and lets the real assertion run; where that is not possible
+    the test skips rather than asserting against history it cannot see.
+    """
+    present = subprocess.run(["git", "cat-file", "-e", f"{sha}^{{commit}}"],
+                             cwd=REPO, capture_output=True)
+    if present.returncode == 0:
+        parent = subprocess.run(["git", "cat-file", "-e", f"{sha}^^{{commit}}"],
+                                cwd=REPO, capture_output=True)
+        if parent.returncode == 0:
+            return True
+    # GitHub refuses to serve an arbitrary commit by name unless the server
+    # allows it, so this succeeds on a full local clone and fails on a
+    # shallow CI checkout. The caller skips in that case;
+    # ``test_the_diff_names_exactly_what_was_added`` covers the same contract
+    # with no git at all, so CI is not left with nothing.
+    fetched = subprocess.run(
+        ["git", "fetch", "--quiet", "--depth=2", "origin", sha],
+        cwd=REPO, capture_output=True)
+    return fetched.returncode == 0
+
+
 def test_the_route_table_is_not_empty():
     """A silent empty list would report every release as route-free, which is
     the failure mode that leaves the deadlock unannounced."""
@@ -110,15 +136,53 @@ def test_the_release_that_caused_the_deadlock_reports_its_routes():
     Two real commits, so this cannot pass against a stub: ``cce45bf8ba`` is
     the Delivered tab and ``d7b3ddc3b9`` is the fix that followed it.
     """
+    if not (_have("cce45bf8ba") and _have("d7b3ddc3b9")):
+        pytest.skip("neither commit is reachable from this checkout")
+
     added = _run("--ref", "cce45bf8ba", "--added-since", "cce45bf8ba^")
-    if added.returncode != 0:
-        pytest.skip(f"shallow clone: {added.stderr.strip()[:120]}")
+    assert added.returncode == 0, added.stderr
     assert added.stdout.split() == [
         "/api/delivery", "/api/delivery/session/<path:session_id>"]
 
     quiet = _run("--ref", "d7b3ddc3b9", "--added-since", "d7b3ddc3b9^")
     assert quiet.returncode == 0, quiet.stderr
     assert quiet.stdout.strip() == "", quiet.stdout
+
+
+def test_the_diff_names_exactly_what_was_added(tmp_path):
+    """The comparison itself, with no git in the way.
+
+    The test above uses the two real commits either side of the burn, but
+    GitHub refuses to serve an arbitrary commit by name, so on a shallow CI
+    checkout it can only skip — and a skipped test covers nothing. This one
+    runs everywhere: two snapshots of the same module, one route added.
+    """
+    before = lor._rules_from_source(
+        "\n".join(["@bp.route('/api/usage')", "def a(): pass",
+                    "@bp.route('/api/sessions')", "def b(): pass"]), "<before>")
+    after = lor._rules_from_source(
+        "\n".join(["@bp.route('/api/usage')", "def a(): pass",
+                    "@bp.route('/api/sessions')", "def b(): pass",
+                    "@bp.route('/api/delivery')", "def c(): pass"]), "<after>")
+    assert sorted(after - before) == ["/api/delivery"]
+    assert sorted(before - after) == []
+    # A release that adds nothing must produce nothing, not "everything".
+    assert sorted(after - after) == []
+
+
+def test_both_refs_unreadable_is_an_error_not_an_empty_answer():
+    """The hole the first version had, found by CI.
+
+    On a shallow checkout NEITHER ref resolved, both route sets came back
+    empty, the difference was empty, and the script printed nothing and
+    exited 0 — "this release added no routes". A plausible silence is the
+    one outcome this script must never produce, so the working tree, which
+    is always readable, is the yardstick both refs are held to.
+    """
+    done = _run("--ref", "deadbeef1234", "--added-since", "deadbeef1234^")
+    assert done.returncode == 2, done
+    assert done.stdout.strip() == ""
+    assert "incomplete" in done.stderr
 
 
 def test_an_unreachable_base_is_loud_not_plausible():
@@ -131,3 +195,4 @@ def test_an_unreachable_base_is_loud_not_plausible():
     assert done.returncode == 2, done
     assert done.stdout.strip() == ""
     assert "0 routes readable" in done.stderr
+    assert "working tree" in done.stderr

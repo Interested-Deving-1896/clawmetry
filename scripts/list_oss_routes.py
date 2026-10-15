@@ -135,7 +135,25 @@ def main() -> int:
                                   "working tree")
     args = ap.parse_args()
 
+    # The working tree is the one side that is always readable, so it is the
+    # yardstick both refs are held to. Without it the check had a hole in the
+    # middle: on a shallow checkout NEITHER ref resolves, both sets come back
+    # empty, the difference is empty, and the script reports "this release
+    # added no routes" with a success exit. That is the silence this whole
+    # thing exists to prevent, and it reached CI.
+    reference = routes_at(None)
+    if not reference:
+        print("error: no routes found in the working tree — run this from the "
+              "repository root", file=sys.stderr)
+        return 2
+    floor = len(reference) * 0.8
+
     current = routes_at(args.ref)
+    if args.ref and len(current) < floor:
+        print(f"error: only {len(current)} routes readable at {args.ref!r} "
+              f"against {len(reference)} in the working tree — the ref is "
+              "missing or its tree is incomplete", file=sys.stderr)
+        return 2
     if args.added_since:
         before = routes_at(args.added_since)
         # A base that reads SHORT is as dangerous as one that does not read
@@ -144,11 +162,11 @@ def main() -> int:
         # the difference between a usable instruction and one that sends the
         # reader off to classify the whole API. A shallow checkout that
         # cannot serve part of the tree lands here.
-        if len(before) < len(current) * 0.8:
+        if len(before) < floor:
             print(f"error: only {len(before)} routes readable at "
-                  f"{args.added_since!r} against {len(current)} now — "
-                  "the ref is missing or its tree is incomplete",
-                  file=sys.stderr)
+                  f"{args.added_since!r} against {len(reference)} in the "
+                  "working tree — the ref is missing or its tree is "
+                  "incomplete", file=sys.stderr)
             return 2
         current -= before
     for rule in sorted(current):
