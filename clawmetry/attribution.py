@@ -1203,6 +1203,44 @@ def _repair_pr_repos(prs: dict, repos: dict) -> dict:
     return out
 
 
+def _fold_repo_case(repos: dict, prs: dict) -> tuple[dict, dict]:
+    """One repository spelled two ways is one row.
+
+    GitHub treats an owner and a name case-insensitively, so a session that
+    reads ``NVIDIA/OpenShell`` from a URL and ``nvidia/openshell`` from a
+    clone path has seen one repository, and the live tab listed it twice.
+    The spelling with the most sightings wins, because the one a session
+    mentions most is the one its author typed; ties keep the first seen, so
+    the choice never depends on dict ordering.
+
+    Pull-request rows are re-spelled to match, or the two halves of the tab
+    would disagree about the same repository's name.
+    """
+    best: dict[str, str] = {}
+    score: dict[str, int] = {}
+    for key, row in repos.items():
+        low = str(key[0]).lower()
+        mentions = int(row.get("mentions") or 1)
+        if low not in best or mentions > score[low]:
+            best[low], score[low] = key[0], mentions
+    folded: dict = {}
+    for key, row in repos.items():
+        canon = best[str(key[0]).lower()]
+        if canon != key[0]:
+            row = dict(row)
+            row["repo"] = canon
+            row["source"] = f"{row.get('source') or 'repo'}+case"
+        _fold_into(folded, (canon,) + tuple(key[1:]), row)
+    out_prs: dict = {}
+    for (repo, pr), row in prs.items():
+        canon = best.get(str(repo).lower(), repo)
+        if canon != repo:
+            row = dict(row)
+            row["repo"] = canon
+        _fold_into(out_prs, (canon, pr), row)
+    return folded, out_prs
+
+
 def _drop_truncated_repos(repos: dict) -> dict:
     """Remove a repository name that is a cut-short form of another one here.
 
@@ -1422,6 +1460,12 @@ def extract_session_delivery(
     # A name cut short by the tool that printed it is not a repository, and
     # the rest of the session is what shows that. Done BEFORE the fold below,
     # so a truncated name can never become a pull request's repository.
+    # One repository spelled two ways is one repository: GitHub is
+    # case-insensitive, and the live tab listed ``NVIDIA/OpenShell`` beside
+    # ``nvidia/openshell``. Done BEFORE the truncation pass, so prefixes are
+    # compared in one spelling rather than across two.
+    repos, prs = _fold_repo_case(repos, prs)
+
     repos = _drop_truncated_repos(repos)
 
     # The same cut-short name reaches a pull request by its own route, so the

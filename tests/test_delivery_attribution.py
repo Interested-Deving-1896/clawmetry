@@ -1369,6 +1369,27 @@ def test_placeholder_rows_do_not_block_the_bare_fold():
     assert prs[0]["repo"] == "nordwind/clawmetry"
 
 
+def test_one_repository_spelled_two_ways_is_one_row():
+    """GitHub is case-insensitive, and the live tab listed
+    ``NVIDIA/OpenShell`` beside ``nvidia/openshell`` in the same session.
+
+    The spelling with the most sightings wins, so the row reads the way its
+    author typed it rather than however the loop happened to run.
+    """
+    events = [
+        _call("git clone https://github.com/nvidia/openshell"),
+        _call("gh pr view 4 --repo NVIDIA/OpenShell"),
+        _call("gh pr view 5 --repo NVIDIA/OpenShell"),
+        _call("gh pr view 6 --repo NVIDIA/OpenShell"),
+    ]
+    out = attribution.extract_session_delivery(_newest_first(events), "s1")
+    repos = [a["ref"] for a in out["artifacts"] if a["kind"] == "repo"]
+    assert repos == ["NVIDIA/OpenShell"], repos
+    # Both halves of the tab have to agree about the name.
+    pr_repos = {a["repo"] for a in out["artifacts"] if a["kind"] == "pr"}
+    assert pr_repos == {"NVIDIA/OpenShell"}, pr_repos
+
+
 def test_githubs_own_service_namespaces_are_not_accounts():
     """``user-attachments/assets`` is the image CDN path and
     ``assets-cdn/worker`` is GitHub's service worker. Both look exactly like
