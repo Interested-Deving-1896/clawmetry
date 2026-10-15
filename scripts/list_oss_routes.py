@@ -18,6 +18,8 @@ catastrophe: ~18 failing checks on a pin that changed a version string.
 
 ``auto-deploy-cloud.yml`` runs this with ``--added-since`` so the pin PR says
 so in its own body instead of leaving the next reader to rediscover it.
+Specified as RouteInventoryReporter in the "Release Verification and Merge
+Gating" blueprint, under the section named for this deadlock.
 
 Routes are read with :mod:`ast`, not a regex: a decorator argument is a
 literal in the tree and guessing at it from text mis-reads f-strings and
