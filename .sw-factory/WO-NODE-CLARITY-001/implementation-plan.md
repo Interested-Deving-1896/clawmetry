@@ -43,3 +43,5 @@ Final live proof: owned harmless process plus loopback TCP listener, actual meas
 * Exact eleven Factory criteria mirrored without rewording. Coverage ratchet remains at 68 pre-existing uncovered criteria, with all eleven additions referenced by meaningful tests. Actual installed and encrypted hosted acceptance is a separate mandatory release gate.
 
 Final combined pre-PR suite after all review fixes: **96 passed**. Independent collector and frontend buckets both APPROVED; official installed/hosted acceptance remains pending.
+
+CI follow-up: the test-file coverage ratchet found that the new collector regression module was not explicitly named in a workflow. Added it to the existing Node observation/governance/lifecycle job, without changing assertions, gates or the unlisted baseline. The failing CI log supplies the red-before evidence. Product source is unchanged.

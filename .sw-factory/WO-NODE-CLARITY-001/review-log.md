@@ -87,3 +87,14 @@ Listener method changes qualify the source identity. Store partial/gap rules the
 * Existing 30-second service cadence, per-source caps, private row projection, store no-negative-on-partial rules and encrypted snapshot/bridge compatibility were inspected directly.
 
 **Verdict: APPROVED.** Blocking: 0. Advisory: 0. Both collector findings are resolved and covered by named regressions. This approves implementation and component evidence, not release completion. Official wheel inspection, installed daemon restart and the same owned CPU/listener evidence in local plus encrypted hosted views remain required delivery gates under root ownership.
+
+
+## Round 5: Independent CI registration bucket review
+
+Reviewer: node_ui. Reviewed the entire new uncommitted bucket: `.github/workflows/ci.yml` and the appended CI follow-up paragraph in this work order's implementation plan. Product source and test assertions are unchanged by this follow-up; prior frontend and collector approvals remain applicable.
+
+The exact workflow diff adds `tests/test_node_activity_collector_clarity.py` to the existing folded Node observation/governance/lifecycle pytest command, between the existing collector/store tests and wiring tests. It does not add a job, alter execution flags, change the unlisted allowance or weaken a gate. The plan truthfully records why the registration was needed and cites the failed CI run as author red-before evidence.
+
+Independently executed `python3 scripts/check_ci_test_coverage.py --check`: **PASS, 384 listed / 902 unlisted, maximum 902 unchanged**. Independently executed the exact amended four-module pytest command with explicit scratch audit/store paths: **95 passed in 3.64 seconds**. The command uses `--noconftest`, preserving the existing isolated test boundary. `git diff --check` passed. The new file is executed by an existing CI step rather than merely added to a parser allowlist.
+
+**Verdict: APPROVED.** Blocking: 0. Advisory: 0. This approval covers the CI registration and plan update only; it makes no new installed or hosted release claim. Reviewer made no workflow or product edit.
