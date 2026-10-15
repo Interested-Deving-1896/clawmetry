@@ -45,6 +45,37 @@ def test_the_route_table_is_not_empty():
     assert all(r.startswith("/") for r in routes)
 
 
+@pytest.mark.skipif(
+    not (REPO / ".git").exists(), reason="needs the git history")
+def test_the_working_tree_and_the_same_commit_agree():
+    """The two ways of listing have to see the same files.
+
+    They did not. Reading the working tree used a non-recursive listing, so
+    `routes/entitlement/` — a subpackage holding 435 of this repo's routes —
+    was invisible, while reading a ref walked the whole tree. Worktree mode
+    reported 537 routes and ref mode 972, and BOTH looked plausible, which is
+    how a diff of the two would have announced 435 new routes on a release
+    that added none.
+    """
+    assert lor.routes_at() == lor.routes_at("HEAD")
+
+
+@pytest.mark.skipif(
+    not (REPO / ".git").exists(), reason="needs the git history")
+def test_a_base_that_reads_short_is_refused():
+    """A partially readable base is more dangerous than an absent one.
+
+    A shallow checkout that can resolve a ref but not serve its whole tree
+    yields a short route set, and the difference between "two new routes" and
+    "four hundred" is the difference between a usable instruction and one
+    that sends the reader off to classify the entire API.
+    """
+    done = _run("--added-since", "v9.99.99")
+    assert done.returncode == 2, done
+    assert done.stdout.strip() == ""
+    assert "incomplete" in done.stderr or "missing" in done.stderr
+
+
 def test_a_decorator_argument_is_read_from_the_tree_not_the_text():
     """A regex over source text mis-reads a multi-line or computed
     decorator; ``ast`` sees the literal or nothing."""
@@ -99,4 +130,4 @@ def test_an_unreachable_base_is_loud_not_plausible():
     done = _run("--added-since", "no-such-ref-abcdef")
     assert done.returncode == 2, done
     assert done.stdout.strip() == ""
-    assert "no routes found" in done.stderr
+    assert "0 routes readable" in done.stderr

@@ -92,11 +92,18 @@ def _paths(ref: str | None) -> list[str]:
         found = []
         for src in ROUTE_SOURCES:
             if os.path.isdir(src):
-                found += [os.path.join(src, f) for f in sorted(os.listdir(src))
-                          if f.endswith(".py")]
+                # os.walk, not os.listdir: `routes/entitlement/` is a
+                # subpackage holding 435 of this repo's routes, and a
+                # non-recursive listing reported none of them. Worktree mode
+                # and ref mode then disagreed by 435 routes while both looked
+                # plausible, which is the exact failure this script exists
+                # not to produce.
+                for root, _dirs, files in os.walk(src):
+                    found += [os.path.join(root, f) for f in sorted(files)
+                              if f.endswith(".py")]
             elif os.path.isfile(src):
                 found.append(src)
-        return found
+        return sorted(found)
     done = subprocess.run(["git", "ls-tree", "-r", "--name-only", ref],
                           capture_output=True, text=True)
     if done.returncode != 0:
@@ -105,9 +112,9 @@ def _paths(ref: str | None) -> list[str]:
         # let the caller report the bad ref.
         return []
     listing = done.stdout.splitlines()
-    return [p for p in listing
-            if p.endswith(".py")
-            and (p.startswith("routes/") or p in ROUTE_SOURCES)]
+    return sorted(p for p in listing
+                  if p.endswith(".py")
+                  and (p.startswith("routes/") or p in ROUTE_SOURCES))
 
 
 def routes_at(ref: str | None = None) -> set[str]:
@@ -131,12 +138,17 @@ def main() -> int:
     current = routes_at(args.ref)
     if args.added_since:
         before = routes_at(args.added_since)
-        if not before:
-            # An empty 'before' would report every route as new, which in the
-            # pin PR reads as "this release added 300 routes". A bad ref has
-            # to be loud, not plausible.
-            print(f"error: no routes found at {args.added_since!r} — "
-                  "is the ref fetched?", file=sys.stderr)
+        # A base that reads SHORT is as dangerous as one that does not read
+        # at all, and far harder to notice: the difference between "this
+        # release added two routes" and "this release added four hundred" is
+        # the difference between a usable instruction and one that sends the
+        # reader off to classify the whole API. A shallow checkout that
+        # cannot serve part of the tree lands here.
+        if len(before) < len(current) * 0.8:
+            print(f"error: only {len(before)} routes readable at "
+                  f"{args.added_since!r} against {len(current)} now — "
+                  "the ref is missing or its tree is incomplete",
+                  file=sys.stderr)
             return 2
         current -= before
     for rule in sorted(current):
