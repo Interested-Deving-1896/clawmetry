@@ -22,6 +22,12 @@ so in its own body instead of leaving the next reader to rediscover it.
 Routes are read with :mod:`ast`, not a regex: a decorator argument is a
 literal in the tree and guessing at it from text mis-reads f-strings and
 multi-line calls.
+
+The decorator literal IS the served path here, so no prefix is applied: no
+blueprint in this repository is registered with a ``url_prefix`` (checked, not
+assumed — ``grep -r url_prefix routes/ dashboard.py`` finds nothing). Should
+one ever be, a rule listed here would no longer match the path the policy
+entry has to name, and this is the line that says so.
 """
 
 from __future__ import annotations
