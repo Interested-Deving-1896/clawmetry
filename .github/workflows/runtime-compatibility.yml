@@ -211,7 +211,7 @@ jobs:
       - name: Record the result on the exact Pro candidate
         env:
           GH_TOKEN: ${{ secrets.PRO_STATUS_TOKEN || secrets.CLOUD_REPO_PAT }}
-          PRO_SHA: ${{ needs.plan.outputs.pro_sha }}
+          PRO_SHA: ${{ needs.plan.outputs.pro_sha || github.event.client_payload.pro_sha }}
           PLAN_RESULT: ${{ needs.plan.result }}
           MATRIX_RESULT: ${{ needs.compatibility.result }}
           RUNTIMES: ${{ needs.plan.outputs.runtimes }}
