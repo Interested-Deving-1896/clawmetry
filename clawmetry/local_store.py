@@ -9574,6 +9574,7 @@ class LocalStore(AgentMetaMixin, ProjectsMixin, TrailStoreMixin, IncidentStoreMi
             ])
         try:
             with self._write_lock:
+                self._conn.execute("BEGIN TRANSACTION")
                 self._conn.execute(
                     "DELETE FROM session_artifacts WHERE session_id = ?",
                     [sid])
@@ -9609,7 +9610,15 @@ class LocalStore(AgentMetaMixin, ProjectsMixin, TrailStoreMixin, IncidentStoreMi
                     str(result.get("basis") or "unknown")[:48], now,
                     rules_version,
                 ])
+                self._conn.execute("COMMIT")
         except Exception as exc:  # noqa: BLE001
+            # All or nothing: a half-written session would show partial rows
+            # on the tab and, with no state row, be recomputed on every pass
+            # forever.
+            try:
+                self._conn.execute("ROLLBACK")
+            except Exception:
+                pass
             log.warning("persist_session_attribution(%s): %s", sid, exc)
             return 0
         return len(rows)

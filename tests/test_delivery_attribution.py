@@ -653,6 +653,58 @@ def test_a_duplicate_artifact_cannot_cost_the_session_its_whole_write(store):
     assert len(rows) == 1 and rows[0]["cost_usd"] == 3.0
 
 
+def test_a_failed_persist_leaves_the_session_exactly_as_it_was(store):
+    """Atomicity, learned from a live node.
+
+    DuckDB autocommits each statement, and an executemany that hits a
+    constraint on row N leaves rows 0..N-1 committed. One session ended up
+    with artifacts and NO state row that way, which also means it is
+    recomputed on every pass forever, because a missing state row reads as
+    never attributed. The write has to be all or nothing.
+    """
+    good = [_call("gh pr edit 1 --repo own/repo"), _usage(4.0)]
+    _attribute(store, "s1", good)
+    before = store.query_session_artifacts(session_id="s1")
+    assert before
+
+    # Fail precisely where the live one failed: after the artifact rows are
+    # written and before the state row is. No input a caller can supply
+    # lands there, so the connection raises on that one statement.
+    real_conn = store._conn
+
+    class _FailsOnStateWrite:
+        def __getattr__(self, name):
+            return getattr(real_conn, name)
+
+        def execute(self, sql, *a, **kw):
+            if "session_attribution_state" in str(sql) and "INSERT" in str(sql):
+                raise RuntimeError("simulated failure between the two writes")
+            return real_conn.execute(sql, *a, **kw)
+
+    store._conn = _FailsOnStateWrite()
+    try:
+        rewrite = {
+            "session_id": "s1", "agent_type": "openclaw", "event_count": 99,
+            "total_usd": 1.0, "unattributed_usd": 0.0,
+            "basis": "last_touch_segment",
+            "artifacts": [
+                {"kind": "pr", "ref": "2", "repo": "own/repo",
+                 "role": "authored", "confidence": 1.0, "cost_usd": 1.0,
+                 "evidence": "x", "basis": "pr_reference"},
+            ],
+        }
+        assert store.persist_session_attribution(rewrite, node_id="n") == 0
+    finally:
+        store._conn = real_conn
+
+    after = store.query_session_artifacts(session_id="s1")
+    assert after == before, (
+        "a failed persist must not delete the previous answer or leave a "
+        "half-written one")
+    state = store.attribution_watermarks()
+    assert "s1" in state, "the state row must survive a failed rewrite"
+
+
 def test_empty_store_is_an_honest_empty_not_an_error(store):
     out = store.query_delivery(kind="pr")
     assert out["available"] is True
