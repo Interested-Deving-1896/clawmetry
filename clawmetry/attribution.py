@@ -792,11 +792,28 @@ def extract_session_delivery(
     # than guess, because a wrong repo is worse than a missing one.
     if len(repos) == 1:
         only_repo = next(iter(repos))[0]
-        for row in prs.values():
-            if not row.get("repo"):
+        rekeyed: dict[tuple, dict] = {}
+        for (repo, pr), row in prs.items():
+            if not repo:
                 row["repo"] = only_repo
                 row["confidence"] = min(float(row.get("confidence") or 1.0), 0.8)
                 row["source"] = f"{row.get('source') or 'pr'}+sole_repo"
+            key = (row.get("repo") or "", pr)
+            if key in rekeyed:
+                # The same pull request under two keys. Merge rather than
+                # emit twice: strongest role and evidence win, the widest
+                # window survives, and confidence takes the WEAKER of the
+                # two because part of this row rests on an inferred repo.
+                _merge_ref(rekeyed, key, row, row.get("first_ts") or "")
+                existing = rekeyed[key]
+                existing["last_ts"] = max(
+                    existing.get("last_ts") or "", row.get("last_ts") or "")
+                existing["confidence"] = min(
+                    float(existing.get("confidence") or 1.0),
+                    float(row.get("confidence") or 1.0))
+            else:
+                rekeyed[key] = row
+        prs = rekeyed
 
     try:
         split = split_cost(chron)

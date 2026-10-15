@@ -9532,6 +9532,7 @@ class LocalStore(AgentMetaMixin, ProjectsMixin, TrailStoreMixin, IncidentStoreMi
                      if isinstance(a, dict)]
         now = int(time.time())
         rows = []
+        seen_keys: set[tuple] = set()
         for art in artifacts:
             ref = str(art.get("ref") or "").strip()
             kind = str(art.get("kind") or "").strip()
@@ -9546,6 +9547,16 @@ class LocalStore(AgentMetaMixin, ProjectsMixin, TrailStoreMixin, IncidentStoreMi
                 conf = float(art.get("confidence") or 0.0)
             except (TypeError, ValueError):
                 conf = 0.0
+            # Last line of defence on the artifact primary key. A single
+            # colliding pair used to fail the whole executemany on a
+            # constraint error, so ONE bad row cost the entire session its
+            # attribution, on every pass, permanently (measured: seven
+            # consecutive failures on one session). De-duplicating here keeps
+            # a future extractor change from ever reaching that failure mode.
+            pk = (kind[:32], ref[:500], str(art.get("repo") or "")[:255])
+            if pk in seen_keys:
+                continue
+            seen_keys.add(pk)
             rows.append([
                 sid, atype, kind[:32], ref[:500],
                 str(art.get("repo") or "")[:255],

@@ -605,6 +605,54 @@ def test_refiling_a_session_under_a_new_runtime_leaves_no_duplicate(store):
     assert store._delivery_totals()["unattributed_usd"] == 0.0
 
 
+def test_one_pull_request_seen_with_and_without_a_repo_is_one_row(store):
+    """The constraint-error guard.
+
+    A session can reference the same pull request twice: once in a command
+    that carried no ``--repo`` and once in a command that did. The sole-repo
+    backfill then filled the first one in, producing two artifacts with the
+    same (kind, ref, repo), which IS the primary key. The write failed on a
+    constraint error and the session stayed unattributed on every pass
+    forever. Measured on a real node: copilot:7d1766c8, PR 4465, seven
+    consecutive failures.
+    """
+    events = [
+        _call("gh pr view 4465"),
+        _call("gh pr edit 4465 --repo own/repo"),
+        _usage(5.0),
+    ]
+    result, written = _attribute(store, "s1", events)
+    prs = [a for a in result["artifacts"] if a["kind"] == "pr"]
+    assert len(prs) == 1, f"one pull request, {len(prs)} artifacts"
+    assert prs[0]["repo"] == "own/repo"
+    assert written > 0, "the session must persist, not fail on a constraint"
+
+    rows = store.query_delivery(kind="pr")["rows"]
+    assert len(rows) == 1
+    assert rows[0]["cost_usd"] == 5.0, "cost must not be counted twice"
+    # The merged row carries the authoring verb, and flags that part of it
+    # was inferred.
+    assert prs[0]["role"] == attribution.ROLE_AUTHORED
+
+
+def test_a_duplicate_artifact_cannot_cost_the_session_its_whole_write(store):
+    """Defence in depth: even if an extractor change produced a colliding
+    pair, the session must still be attributed rather than lost."""
+    result = {
+        "session_id": "s2", "agent_type": "openclaw", "event_count": 2,
+        "total_usd": 3.0, "unattributed_usd": 0.0, "basis": "last_touch_segment",
+        "artifacts": [
+            {"kind": "pr", "ref": "9", "repo": "own/repo", "role": "authored",
+             "confidence": 1.0, "cost_usd": 3.0, "evidence": "a", "basis": "pr_reference"},
+            {"kind": "pr", "ref": "9", "repo": "own/repo", "role": "reviewed",
+             "confidence": 0.5, "cost_usd": 3.0, "evidence": "b", "basis": "pr_reference"},
+        ],
+    }
+    assert store.persist_session_attribution(result, node_id="n") == 1
+    rows = store.query_delivery(kind="pr")["rows"]
+    assert len(rows) == 1 and rows[0]["cost_usd"] == 3.0
+
+
 def test_empty_store_is_an_honest_empty_not_an_error(store):
     out = store.query_delivery(kind="pr")
     assert out["available"] is True
