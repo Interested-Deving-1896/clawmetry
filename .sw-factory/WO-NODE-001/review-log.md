@@ -332,3 +332,14 @@ Validation: `CLAWMETRY_AUDIT_DB=/tmp/clawmetry-node-review-audit.db python3 -m p
 - Total blocking: 0.
 - Total advisory: 0.
 - **Verdict:** APPROVED for the test-only audit isolation correction.
+
+## Round 10: Independent private node RPC read authorization review
+
+Reviewed only the pending changes to `routes/local_query.py` and `tests/test_node_activity_wiring.py`. The private daemon-token check now covers `query_node_activity` as well as the two node preference/review mutations. It executes before store dispatch, refuses a missing daemon token, and uses constant-time comparison against the full bearer value. This closes the new host-metadata read bypass on the dashboard's legacy RPC path without changing other legacy methods. The normal node API continues through the existing authenticated dashboard route and daemon proxy, which already supplies the discovery token.
+
+Validation: `CLAWMETRY_AUDIT_DB=/tmp/clawmetry-node-round10-audit.db python3 -m pytest --noconftest -q tests/test_node_activity_wiring.py` passed with 19 tests. The relay fixture retains its own temporary audit override. An additional isolated Flask smoke check confirmed that missing and incorrect bearer tokens deny node reads with 401, while the valid daemon bearer reaches the stored query and returns 200. No production host store or audit database was used.
+
+- Total blocking: 0.
+- Total advisory: 0.
+- **Verdict:** APPROVED for the minimal private node RPC read authorization correction.
+- No implementation edits were made by this reviewer. This approval does not broaden the reviewed legacy RPC surface or replace the release and hosted verification gates.

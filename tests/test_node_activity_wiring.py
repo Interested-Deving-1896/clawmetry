@@ -151,7 +151,8 @@ def test_review_not_in_readback_cannot_claim_confirmed(relay):
     assert result["applied"] is False
 
 
-def test_internal_mutation_requires_daemon_token_on_public_app(relay, monkeypatch):
+@pytest.mark.parametrize("method", ["query_node_activity", "set_node_activity_preferences", "review_node_activity_event"])
+def test_internal_node_method_requires_daemon_token_on_public_app(relay, monkeypatch, method):
     from flask import Flask
     from clawmetry import local_server
     from routes.local_query import bp_local_query
@@ -159,7 +160,7 @@ def test_internal_mutation_requires_daemon_token_on_public_app(relay, monkeypatc
     monkeypatch.setattr(local_server, "_token", None)
     app = Flask(__name__)
     app.register_blueprint(bp_local_query)
-    response = app.test_client().post('/__local_query__/set_node_activity_preferences',
+    response = app.test_client().post('/__local_query__/' + method,
                                       json={"kwargs": {"preferences": {"enabled": False}}})
     assert response.status_code == 401
     assert store.preferences["enabled"] is True
