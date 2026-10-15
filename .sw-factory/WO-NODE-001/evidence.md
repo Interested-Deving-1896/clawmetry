@@ -2,7 +2,7 @@
 
 ## Local implementation
 
-- Focused collector, store, route, sealed relay, frontend, navigation and existing Guard checks: 63 passed before the final cancellation correction. A later focused feature run passed 33 tests. Final counts are recorded in the review and PR after the correction.
+- 65 focused collector, store, route, sealed relay, frontend, navigation and existing Guard checks passed after the final cancellation correction.
 - Workflow/module verification: 725 passed, 462 skipped. The skipped workflow cases are existing condition-dependent command checks, not node feature failures.
 - Acceptance manifest: 24 new Factory criteria mirrored, all referenced by meaningful feature tests. Overall gate: 374/442 covered; remaining 68 are existing uncovered criteria.
 - English mechanical subset, daemon method allowlist, Python compilation, app.js syntax, generated module map and diff whitespace checks passed.
