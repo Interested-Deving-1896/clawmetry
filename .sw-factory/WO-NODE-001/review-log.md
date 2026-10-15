@@ -370,3 +370,22 @@ Validation with an isolated audit override: `CLAWMETRY_AUDIT_DB=/tmp/clawmetry-n
 - Total advisory: 0.
 - **Verdict:** APPROVED for the read lifecycle correction and navigation test expectation update.
 - Release, deployment and actual hosted verification remain the parent's delivery gates.
+
+## Round 13: Browser harness correction and red/green evidence
+
+The critical browser job reached the Node test after its existing session-scoped Playwright context had started. The Node test incorrectly entered a second `sync_playwright` context. Reproduced that exact failure locally by running `tests/test_assistant_evidence_browser.py` followed by `tests/test_node_activity_browser.py` with pytest plugins active: 1 failed, 3 passed, with the same Sync API inside asyncio loop exception as CI.
+
+The test now receives the existing `_shared_chromium` fixture from `tests/conftest.py`, creates its own 320-pixel reduced-motion browser context, and closes only that context. The separate Playwright manager, browser launch and machine-specific Chrome fallback were removed. All original evidence, coverage, history, replay, unavailable-state and overflow assertions remain unchanged. No production code changed.
+
+The identical two-module invocation passed after the correction (4 tests). A combined invocation of `tests/test_node_activity_frontend.py`, `tests/test_assistant_evidence_browser.py` and `tests/test_node_activity_browser.py` then passed (5 tests). Both runs use explicit scratch audit and DuckDB paths. Evidence is in `/tmp/clawmetry-node-qa/browser-harness-red.log`, `browser-harness-green.log` and `browser-harness-green-final.log`. Whitespace checks pass. An independent reviewer was asked to inspect the test-only change before handoff; this entry records the implementation verification and does not claim independent approval.
+
+## Round 14: Independent shared browser fixture correction review
+
+Reviewed the pending test-only correction in `tests/test_node_activity_browser.py` against the existing session-scoped `_shared_chromium` fixture in `tests/conftest.py`. The test now creates its own isolated 320-pixel, reduced-motion browser context from that shared browser and closes only the context in `finally`. It no longer enters a second Playwright Sync context or closes a browser owned by the session fixture. Data collection and DuckDB evidence remain isolated to the test's temporary paths.
+
+An independent AST comparison against HEAD confirms that all 15 test assertions are preserved exactly. The author-provided scratch-run evidence was inspected: the unchanged test failed in the combined browser invocation with the nested Sync API error (1 failed, 3 passed); the corrected combined browser modules passed (4 passed), and the frontend lifecycle plus both browser modules passed (5 passed). Logs are in `/tmp/clawmetry-node-qa/browser-harness-{red,green,green-final}.log`. `git diff --check -- tests/test_node_activity_browser.py` passed. An attempted reviewer-only `--noconftest` registration omitted the shared fixture and produced fixture-setup errors; this was a separate invocation limitation, not a failure of the reviewed combined fixture run. No live server was started by that invocation.
+
+- Total blocking: 0.
+- Total advisory: 0.
+- **Verdict:** APPROVED for the shared browser fixture correction.
+- No implementation edits, commit or push were made by this reviewer. This approval preserves the component-browser proof and does not claim released hosted verification.

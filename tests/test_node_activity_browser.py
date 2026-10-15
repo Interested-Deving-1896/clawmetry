@@ -8,7 +8,6 @@ AC-OBS-NODE-007.4: each view fits a 320 pixel viewport without page overflow.
 This isolated component check is not a release or hosted end-to-end proof.
 """
 from pathlib import Path
-import os
 import json
 import threading
 
@@ -17,8 +16,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_node_activity_real_payload_at_narrow_width(tmp_path):
-    playwright = pytest.importorskip("playwright.sync_api")
+def test_node_activity_real_payload_at_narrow_width(_shared_chromium, tmp_path):
     pytest.importorskip("psutil")
     import duckdb
     from clawmetry.node_activity import collect_node_activity, unavailable
@@ -56,49 +54,42 @@ def test_node_activity_real_payload_at_narrow_width(tmp_path):
     css = (ROOT / "clawmetry/static/css/dashboard.css").read_text() + (ROOT / "clawmetry/static/css/node-activity.css").read_text()
     script = (ROOT / "clawmetry/static/js/node-activity.js").read_text()
     shell = '<!doctype html><html><meta name="viewport" content="width=device-width,initial-scale=1"><style>' + css + '</style><body style="padding:12px">' + template.replace('class="page"', 'class="page active"') + '</body></html>'
-    chrome = sorted(Path.home().glob(".cache/puppeteer/chrome/*/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"))
-    with playwright.sync_playwright() as api:
-        try:
-            browser = api.chromium.launch(executable_path=str(chrome[-1]) if chrome else None, headless=True)
-        except playwright.Error as exc:
-            if os.environ.get("CI"):
-                raise
-            pytest.skip(f"A local Chromium browser is required: {type(exc).__name__}")
-        try:
-            page = browser.new_page(viewport={"width": 320, "height": 900}, reduced_motion="reduce")
-            current = {"data": payload}
-            page.route("http://node.test/api/node-activity?limit=100", lambda route: route.fulfill(content_type="application/json", body=json.dumps(current["data"])))
-            page.route("http://node.test/", lambda route: route.fulfill(content_type="text/html", body=shell))
-            page.goto("http://node.test/")
-            page.evaluate("window._cmCurrentTab='node-activity'")
-            page.add_script_tag(content=script)
-            page.evaluate("loadNodeActivity()")
-            page.wait_for_selector(".na-event")
-            for view in ("observe", "govern", "guard"):
-                page.locator(f'[data-na-view="{view}"]').click()
-                assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), view
-                assert page.locator(f'[data-na-panel="{view}"]').is_visible()
-            # An investigation older than 100 routine events remains in Guard.
-            page.locator(f'[data-na-open="{reviewed_id}"]').filter(visible=True).click()
-            selected = page.locator(".na-event[aria-current=step]").get_attribute("data-na-event")
-            assert selected == reviewed_id
-            assert page.locator("#na-map").get_attribute("data-event-id") == selected
-            assert page.locator("#na-evidence").get_attribute("data-event-id") == selected
-            assert int(page.locator("#na-scrub").input_value()) < len(payload["events"]) - 100
-            assert "Last retained measurement before this event" in page.locator(".na-resource-history").inner_text()
-            assert "Values between collections are unknown" in page.locator(".na-resource-history").inner_text()
-            assert "na-animate" not in page.locator("#na-map").get_attribute("class")
-            assert "Monitoring options changed" in page.locator("#na-evidence").inner_text()
-            page.locator('[data-na-view="govern"]').click()
-            for name, coverage in payload["coverage"].items():
-                assert f"Visible scope: {coverage['scope']}" in page.locator("#na-coverage").inner_text(), name
-            page.locator('[data-na-view="observe"]').click()
-            current["data"] = unavailable("No stored observations are available. Open Govern to inspect collection.")
-            page.locator("#na-refresh").click()
-            page.wait_for_function("cmNodeActivity.getState().data.available===false")
-            assert page.locator("#na-cpu").inner_text() == "Unknown"
-            assert "Open Govern" in page.locator("#na-status").inner_text()
-            assert page.locator(".na-event").count() == 0
-            assert "No changes were recorded" in page.locator("#na-events").inner_text()
-        finally:
-            browser.close()
+    context = _shared_chromium.new_context(viewport={"width": 320, "height": 900}, reduced_motion="reduce")
+    try:
+        page = context.new_page()
+        current = {"data": payload}
+        page.route("http://node.test/api/node-activity?limit=100", lambda route: route.fulfill(content_type="application/json", body=json.dumps(current["data"])))
+        page.route("http://node.test/", lambda route: route.fulfill(content_type="text/html", body=shell))
+        page.goto("http://node.test/")
+        page.evaluate("window._cmCurrentTab='node-activity'")
+        page.add_script_tag(content=script)
+        page.evaluate("loadNodeActivity()")
+        page.wait_for_selector(".na-event")
+        for view in ("observe", "govern", "guard"):
+            page.locator(f'[data-na-view="{view}"]').click()
+            assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), view
+            assert page.locator(f'[data-na-panel="{view}"]').is_visible()
+        # An investigation older than 100 routine events remains in Guard.
+        page.locator(f'[data-na-open="{reviewed_id}"]').filter(visible=True).click()
+        selected = page.locator(".na-event[aria-current=step]").get_attribute("data-na-event")
+        assert selected == reviewed_id
+        assert page.locator("#na-map").get_attribute("data-event-id") == selected
+        assert page.locator("#na-evidence").get_attribute("data-event-id") == selected
+        assert int(page.locator("#na-scrub").input_value()) < len(payload["events"]) - 100
+        assert "Last retained measurement before this event" in page.locator(".na-resource-history").inner_text()
+        assert "Values between collections are unknown" in page.locator(".na-resource-history").inner_text()
+        assert "na-animate" not in page.locator("#na-map").get_attribute("class")
+        assert "Monitoring options changed" in page.locator("#na-evidence").inner_text()
+        page.locator('[data-na-view="govern"]').click()
+        for name, coverage in payload["coverage"].items():
+            assert f"Visible scope: {coverage['scope']}" in page.locator("#na-coverage").inner_text(), name
+        page.locator('[data-na-view="observe"]').click()
+        current["data"] = unavailable("No stored observations are available. Open Govern to inspect collection.")
+        page.locator("#na-refresh").click()
+        page.wait_for_function("cmNodeActivity.getState().data.available===false")
+        assert page.locator("#na-cpu").inner_text() == "Unknown"
+        assert "Open Govern" in page.locator("#na-status").inner_text()
+        assert page.locator(".na-event").count() == 0
+        assert "No changes were recorded" in page.locator("#na-events").inner_text()
+    finally:
+        context.close()
