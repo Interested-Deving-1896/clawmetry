@@ -21,6 +21,7 @@ class SelectionTests(unittest.TestCase):
     def test_fixtures_and_alternate_test_names_select_their_runtime(self):
         paths = ['tests/fixtures/runtimes/cursor/REAL/state.vscdb', 'tests/test_adapter_codex.py']
         self.assertEqual(ci.affected_runtimes(paths, self.runtimes), ['codex', 'cursor'])
+        self.assertEqual(ci.affected_runtimes(['tests/test_codex_runtime_adapter.py'], self.runtimes), ['codex'])
 
     def test_shared_unknown_and_new_runtime_paths_fail_open_to_full_coverage(self):
         for path in ['clawmetry_pro/__init__.py', 'pyproject.toml', 'new_module.py',

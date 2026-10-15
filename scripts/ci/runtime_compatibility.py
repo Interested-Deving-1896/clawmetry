@@ -83,6 +83,7 @@ def affected_runtimes(paths: list, runtimes: dict) -> list:
                     or str(path).startswith(f'tests/fixtures/runtimes/{runtime}/')
                     or (path.parent == PurePosixPath('tests') and
                         (path.name == f'test_adapter_{runtime}.py'
+                         or path.name == f'test_{runtime}_runtime_adapter.py'
                          or path.name.startswith(f'test_{runtime}_adapter')))):
                 found.add(runtime)
         if not found:
