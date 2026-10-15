@@ -566,6 +566,13 @@ pin PR says this in its own body — `scripts/list_oss_routes.py --added-since`
 names the added routes in `auto-deploy-cloud.yml`, and the auto-merge poll is
 skipped rather than left to time out after 45 minutes.
 
+A pin PR whose body carries that warning is **not** waiting for anyone to fix
+its CI. And an empty list there means "no new routes", never "could not tell":
+the script exits 2 when a revision it was asked to compare reads short, and the
+workflow reports that it could not compare rather than reporting a route-adding
+release as route-free. That distinction is the whole value of the check, so it
+is a contract rather than an implementation detail.
+
 ## 7. Verify in production (the part that's non-negotiable)
 
 - Decrypt the live cloud snapshot again post-deploy and confirm your data is present.
