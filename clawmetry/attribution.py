@@ -87,7 +87,7 @@ MAX_TEXTS_PER_EVENT = 12
 #: (which says 'openclaw' for almost everything) and started coming from the
 #: session id prefix, so every stored row is refiled under the runtime the
 #: switcher actually offers.
-RULES_VERSION = "8"
+RULES_VERSION = "9"
 # Per-session caps. A session that names 500 PRs is a digest cron, not a
 # delivery; truncating keeps one pathological row from dominating the table.
 MAX_PRS_PER_SESSION = 64
@@ -643,6 +643,29 @@ def _extends_without_separator(short_tail: str, long_tail: str) -> bool:
     return long_tail[len(short_tail)] not in _NAME_SEPARATORS
 
 
+def _line_bounds(text: str, start: int) -> tuple[int, int]:
+    """The line *start* sits on, for a guard that reads one line only.
+
+    An event's text does not always arrive as the agent saw it. A tool_call
+    hands over the command verbatim, newlines intact, but a tool_result is
+    read out of the event's JSON, where a newline is the two characters
+    ``\\n``. Splitting on the real character alone therefore made a whole
+    multi-line tool result ONE line, and a documentation example at the top
+    of a long output reached down and deleted a real repository named on a
+    later line. Both forms are treated as a break.
+    """
+    real = text.rfind("\n", 0, start)
+    escaped = text.rfind("\\n", 0, start)
+    lo = 0
+    if real != -1:
+        lo = real + 1
+    if escaped != -1:
+        lo = max(lo, escaped + 2)
+    ends = [e for e in (text.find("\n", start), text.find("\\n", start))
+            if e != -1]
+    return lo, (min(ends) if ends else len(text))
+
+
 #: A pytest node id: ``path::test_name[the parameter]``. What follows is a
 #: SPECIMEN a test was parametrised with, not a command anyone ran.
 _RE_TEST_NODE_ID = re.compile(r"::test_[A-Za-z0-9_]+\[")
@@ -660,8 +683,60 @@ def _inside_test_node_id(text: str, start: int) -> bool:
     Only the match's own line is examined, so a test id elsewhere in the
     snippet cannot disqualify a real command.
     """
-    line_start = text.rfind("\n", 0, start) + 1
+    line_start, _ = _line_bounds(text, start)
     return bool(_RE_TEST_NODE_ID.search(text, line_start, start))
+
+
+#: A line that announces its own contents as an illustration.
+_RE_EXAMPLE_ANNOUNCE = re.compile(
+    r"\b(?:examples?\b|e\.g\.|for\s+example\b)", re.I)
+
+#: A domain RFC 2606 reserves for documentation. Nobody serves a repository
+#: from one, so its presence says the line is written to be read, not run.
+_RE_RESERVED_EXAMPLE_DOMAIN = re.compile(r"\bexample\.(?:com|org|net)\b", re.I)
+
+
+def _inside_example_list(text: str, start: int) -> bool:
+    """True when the match sits in a line that declares itself an example.
+
+    A documentation line reading::
+
+        URL. Examples: `https://github.com/openai/openai/pulls/123`,
+        `https://api.github.com/repos/openai/openai`,
+        `https://github.example.com/api/v3/repos/octo/repo`.
+
+    put ``openai/openai`` -- an account nobody has -- on the live tab in two
+    sessions, and in one of them that phantom gave the session a second
+    repository, so the fold could no longer tell which repository a real
+    pull request belonged to and the row lost its label.
+
+    **Two signals are required, and the second one is the point.** Measured
+    over the 1120 repository and pull-request rows on a live node, the word
+    ``example`` alone also appears on the evidence of four REAL repositories:
+    ``Tavus-Engineering/tavus-examples`` carries it in its own name, and
+    ``CopilotKit/OpenBot`` and ``CopilotKit/OpenTag`` were each sighted
+    through a path ending ``.env.example``. Requiring a reserved
+    documentation domain on the same line leaves all four standing and
+    removes only the two phantoms. A filter's half that matters is what it
+    does NOT remove.
+
+    Only the match's own line is examined, so an example elsewhere in a long
+    snippet cannot disqualify a real command. The announcement is required
+    to come before the match, because a sentence cannot illustrate something
+    it has not reached yet; the reserved domain may sit anywhere on the line,
+    since it is the line as a whole that it marks as specimen text.
+    """
+    line_start, line_end = _line_bounds(text, start)
+    if not _RE_RESERVED_EXAMPLE_DOMAIN.search(text, line_start, line_end):
+        return False
+    # ``example.com`` contains the word ``example``, so left alone the
+    # reserved domain answers BOTH halves by itself and the rule collapses
+    # into a single signal: a line reading "mirror at example.com of
+    # <a real repository URL>" lost its repository. Mask the domains out of
+    # the text before the match, then look for a real announcement in what
+    # is left.
+    head = _RE_RESERVED_EXAMPLE_DOMAIN.sub(" ", text[line_start:start])
+    return bool(_RE_EXAMPLE_ANNOUNCE.search(head))
 
 
 def _is_placeholder_repo(name: str) -> bool:
@@ -758,6 +833,8 @@ def _find_pr_refs(text: str) -> list[dict]:
     refs: list[dict] = []
 
     for m in _RE_PR_URL.finditer(text):
+        if _inside_example_list(text, m.start()):
+            continue
         refs.append({
             "pr": m.group(2),
             "repo": _clean_repo(m.group(1)),
@@ -772,6 +849,8 @@ def _find_pr_refs(text: str) -> list[dict]:
         if verb not in _GH_PR_VERBS:
             continue
         if _inside_test_node_id(text, m.start()):
+            continue
+        if _inside_example_list(text, m.start()):
             continue
         role = ROLE_AUTHORED if verb in _GH_PR_AUTHOR_VERBS else ROLE_REVIEWED
         raw_repo = _repo_for_match(text, m.start(), m.end())
@@ -809,6 +888,8 @@ def _find_repo_refs(text: str) -> list[dict]:
                             (_RE_REPO_REMOTE, "remote_url"),
                             (_RE_REPO_API, "api_url")):
         for m in pattern.finditer(text):
+            if _inside_example_list(text, m.start()):
+                continue
             name = _clean_repo(m.group(1))
             if not name:
                 continue

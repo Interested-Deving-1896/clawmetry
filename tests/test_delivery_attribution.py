@@ -1279,6 +1279,121 @@ def test_a_placeholder_command_is_a_specimen_not_a_delivery():
     assert out["unattributed_usd"] == 4.0
 
 
+def test_a_documentation_example_list_is_not_a_repository():
+    """``openai/openai`` reached the live tab in two sessions.
+
+    The sighting is a documentation line listing the URL shapes a tool
+    accepts. There is no ``openai/openai`` account, and the damage was not
+    only the phantom row: in one of the two sessions it became a SECOND
+    repository, so the fold could no longer tell which repository pull
+    request #6351 belonged to, and a real $10.89 row lost its label.
+    """
+    doc = ("URL. Examples: `https://github.com/openai/openai/pulls/123`, "
+           "`https://api.github.com/repos/openai/openai`, "
+           "`https://github.example.com/api/v3/repos/octo/repo`.")
+    out = attribution.extract_session_delivery(_newest_first([
+        {"event_type": "tool_result", "ts": "2026-10-15T10:00:00Z",
+         "data": {"content": doc}}]), "s1")
+    assert [a for a in out["artifacts"] if a["kind"] == "repo"] == []
+    assert [a for a in out["artifacts"] if a["kind"] == "pr"] == []
+
+
+@pytest.mark.parametrize("text, kept", [
+    # The word is in the repository's OWN name.
+    ("- Working examples: [tavus-examples](https://github.com/"
+     "Tavus-Engineering/tavus-examples/tree/main/examples#readme)",
+     "Tavus-Engineering/tavus-examples"),
+    # "Example" introduces the skill, not the repository.
+    ("- Example (experimental skill): `scripts/install-skill-from-github.py "
+     "--repo openai/skills --path skills/.experimental/`",
+     "openai/skills"),
+    # Sighted only because a PATH ends ".env.example".
+    ("OpenBot/.env.example at main \u00b7 CopilotKit/OpenBot \u00b7 GitHub "
+     "(https://github.com/CopilotKit/OpenBot/blob/main/.env.example)",
+     "CopilotKit/OpenBot"),
+    ("OpenTag/.env.example at main \u00b7 CopilotKit/OpenTag \u00b7 GitHub "
+     "(https://github.com/CopilotKit/OpenTag/blob/main/.env.example)",
+     "CopilotKit/OpenTag"),
+])
+def test_the_word_example_alone_does_not_delete_a_real_repository(text, kept):
+    """The half of this filter that matters is what it does NOT remove.
+
+    Measured over the 1120 repository and pull-request rows on a live node,
+    a rule keyed on the word ``example`` alone would have deleted these four
+    REAL repositories while removing two phantoms. That is why a reserved
+    documentation domain is required on the same line as a second signal.
+    """
+    out = attribution.extract_session_delivery(_newest_first([
+        {"event_type": "tool_result", "ts": "2026-10-15T10:00:00Z",
+         "data": {"content": text}}]), "s1")
+    assert [a["ref"] for a in out["artifacts"] if a["kind"] == "repo"] == [kept]
+
+
+def test_a_reserved_domain_alone_does_not_delete_a_real_repository():
+    """``example.com`` CONTAINS the word ``example``.
+
+    Left alone the reserved domain answers both halves by itself and the
+    two-signal rule collapses into one, so this line lost a real repository
+    until the domains were masked out before looking for an announcement.
+    """
+    out = attribution.extract_session_delivery(_newest_first([
+        {"event_type": "tool_result", "ts": "2026-10-15T10:00:00Z",
+         "data": {"content": "mirror at example.com of "
+                             "https://github.com/nordwind/repo"}}]), "s1")
+    assert [a["ref"] for a in out["artifacts"] if a["kind"] == "repo"] \
+        == ["nordwind/repo"]
+
+
+def test_an_example_elsewhere_cannot_delete_a_real_repository():
+    """Only the match's own line is read, as for a pytest node id. A session
+    that pastes a documentation example and then does real work keeps the
+    real work."""
+    text = ("Examples: `https://github.example.com/api/v3/repos/octo/repo`\n"
+            "git remote add origin https://github.com/nordwind/repo")
+    out = attribution.extract_session_delivery(_newest_first([
+        {"event_type": "tool_result", "ts": "2026-10-15T10:00:00Z",
+         "data": {"content": text}}]), "s1")
+    assert [a["ref"] for a in out["artifacts"] if a["kind"] == "repo"] \
+        == ["nordwind/repo"]
+
+
+def test_an_announcement_after_the_match_does_not_govern_it():
+    """A sentence cannot illustrate something it has not reached yet."""
+    out = attribution.extract_session_delivery(_newest_first([
+        {"event_type": "tool_result", "ts": "2026-10-15T10:00:00Z",
+         "data": {"content": "https://github.com/nordwind/repo -- for "
+                             "example.com style hosts see the docs"}}]), "s1")
+    assert [a["ref"] for a in out["artifacts"] if a["kind"] == "repo"] \
+        == ["nordwind/repo"]
+
+
+def test_a_phantom_repository_no_longer_blocks_a_real_pull_request():
+    """The live payoff: #6351 was filed with a BLANK repository.
+
+    The session named one real repository and one phantom out of a
+    documentation example, and the fold correctly refuses to guess between
+    two candidates. Removing the phantom leaves one, so the row recovers its
+    label -- and the money does not move, because the split never depended
+    on the name.
+    """
+    doc = ("URL. Examples: `https://github.com/openai/openai/pulls/123`, "
+           "`https://github.example.com/api/v3/repos/octo/repo`.")
+    events = [
+        _call("git remote -v  # https://github.com/nordwind/clawmetry"),
+        {"event_type": "tool_result", "ts": "2026-10-15T10:00:01Z",
+         "data": {"content": doc}},
+        _call("gh pr view 6351 --json title,body", ts="2026-10-15T10:00:02Z"),
+        _usage(10.0, ts="2026-10-15T10:00:03Z"),
+    ]
+    out = attribution.extract_session_delivery(_newest_first(events), "s1")
+    prs = [a for a in out["artifacts"] if a["kind"] == "pr"]
+    assert len(prs) == 1, prs
+    assert prs[0]["ref"] == "6351"
+    assert prs[0]["repo"] == "nordwind/clawmetry"
+    repos = [a["ref"] for a in out["artifacts"] if a["kind"] == "repo"]
+    assert repos == ["nordwind/clawmetry"], repos
+
+
 def test_a_number_the_session_also_names_for_real_keeps_its_row():
     """The specimen rule must not take a real delivery with it.
 
@@ -1425,6 +1540,28 @@ def test_a_real_command_beside_test_output_is_still_read():
     out = attribution.extract_session_delivery(_newest_first(events), "s1")
     branches = sorted(a["ref"] for a in out["artifacts"] if a["kind"] == "branch")
     assert branches == ["feat/real-work"], branches
+
+
+def test_a_json_escaped_newline_still_ends_a_line():
+    """A tool_result's text is read out of the event's JSON, where a newline
+    is the two characters ``\\n``.
+
+    Splitting on the real character alone made a whole multi-line tool
+    result ONE line, so a documentation example or a pytest node id at the
+    top of a long output reached down and disqualified a real sighting named
+    further on. The tool_call path never showed this because a command
+    arrives verbatim.
+    """
+    escaped = 'Examples: github.example.com/x\\ngit remote add nordwind/repo'
+    lo, hi = attribution._line_bounds(escaped, escaped.index("nordwind"))
+    assert escaped[lo:hi] == "git remote add nordwind/repo"
+
+    real = "Examples: github.example.com/x\ngit remote add nordwind/repo"
+    lo, hi = attribution._line_bounds(real, real.index("nordwind"))
+    assert real[lo:hi] == "git remote add nordwind/repo"
+
+    # A text with no break of either kind is one line, from its very start.
+    assert attribution._line_bounds("no breaks here", 5) == (0, 14)
 
 
 def test_rules_version_moved_to_eight():
