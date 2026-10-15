@@ -639,6 +639,30 @@ def _extends_without_separator(short_tail: str, long_tail: str) -> bool:
     return long_tail[len(short_tail)] not in _NAME_SEPARATORS
 
 
+def _is_placeholder_repo(name: str) -> bool:
+    """True when *name* is a stand-in for an account rather than one."""
+    name = str(name or "").strip().strip("/").rstrip(".,;:!?)]}\"'")
+    owner, _, repo = name.partition("/")
+    if not owner or not repo:
+        return False
+    if owner.lower() in PLACEHOLDER_REPO_OWNERS:
+        return True
+    return len(owner) <= 2 and len(repo) <= 2
+
+
+def _evidence_contradicts(evidence: str, repo: str) -> bool:
+    """True when the snippet names a DIFFERENT repository than its own row.
+
+    The evidence column exists for a reader to check the row against, so a
+    snippet reading ``--repo vivekchand/c`` under a row filed to
+    ``vivekchand/clawmetry`` fails at the one job it has.
+    """
+    if not evidence or not repo:
+        return False
+    named = set(_RE_REPO_FLAG.findall(evidence))
+    return bool(named) and repo not in named
+
+
 def _clean_repo(name: str) -> str:
     """A repository name, or ``""`` when what arrived is not one.
 
@@ -688,9 +712,9 @@ def _repo_for_match(text: str, start: int, end: int) -> str:
         distance = abs((lo + m.start()) - end)
         if best_distance is None or distance < best_distance:
             best, best_distance = m.group(1), distance
-    # A placeholder or a full stop reaches a pull request by THIS route, not
-    # through the repository bucket, so it has to be cleaned here too.
-    return _clean_repo(best)
+    # RAW on purpose: the caller has to see a placeholder to know the whole
+    # command is a specimen, which cleaning here would hide.
+    return best
 
 
 def _find_pr_refs(text: str) -> list[dict]:
@@ -723,9 +747,20 @@ def _find_pr_refs(text: str) -> list[dict]:
         if verb not in _GH_PR_VERBS:
             continue
         role = ROLE_AUTHORED if verb in _GH_PR_AUTHOR_VERBS else ROLE_REVIEWED
+        raw_repo = _repo_for_match(text, m.start(), m.end())
+        if _is_placeholder_repo(raw_repo):
+            # A command naming a placeholder repository is a specimen out of
+            # help text, documentation or a test fixture, so the NUMBER in it
+            # is not a pull request either. Blanking only the repository left
+            # the number behind, and the fold then dressed it in a real
+            # repository: a line of this repo's own test source became a
+            # $0.27 pull request "#2" in ``vivekchand/clawmetry-pro``. A
+            # number that the session also names for real keeps its row,
+            # because that sighting arrives by its own route.
+            continue
         refs.append({
             "pr": m.group(2),
-            "repo": _repo_for_match(text, m.start(), m.end()),
+            "repo": _clean_repo(raw_repo),
             "role": role,
             "confidence": 1.0,
             "evidence": _snippet_around(text, m.start(), m.end()),
@@ -902,12 +937,26 @@ def _fold_into(bucket: dict, key: tuple, row: dict) -> None:
     if key not in bucket:
         bucket[key] = row
         return
+    # Picked BEFORE the merge, and from both sides, because :func:`_merge_ref`
+    # installs the strongest ROLE's snippet and that can be the one naming the
+    # name we just rejected. Which side seats first decides whether it wins,
+    # so checking only afterwards fixed one fold order and not the other.
+    keeper = ""
+    for candidate in (bucket[key].get("evidence"), row.get("evidence")):
+        if candidate and not _evidence_contradicts(candidate, key[0]):
+            keeper = candidate
+            break
     _merge_ref(bucket, key, row, row.get("first_ts") or "")
     existing = bucket[key]
     existing["last_ts"] = max(existing.get("last_ts") or "",
                               row.get("last_ts") or "")
     existing["confidence"] = min(float(existing.get("confidence") or 1.0),
                                  float(row.get("confidence") or 1.0))
+    # Five live rows were filed correctly and evidenced by ``--repo
+    # vivekchand/c``, the name that had just been rejected. The column exists
+    # to be checked against the row, so it has to agree with it.
+    if keeper and _evidence_contradicts(existing.get("evidence") or "", key[0]):
+        existing["evidence"] = keeper
 
 
 def _distribute_pr_cost(per_pr: dict, prs: dict) -> tuple[dict, float]:

@@ -1263,14 +1263,56 @@ def test_a_documentation_placeholder_is_not_a_repository():
     assert attribution._clean_repo("npm/cli") == "npm/cli"
 
 
-def test_a_placeholder_never_labels_a_pull_request():
-    """The number may well be real; the repository name is not."""
-    events = [_call("gh pr edit 6275 --repo owner/repo"), _usage(4.0)]
+def test_a_placeholder_command_is_a_specimen_not_a_delivery():
+    """Blanking only the repository was not enough.
+
+    The number came out of the same fictional command, and leaving it behind
+    let the fold dress it in a real repository: a line of this repository's
+    OWN test source became a $0.27 pull request "#2" in
+    ``vivekchand/clawmetry-pro``. There is no pull request #2.
+    """
+    events = [_call('_call("gh pr edit 2 --repo owner/repo")'), _usage(4.0)]
     out = attribution.extract_session_delivery(_newest_first(events), "s1")
-    assert [a["ref"] for a in out["artifacts"] if a["kind"] == "repo"] == []
+    assert [a for a in out["artifacts"] if a["kind"] == "pr"] == []
+    assert [a for a in out["artifacts"] if a["kind"] == "repo"] == []
+    # The money has to go somewhere, and nowhere is the remainder.
+    assert out["unattributed_usd"] == 4.0
+
+
+def test_a_number_the_session_also_names_for_real_keeps_its_row():
+    """The specimen rule must not take a real delivery with it.
+
+    A number sighted in a placeholder command AND in a real one is real; the
+    real sighting arrives by its own route and is untouched.
+    """
+    events = [
+        _call("gh pr edit 6407 --repo owner/repo"),
+        _call("gh pr merge 6407 --repo nordwind/clawmetry --squash"),
+    ]
+    out = attribution.extract_session_delivery(_newest_first(events), "s1")
     prs = [a for a in out["artifacts"] if a["kind"] == "pr"]
     assert len(prs) == 1, prs
-    assert prs[0]["repo"] == "", prs
+    assert prs[0]["repo"] == "nordwind/clawmetry"
+    assert "owner/repo" not in (prs[0]["evidence"] or "")
+
+
+def test_evidence_does_not_name_a_repository_the_row_is_not_filed_under():
+    """Five live rows were filed correctly and evidenced by the name that had
+    just been rejected: ``--repo vivekchand/c`` under a row reading
+    ``vivekchand/clawmetry``. The column exists to be checked against the
+    row, so it has to agree with it.
+    """
+    events = [
+        _call("gh pr edit 6211 --repo nordwind/c"),
+        _call("gh pr view 6211 --repo nordwind/clawmetry"),
+        _call("gh pr view 9 --repo nordwind/cloud"),
+    ]
+    out = attribution.extract_session_delivery(_newest_first(events), "s1")
+    row = next(a for a in out["artifacts"]
+               if a["kind"] == "pr" and a["ref"] == "6211")
+    assert row["repo"] == "nordwind/clawmetry", row
+    assert not attribution._evidence_contradicts(row["evidence"] or "",
+                                                 row["repo"]), row["evidence"]
 
 
 def test_a_trailing_full_stop_is_not_part_of_the_name():
