@@ -132,7 +132,7 @@ class ExecutionTests(unittest.TestCase):
                 self.assertEqual(result, {'candidate_sha': 'a' * 40})
                 for call in calls:
                     self.assertNotIn('private-value', str(call.args))
-                    self.assertEqual(call.kwargs['env']['GIT_CONFIG_COUNT'], '1')
+                    self.assertEqual(call.kwargs['env']['GIT_CONFIG_COUNT'], '3')
                     self.assertIn('stdout', call.kwargs)
                 self.assertIn('https://github.com/vivekchand/clawmetry-pro.git', calls[1].args[0])
                 self.assertNotIn('private-value', (root / 'logs/checkout.log').read_text())
@@ -144,6 +144,9 @@ class ExecutionTests(unittest.TestCase):
                                    env=git_env, capture_output=True, text=True)
             self.assertEqual(match.returncode, 0)
             self.assertEqual(match.stdout.strip(), git_env['GIT_CONFIG_VALUE_0'])
+            for key, expected in [('core.autocrlf', 'false'), ('core.longpaths', 'true')]:
+                effective = subprocess.check_output(['git', 'config', '--get', key], env=git_env, text=True)
+                self.assertEqual(effective.strip(), expected)
 
     def test_checkout_failure_withholds_raw_git_output(self):
         with tempfile.TemporaryDirectory() as temp:

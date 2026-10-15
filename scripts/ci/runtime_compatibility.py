@@ -47,10 +47,12 @@ def checkout_private(pro: Path, sha: str, private_logs: Path) -> dict:
     private_logs.mkdir(parents=True, exist_ok=True)
     env = private_environment()
     # Transient environment configuration is not written to .git/config.
-    env.update(GIT_CONFIG_COUNT='1',
+    env.update(GIT_CONFIG_COUNT='3',
                GIT_CONFIG_KEY_0='http.https://github.com/vivekchand/clawmetry-pro.git.extraheader',
                GIT_CONFIG_VALUE_0='AUTHORIZATION: basic ' + base64.b64encode(
                    ('x-access-token:' + token).encode()).decode(),
+               GIT_CONFIG_KEY_1='core.autocrlf', GIT_CONFIG_VALUE_1='false',
+               GIT_CONFIG_KEY_2='core.longpaths', GIT_CONFIG_VALUE_2='true',
                GIT_TERMINAL_PROMPT='0')
     commands = [
         ['git', 'init', str(pro)],
