@@ -48,7 +48,7 @@ def checkout_private(pro: Path, sha: str, private_logs: Path) -> dict:
         ['git', 'init', str(pro)],
         ['git', '-C', str(pro), 'remote', 'add', 'origin',
          'https://github.com/vivekchand/clawmetry-pro.git'],
-        ['git', '-C', str(pro), 'fetch', '--no-tags', 'origin', sha],
+        ['git', '-C', str(pro), 'fetch', '--filter=blob:none', '--no-tags', 'origin', sha],
         ['git', '-C', str(pro), 'checkout', '--detach', sha],
     ]
     with (private_logs / 'checkout.log').open('wb') as log:
