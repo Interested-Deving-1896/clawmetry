@@ -39,8 +39,9 @@ bypasses result reuse for a fresh dependency/platform check.
 ## Authentication and confidentiality
 
 The public workflow requires `PRO_REPO_READ_TOKEN` with Contents read on the
-private Pro repository, and `PRO_STATUS_TOKEN` with Commit statuses write there
-to report dispatched results. Existing `CLOUD_REPO_PAT` is a migration fallback;
+private Pro repository, and, for direct cross-repository dispatch, `PRO_STATUS_TOKEN` with Commit
+statuses write there to report results. The local bridge route needs only the
+read credential in public CI; the Mac reports the final private status. Existing `CLOUD_REPO_PAT` is a migration fallback;
 dedicated fine-grained credentials are preferable. Provider keys are not used.
 
 Private fetch output, build output, wheel files, fixtures and pytest output stay
@@ -64,10 +65,33 @@ synthetic merge SHA. The public workflow resolves the candidate once and posts
 the final `OSS runtime compatibility` status to that exact private commit.
 Superseded candidates of the same Pro PR share a concurrency group.
 
-Install the public workflow first, prove a manual three-OS run, then configure
-the Pro `OSS_CI_DISPATCH_TOKEN` secret with Contents write limited to the public
-OSS repository. Verify dispatch and callback before setting the private
-`OSS_RUNTIME_CI_ENABLED=true` variable. Do not remove existing private coverage
+Install the public workflow first and prove a manual three-OS run. Then install
+`python3 scripts/ci/local_runtime_dispatch.py --install` from the reviewed
+checkout on the owner's Mac. It copies the consumer outside the checkout to
+`~/Library/Application Support/ClawMetryCI/` and registers a once-per-minute
+LaunchAgent. The directory and state file are private to the owner. Existing
+`gh` authentication stays on the Mac; no new personal CI token is needed.
+
+Set private `OSS_RUNTIME_CI_LOCAL_BRIDGE=true` after installing the consumer.
+The private producer's own workflow token writes an exact-candidate pending
+request. The consumer reads only the fixed producer workflow's successful
+same-repository runs and trusted status markers, claims each request with a
+nonce, and dispatches only the fixed OSS workflow. It does not execute candidate
+code. The public run name carries the nonce. Atomic local state and receipt
+reconciliation prevent immediate duplicate delivery after an uncertain API
+response. Failed deliveries retry at five-minute intervals, then report failure.
+Newer requests supersede old markers without an old result overwriting them.
+The Mac must be awake and the owner logged in; offline requests stay pending.
+
+Verify a real dispatch and exact-SHA callback before setting private
+`OSS_RUNTIME_CI_ENABLED=true`. A dedicated `OSS_CI_DISPATCH_TOKEN` with public
+Contents write remains an optional direct route, using the public-side private
+status credential for its callback. Do not remove existing private coverage
 before its replacement passes. This path-filtered check is continuous coverage;
 it must not enter an always-required aggregate without a no-impact reporting
 path on every PR.
+
+To stop the local consumer, run
+`launchctl bootout gui/$(id -u)/com.clawmetry.runtime-dispatch` and remove the
+private `OSS_RUNTIME_CI_LOCAL_BRIDGE` variable. Remove `OSS_RUNTIME_CI_ENABLED`
+to stop automatic production of requests. Logs and state remain local.

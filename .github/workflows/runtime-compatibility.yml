@@ -1,4 +1,5 @@
 name: Runtime compatibility (OSS and Pro)
+run-name: Runtime compatibility ${{ github.event.client_payload.pro_sha || inputs.pro_sha || 'main' }} [${{ github.event.client_payload.request_id || github.run_id }}]
 
 on:
   repository_dispatch:
@@ -26,12 +27,16 @@ on:
       - requirements.txt
       - SUPPORTED_RUNTIMES.txt
       - scripts/ci/runtime_compatibility.py
+      - scripts/ci/local_runtime_dispatch.py
       - tests/ci/test_runtime_compatibility.py
+      - tests/ci/test_local_runtime_dispatch.py
       - .github/workflows/runtime-compatibility.yml
   pull_request:
     paths:
       - scripts/ci/runtime_compatibility.py
+      - scripts/ci/local_runtime_dispatch.py
       - tests/ci/test_runtime_compatibility.py
+      - tests/ci/test_local_runtime_dispatch.py
       - .github/workflows/runtime-compatibility.yml
 
 permissions:
@@ -54,6 +59,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m unittest discover -s tests/ci -p test_runtime_compatibility.py -v
+      - run: python -m unittest discover -s tests/ci -p test_local_runtime_dispatch.py -v
 
   plan:
     if: github.repository == 'vivekchand/clawmetry' && github.event_name != 'pull_request'
@@ -225,12 +231,13 @@ jobs:
           MATRIX_RESULT: ${{ needs.compatibility.result }}
           RUNTIMES: ${{ needs.plan.outputs.runtimes }}
           EVENT_NAME: ${{ github.event_name }}
+          LOCAL_BRIDGE: ${{ github.event.client_payload.local_bridge }}
         run: |
           cm_state=failure
           if [ "$PLAN_RESULT" = success ] && { [ "$MATRIX_RESULT" = success ] || [ "$RUNTIMES" = '[]' ]; }; then
             cm_state=success
           fi
-          if [ "$EVENT_NAME" = repository_dispatch ] && [[ "$PRO_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+          if [ "$EVENT_NAME" = repository_dispatch ] && [ "$LOCAL_BRIDGE" != true ] && [[ "$PRO_SHA" =~ ^[0-9a-f]{40}$ ]]; then
             gh api --method POST "repos/vivekchand/clawmetry-pro/statuses/$PRO_SHA" \
               -f "state=$cm_state" -f 'context=OSS runtime compatibility' \
               -f "target_url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
