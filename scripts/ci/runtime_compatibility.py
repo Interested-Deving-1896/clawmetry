@@ -14,7 +14,7 @@ from pathlib import Path, PurePosixPath
 import re
 import subprocess
 import sys
-import xml.etree.ElementTree as ET
+from xml.parsers import expat
 
 OPERATING_SYSTEMS = ('ubuntu-latest', 'windows-latest', 'macos-latest')
 
@@ -119,6 +119,40 @@ def runtime_tests(root: Path, runtime: str) -> list:
                    for p in tests.glob(pattern) if p.is_file()})
 
 
+def executed_cases(path: Path) -> int:
+    """Count unskipped JUnit cases with bounded input and no DTD support."""
+    if path.stat().st_size > 10 * 1024 * 1024:
+        raise ValueError('JUnit report exceeds the private parser limit')
+    parser = expat.ParserCreate()
+    active = skipped = False
+    count = 0
+
+    def reject_doctype(*args):
+        raise ValueError('DTD declarations are not permitted in JUnit reports')
+
+    def start(name, attrs):
+        nonlocal active, skipped
+        if name == 'testcase':
+            if active:
+                raise ValueError('Nested JUnit testcases are not permitted')
+            active, skipped = True, False
+        elif name == 'skipped' and active:
+            skipped = True
+
+    def end(name):
+        nonlocal active, count
+        if name == 'testcase':
+            count += int(not skipped)
+            active = False
+
+    parser.StartDoctypeDeclHandler = reject_doctype
+    parser.StartElementHandler = start
+    parser.EndElementHandler = end
+    with path.open('rb') as stream:
+        parser.ParseFile(stream)
+    return count
+
+
 def run_runtime(oss: Path, pro: Path, runtime: str, private_logs: Path) -> dict:
     """Run one suite in a fresh process, retaining raw output only on the runner."""
     tests = runtime_tests(pro, runtime) + runtime_tests(oss, runtime)
@@ -144,9 +178,10 @@ def run_runtime(oss: Path, pro: Path, runtime: str, private_logs: Path) -> dict:
                 cwd=pro, env=env, stdout=output, stderr=subprocess.STDOUT, timeout=300)
             status = 'failed'
             if process.returncode == 0 and junit.exists():
-                cases = list(ET.parse(junit).getroot().iter('testcase'))
-                executed = [c for c in cases if c.find('skipped') is None]
-                status = 'passed' if executed else 'unverified'
+                try:
+                    status = 'passed' if executed_cases(junit) else 'unverified'
+                except (ValueError, expat.ExpatError):
+                    status = 'failed'
         except subprocess.TimeoutExpired:
             status = 'timed-out'
     # Do not publish node ids, assertion strings, traceback locals or fixture text.

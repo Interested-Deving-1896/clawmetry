@@ -49,6 +49,24 @@ class SelectionTests(unittest.TestCase):
 
 
 class ExecutionTests(unittest.TestCase):
+    def test_junit_entity_expansion_is_rejected_for_utf8_and_utf16(self):
+        xml = '<!DOCTYPE x [<!ENTITY x "private">]><testsuite><testcase>&x;</testcase></testsuite>'
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'private.xml'
+            for encoding in ('utf-8', 'utf-16'):
+                path.write_bytes(xml.encode(encoding))
+                with self.subTest(encoding=encoding), self.assertRaisesRegex(ValueError, 'DTD'):
+                    ci.executed_cases(path)
+
+    def test_junit_counts_only_executed_cases_and_rejects_malformed_reports(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'private.xml'
+            path.write_text('<testsuite><testcase/><testcase><skipped/></testcase></testsuite>')
+            self.assertEqual(ci.executed_cases(path), 1)
+            path.write_text('<testsuite><testcase>')
+            with self.assertRaises(ci.expat.ExpatError):
+                ci.executed_cases(path)
+
     def test_private_checkout_never_persists_or_prints_credentials(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
