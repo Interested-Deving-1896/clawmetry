@@ -74,18 +74,18 @@ Direct commits to OSP or OOC are detected and opened as PRs back to `Interested-
 | [@JaiCodes77](https://github.com/JaiCodes77) | 10 |
 | [@claude](https://github.com/claude) | 4 |
 | [@mvanhorn](https://github.com/mvanhorn) | 3 |
-| [@mrbrazzi](https://github.com/mrbrazzi) | 2 |
 | [@ummtushar](https://github.com/ummtushar) | 2 |
-| [@vincent067](https://github.com/vincent067) | 1 |
-| [@sudabg](https://github.com/sudabg) | 1 |
-| [@gypsy5oul](https://github.com/gypsy5oul) | 1 |
-| [@drathava847-beep](https://github.com/drathava847-beep) | 1 |
-| [@XanderLuciano](https://github.com/XanderLuciano) | 1 |
-| [@ruzeynalov](https://github.com/ruzeynalov) | 1 |
-| [@RijulTP](https://github.com/RijulTP) | 1 |
-| [@JF10R](https://github.com/JF10R) | 1 |
-| [@Interested-Deving-1896](https://github.com/Interested-Deving-1896) | 1 |
+| [@mrbrazzi](https://github.com/mrbrazzi) | 2 |
+| [@Interested-Deving-1896](https://github.com/Interested-Deving-1896) | 2 |
 | [@Aaqibhafeezkhan](https://github.com/Aaqibhafeezkhan) | 1 |
+| [@JF10R](https://github.com/JF10R) | 1 |
+| [@RijulTP](https://github.com/RijulTP) | 1 |
+| [@ruzeynalov](https://github.com/ruzeynalov) | 1 |
+| [@XanderLuciano](https://github.com/XanderLuciano) | 1 |
+| [@drathava847-beep](https://github.com/drathava847-beep) | 1 |
+| [@gypsy5oul](https://github.com/gypsy5oul) | 1 |
+| [@sudabg](https://github.com/sudabg) | 1 |
+| [@vincent067](https://github.com/vincent067) | 1 |
 <!-- AI:end:contributors -->
 
 ## Origins
