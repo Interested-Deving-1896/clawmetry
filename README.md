@@ -73,10 +73,10 @@ Direct commits to OSP or OOC are detected and opened as PRs back to `Interested-
 | [@dumko2001](https://github.com/dumko2001) | 17 |
 | [@JaiCodes77](https://github.com/JaiCodes77) | 10 |
 | [@claude](https://github.com/claude) | 4 |
+| [@Interested-Deving-1896](https://github.com/Interested-Deving-1896) | 3 |
 | [@mvanhorn](https://github.com/mvanhorn) | 3 |
 | [@ummtushar](https://github.com/ummtushar) | 2 |
 | [@mrbrazzi](https://github.com/mrbrazzi) | 2 |
-| [@Interested-Deving-1896](https://github.com/Interested-Deving-1896) | 2 |
 | [@Aaqibhafeezkhan](https://github.com/Aaqibhafeezkhan) | 1 |
 | [@JF10R](https://github.com/JF10R) | 1 |
 | [@RijulTP](https://github.com/RijulTP) | 1 |
@@ -103,18 +103,15 @@ _No additional resource files found._
 ## Accessibility
 
 <!-- AI:start:accessibility -->
-This repo uses automated accessibility auditing via `check-accessibility.yml`.
-
-Checks include: CODEOWNERS ownership coverage, README screen-reader compatibility,
-WCAG 2.1 AA HTML compliance, audio overview (espeak-ng), and Braille output (liblouis).
-
+No  was found when this README was generated. Check the
+[Actions tab](https://github.com/Interested-Deving-1896/clawmetry/actions) for repository-specific checks, and document an
+accessibility status only when a report or workflow provides evidence for it.
 
 
 
-Run the [Check Accessibility](https://github.com/Interested-Deving-1896/clawmetry/actions/workflows/check-accessibility.yml)
-workflow to generate the first report and accessibility artifacts.
+
 See the [W3C Web Content Accessibility Guidelines (WCAG)](https://www.w3.org/WAI/standards-guidelines/wcag/)
-for the underlying accessibility reference.
+for accessibility guidance.
 <!-- AI:end:accessibility -->
 
 ## License
