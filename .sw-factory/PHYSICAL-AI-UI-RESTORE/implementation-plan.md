@@ -21,3 +21,11 @@ Use the established dashboard palette: background #0a0a0b, surface #0f0f11, bord
 
 ## Boundaries
 The simulation and adapter release already verified at 0.12.930 remains valid evidence. This follow-up corrects presentation/discovery. Hardware commands remain unavailable in the free observer; existing paid controls keep their existing gates. Historical landing PR895 has a failed late documentation review; its queued deployment was cancelled and genuine native Factory correction is PR896, held for the coordinated UI delivery.
+
+
+## CI-discovered Assistant deadline repair (planned before code)
+MOAT on PR6477 at fd37fd077f failed the existing request-deadline assertion: a timed-out request reported sync unavailable instead of the authoritative timeout. Independent diagnosis reproduced the exact failure with a controlled durable-receipt delay; Assistant implementation is byte-identical to main. This is an existing product race, not a reason to weaken the test or retry until green.
+
+Acceptance: while the consumer persists a timed-out request's failure receipt, a concurrent renewing status read must remain a readable nonterminal journal rather than throw a transport-shaped error. It must cancel expired work without extending the original deadline or lease. Only the existing consumer may persist and publish the final timeout error; unsuccessful work must not save conversation history, and existing producer-owned admission release remains intact.
+
+Read .sw-factory/assistant/requirements.md and blueprint.md before repair. Their daemon-owned persistence and explicit-failure contracts remain unchanged; this bounded correction does not add an operation, endpoint, inferred result or provider path. Add a deterministic receipt-completion barrier test first and record its original TimeoutError failure. In Executor.read only, catch renewal TimeoutError, abort with timeout=True, and continue returning the journal snapshot; retain the existing Cancelled branch. Run the original deadline test, the new barrier regression, preceding route/stream group and executor/relay/receipt lifecycle coverage. Root independently reviews the frozen diff before any separate repair commit or push.

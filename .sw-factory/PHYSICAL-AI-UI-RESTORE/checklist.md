@@ -8,3 +8,9 @@
 - [ ] Source PR, separate release and inspected public artifact.
 - [ ] Coordinated cloud deployment and actual served verification.
 - [ ] Complete final evidence and review records.
+
+## CI-discovered Assistant repair
+- [x] Read existing Assistant requirement/blueprint and record bounded race repair before code.
+- [x] Demonstrate deterministic receipt-barrier regression red before fix, green after; exact renewing RPC raises TimeoutError on original source.
+- [x] Run original deadline, route/stream preceding group and executor/relay/pipeline lifecycle checks:126passed,2skipped; evidence.md records scope.
+- [x] Root independent review approved the frozen repair; original deadline, deterministic barrier and executor suite independently passed17tests.

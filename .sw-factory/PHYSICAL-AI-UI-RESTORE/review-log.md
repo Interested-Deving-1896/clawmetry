@@ -25,3 +25,12 @@ The Hardware selector filters loaded run identities by their recorded robot_type
 No blocking or advisory findings in the core source scope. The coordinated cloud renderer must pass the new hardware_choices/selected_hardware template context and consume the owning node's decrypted navigation; this was explicitly handed to the cloud author before repin/deployment. Installed server packages alone remain insufficient evidence of node entitlement. The Pro author separately qualifies actual Jumper support in the retained entitled workbench.
 
 **Verdict: APPROVED for the reviewed core UI correction.** This is source-candidate approval, not release or live completion. Normal current-head CI/native review, separate public release and wheel verification, coordinated Pro/cloud artifacts, and hosted real-node/served-asset checks remain required. No merge, release, deploy or user installation was performed by this reviewer.
+
+
+## Round 2: independent review of CI-discovered Assistant race repair
+
+Reviewer: root. Author: runtime_gate_diagnosis. Reviewed the frozen four-line Executor.read correction and deterministic receipt-barrier regression against StreamJob cancellation/deadline handling, Job.renew, the consumer persistence/terminal barrier and the HTTP error adapter. The existing deadline test is unchanged. The new test exercises the actual typed RPC and durable receipt, holds completion before terminal publication, and checks the original deadline and lease, absence of a fabricated terminal result, canceled timeout state, unsaved conversation and equality of the final 504 journal and persisted failure.
+
+The correction preserves producer-owned admission and consumer-owned terminal persistence. Catching TimeoutError only around renewal prevents transport misclassification without retrying inference, extending an expired lease or replacing an authoritative result. Existing Cancelled handling and success commit checks remain intact. Existing Assistant requirements/blueprint already require explicit durable failure and daemon ownership, so the repair satisfies the existing contract.
+
+Independent root verification: original deadline regression, new barrier regression and full executor suite: **17 passed in 6.72 seconds**. Inspected the author's controlled pre-fix reproduction and 126-pass lifecycle report. git diff --check passed. No findings. **APPROVED** for the bounded repair; normal fresh-head CI, release and hosted qualification remain required.
