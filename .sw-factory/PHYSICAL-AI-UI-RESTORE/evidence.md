@@ -24,3 +24,9 @@ Verification:
 - git diff --check passes. No provider API, production node, database or user process was used; tests own temporary stores and controlled providers.
 
 Repair source/tests/docs frozen for root independent review before a separate commit or push. This evidence does not claim release or hosted delivery.
+
+
+## Existing OpenDots filtered-read wiring gap
+Completing the already-declared local-work adapter in private PR298 exposed a missing known-runtime prefix in the public store. Its author ingested six official upstream-writer sessions and31events with released0.12.930, then observed an empty runtime=opendots query despite correctly attributed persisted records.
+
+Before editing product code, root extended the existing mutable native-record ingestion regression to query persisted events under the OpenDots and OpenClaw runtime filters. The OpenDots content assertion failed with an empty set while both expected revisions existed in DuckDB. Adding only opendots to the shared known-prefix tuple restored scoped visibility and excluded those records from OpenClaw. The existing unknown-runtime fail-closed behavior remains intact. OpenDots wiring plus runtime no-leak suites: **14 passed in 2.99 seconds**. No private adapter implementation was copied into OSS. Independent review approved the classification/query scope and passed 58 expanded attribution, runtime-isolation, rollup and migration checks. Actual upstream-writer filtered replay is a separate remaining check before merge; installed public-wheel qualification follows publication.

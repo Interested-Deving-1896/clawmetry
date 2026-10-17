@@ -14,3 +14,10 @@
 - [x] Demonstrate deterministic receipt-barrier regression red before fix, green after; exact renewing RPC raises TimeoutError on original source.
 - [x] Run original deadline, route/stream preceding group and executor/relay/pipeline lifecycle checks:126passed,2skipped; evidence.md records scope.
 - [x] Root independent review approved the frozen repair; original deadline, deterministic barrier and executor suite independently passed17tests.
+
+
+## Existing OpenDots release dependency
+- [x] Record scoped attribution repair before code; use existing declared local-activity contract.
+- [x] Persisted scoped-query regression red before prefix correction, then 14 wiring/no-leak checks passed.
+- [x] Independent prefix/query review approved, including 58 attribution, runtime-isolation, rollup and migration checks.
+- [ ] Actual upstream-writer filtered-read proof before merge and later public-wheel qualification.
