@@ -381,3 +381,31 @@ console.log(JSON.stringify(values));
 '''
     values = json.loads(subprocess.check_output(['node', '-e', harness, str(script_path)], text=True))
     assert values['--cm-nav-top'] == '150px'
+
+
+@pytest.mark.parametrize('encoding,filename', [('webp', 'cost.webp'), ('jpeg', 'cost.jpg')])
+def test_uploaded_screenshot_name_matches_its_encoded_format(encoding, filename):
+    """Run the actual upload handler, including the browser's JPEG fallback."""
+    from pathlib import Path
+    import subprocess
+    harness = r'''
+const fs=require('node:fs'),vm=require('node:vm');
+const events={},controls={};
+function control(id){return controls[id]||(controls[id]={hidden:false,textContent:'',files:[],addEventListener:(type,fn)=>{events[id+':'+type]=fn;}});}
+['bug-drop','bug-file','bug-shot','bug-shot-img','bug-shot-name','bug-shot-remove','bug-error'].forEach(control);
+class Reader{readAsDataURL(){this.result='data:image/png;base64,AAAA';this.onload();}}
+class Image{constructor(){this.width=2000;this.height=1000;}set src(value){this.onload();}}
+const ctx={window:{addEventListener:()=>{}},FileReader:Reader,Image,
+ document:{addEventListener:(name,fn)=>{events[name]=fn;},getElementById:id=>controls[id]||null,
+ querySelector:()=>null,querySelectorAll:()=>[],
+ createElement:()=>({getContext:()=>({drawImage:()=>{}}),toDataURL:()=>`data:image/${process.argv[2]};base64,AAAA`})}};
+vm.runInNewContext(fs.readFileSync(process.argv[1],'utf8'),ctx);
+events.DOMContentLoaded();
+controls['bug-file'].files=[{type:'image/png',name:'cost.png',size:1000}];
+events['bug-file:change']();
+console.log(JSON.stringify({label:controls['bug-shot-name'].textContent,preview:controls['bug-shot-img'].src}));
+'''
+    script = Path(__file__).resolve().parents[1] / 'clawmetry/static/js/bug-report.js'
+    result = json.loads(subprocess.check_output(['node', '-e', harness, str(script), encoding], text=True))
+    assert result['label'].startswith(filename + ' ')
+    assert result['preview'].startswith('data:image/' + encoding + ';base64,')
