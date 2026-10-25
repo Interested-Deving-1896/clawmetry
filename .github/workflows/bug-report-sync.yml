@@ -30,7 +30,7 @@ concurrency:
 
 jobs:
   sync:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # A fork has neither the shared token nor our tracker.
     if: github.repository == 'vivekchand/clawmetry'
     steps:
