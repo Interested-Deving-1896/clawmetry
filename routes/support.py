@@ -193,6 +193,12 @@ def collect_diagnostics(client: dict = None) -> dict:
     return diag
 
 
+def _human_error(value, fallback):
+    if isinstance(value, str) and len(value) >= 15 and value.startswith(("Please ", "We ", "That ", "This ", "Bug reporting ")):
+        return value[:600]
+    return fallback
+
+
 def _post_to_cloud(payload: dict) -> tuple[dict, int]:
     """POST the report to the intake. Returns (body, http_status)."""
     if not _intake_url_ok(CLOUD_INTAKE_URL):
@@ -292,15 +298,14 @@ def api_bug_report():
         return jsonify({"ok": False, "error": ERR_OFFLINE, "retryable": True}), 503
     if status == 429:
         return jsonify({"ok": False,
-                        "error": body_out.get("error")
-                        or "That is a lot of reports in one hour. Email "
-                           "hello@clawmetry.com and we will pick it up there."}), 429
+                        "error": _human_error(body_out.get("error"),
+                           "That is a lot of reports in one hour. Email "
+                           "hello@clawmetry.com and we will pick it up there.")}), 429
     if status >= 400 or not body_out.get("ok"):
         return jsonify({"ok": False,
-                        "error": body_out.get("error")
-                        or "We could not file that just now, so nothing was "
-                           "sent. Press Send again in a minute, or email "
-                           "hello@clawmetry.com.",
+                        "error": _human_error(body_out.get("error"),
+                           "We could not file that just now. Your text is still here. "
+                           "Press Send again in a minute, or email hello@clawmetry.com."),
                         "retryable": True}), 502
     return jsonify(body_out)
 

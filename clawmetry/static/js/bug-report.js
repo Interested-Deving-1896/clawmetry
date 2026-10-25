@@ -367,7 +367,7 @@
         clearTimeout(timer); _sending = false;
         if (btn) { btn.disabled = false; btn.textContent = 'Send report'; }
         if (res.status >= 400 || !res.body || !res.body.ok || !/^CM-[0-9A-HJ-NP-Z]{8}$/.test(res.body.ticket || '')) {
-          showError(res.body && res.body.error
+          showError(res.body && typeof res.body.error === 'string' && /^(Please |We |That |This |Bug reporting )/.test(res.body.error)
             ? res.body.error
             : 'We could not send that just now, so nothing was lost. '
               + 'Press Send report again in a minute.');

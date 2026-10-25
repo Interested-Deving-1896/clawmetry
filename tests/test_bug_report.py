@@ -152,10 +152,10 @@ def test_intake_failure_never_invents_a_ticket(client, monkeypatch):
 def test_rate_limit_message_is_human(client, monkeypatch):
     monkeypatch.setattr(
         support, "_post_to_cloud",
-        lambda p: ({"ok": False, "error": "Slow down there friend."}, 429))
+        lambda p: ({"ok": False, "error": "Please wait a few minutes before sending another report."}, 429))
     resp = client.post("/api/bug-report", json={"title": "x"})
     assert resp.status_code == 429
-    assert resp.get_json()["error"] == "Slow down there friend."
+    assert resp.get_json()["error"] == "Please wait a few minutes before sending another report."
 
 
 def test_disabled_install_explains_itself(client, monkeypatch):
@@ -343,3 +343,11 @@ def test_diagnostics_exclude_secret_urls_and_raw_errors():
     script = (Path(__file__).resolve().parents[1] / 'clawmetry/static/js/bug-report.js').read_text()
     assert 'location.search' not in script
     assert 'ctx.console_errors' not in script
+
+
+@pytest.mark.parametrize('upstream', ['forbidden', '500', 'Unauthorized', None, {'code': 'internal'}])
+def test_upstream_codes_never_reach_the_reporter(client, monkeypatch, upstream):
+    monkeypatch.setattr(support, '_post_to_cloud', lambda p: ({'error': upstream}, 500))
+    response = client.post('/api/bug-report', json={'title': 'Something broke'})
+    assert response.status_code == 502
+    assert response.json['error'].startswith('We could not file')
