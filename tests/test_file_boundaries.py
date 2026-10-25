@@ -1,6 +1,10 @@
-"""File roots and loopback trust must hold at the HTTP boundary."""
-import os
+"""File roots and loopback trust must hold at the HTTP boundary.
 
+AC-OBS-LADC-005.1: file and cache containment before reads and writes.
+AC-OBS-LADC-005.2: linked roots work; outside links are refused.
+AC-OBS-LADC-005.3: the peer, Host and forwarding headers control local trust.
+AC-OBS-LADC-005.4: direct clients and authenticated proxies keep working.
+"""
 import pytest
 from flask import Flask, jsonify
 
@@ -151,7 +155,7 @@ def test_invalid_write_paths_do_not_crash(surface, path):
 
 def test_filesystem_root_workspace(surface, monkeypatch):
     client, workspace, _ = surface
-    monkeypatch.setattr(dashboard, "WORKSPACE", os.path.abspath(os.sep))
+    monkeypatch.setattr(dashboard, "WORKSPACE", workspace.anchor)
     response = client.get("/api/file", query_string={"path": str(workspace / "ok.txt")})
     assert response.status_code == 200
 
@@ -165,6 +169,7 @@ def test_filesystem_root_workspace(surface, monkeypatch):
     "/api/sessions/linked/config-drift",
     "/api/sessions/linked/lexical-drift",
     "/api/sessions/linked/intent-divergence",
+    "/api/sessions/linked/intent-drift",
 ])
 def test_session_fallbacks_refuse_outside_links(surface, monkeypatch, url):
     client, workspace, outside = surface

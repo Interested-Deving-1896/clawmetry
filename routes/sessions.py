@@ -8892,11 +8892,15 @@ def api_session_intent_drift(session_id):
     # Filesystem fallback for local-only installs without a running daemon.
     try:
         import dashboard as _d
+        from werkzeug.security import safe_join
+
         sessions_dir = _d.SESSIONS_DIR or os.path.expanduser(
             "~/.openclaw/agents/main/sessions"
         )
-        path = os.path.normpath(os.path.join(sessions_dir, session_id + ".jsonl"))
-        if is_path_within(path, sessions_dir) and os.path.isfile(path):
+        path = safe_join(sessions_dir, session_id + ".jsonl")
+        if path is None or not is_path_within(path, sessions_dir):
+            return jsonify({"error": "access denied"}), 403
+        if os.path.isfile(path):
             fs = _detect_intent_divergence(path)
             return jsonify({
                 "sessionId": session_id,
