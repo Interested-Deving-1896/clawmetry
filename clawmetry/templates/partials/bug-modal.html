@@ -55,6 +55,26 @@
           <label><input type="checkbox" name="bug-category" value="Something stopped working"> Something stopped working</label>
         </fieldset>
 
+        <div class="bug-field">
+          <span class="bug-label">A picture of it, if that is easier</span>
+          <div class="bug-drop" id="bug-drop" tabindex="0" role="button"
+               aria-describedby="bug-shot-help">
+            <input type="file" id="bug-file" accept="image/png,image/jpeg,image/webp" hidden>
+            <span class="bug-drop-text">Drop a screenshot here, paste one, or
+              <span class="bug-drop-pick">choose a file</span></span>
+          </div>
+          <figure class="bug-shot" id="bug-shot" hidden>
+            <img id="bug-shot-img" alt="The screenshot you attached">
+            <figcaption class="bug-shot-meta">
+              <span id="bug-shot-name"></span>
+              <button type="button" class="bug-secondary" id="bug-shot-remove">Remove</button>
+            </figcaption>
+          </figure>
+          <span class="bug-help" id="bug-shot-help">It reaches the ClawMetry team
+            only. It is never attached to the public issue, so hide anything on
+            screen you would not want us to see.</span>
+        </div>
+
         <details class="bug-priority"><summary id="bug-priority-label">Priority: Normal (change)</summary>
         <fieldset class="bug-field bug-severity">
           <legend class="bug-label">How much is it holding you up</legend>
@@ -87,26 +107,6 @@
                  placeholder="you@example.com">
           <span class="bug-help">Optional. Without it we cannot tell you when this is fixed.</span>
         </label>
-
-        <div class="bug-field">
-          <span class="bug-label">A picture of it, if that is easier</span>
-          <div class="bug-drop" id="bug-drop" tabindex="0" role="button"
-               aria-describedby="bug-shot-help">
-            <input type="file" id="bug-file" accept="image/png,image/jpeg,image/webp" hidden>
-            <span class="bug-drop-text">Drop a screenshot here, paste one, or
-              <span class="bug-drop-pick">choose a file</span></span>
-          </div>
-          <figure class="bug-shot" id="bug-shot" hidden>
-            <img id="bug-shot-img" alt="The screenshot you attached">
-            <figcaption class="bug-shot-meta">
-              <span id="bug-shot-name"></span>
-              <button type="button" class="bug-secondary" id="bug-shot-remove">Remove</button>
-            </figcaption>
-          </figure>
-          <span class="bug-help" id="bug-shot-help">It reaches the ClawMetry team
-            only. It is never attached to the public issue, so hide anything on
-            screen you would not want us to see.</span>
-        </div>
 
         <details class="bug-attach" id="bug-attach">
           <summary>What gets sent with this report</summary>
