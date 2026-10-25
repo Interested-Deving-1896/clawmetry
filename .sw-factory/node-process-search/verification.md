@@ -25,3 +25,5 @@ Release checks are in progress. The feature is not yet publicly released or host
 ## Drift check evidence
 
 The first live-cadence drift verdict cited older frontend behavior. Current renderInventory delegates to renderProcesses and renderClawmetry; those functions implement retained-row filtering/pagination and the dedicated self-usage section. schedule uses a 2000ms live interval, load requests live=1, and the old ten/fifteen second period is an explicit older-collector fallback. The hosted blueprint now names these functions and contracts for review. No check is bypassed.
+
+The remaining drift finding identified the automatically created feature blueprint as a placeholder. It is now populated with the actual component composition, contracts, verification limits and three ADRs, verified by rereading the hosted record. The local blueprint mirrors that feature record rather than duplicating the shared capability document.
