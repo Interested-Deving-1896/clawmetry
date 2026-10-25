@@ -33,7 +33,6 @@ import re
 import sys
 import urllib.error
 import urllib.request
-from urllib.parse import urlsplit
 
 from flask import Blueprint, jsonify, request
 
@@ -226,7 +225,7 @@ def _post_to_cloud(payload: dict) -> tuple[dict, int]:
 def api_bug_report():
     """Take a bug report from the dashboard and forward it to the intake."""
     origin = request.headers.get("Origin")
-    if origin and urlsplit(origin).netloc != request.host:
+    if origin and origin.rstrip("/") != request.host_url.rstrip("/"):
         return jsonify(ok=False, error="Please send the report from your ClawMetry dashboard."), 403
     if request.content_length and request.content_length > 3 * 1024 * 1024:
         return jsonify(ok=False, error="Please choose a smaller screenshot."), 413

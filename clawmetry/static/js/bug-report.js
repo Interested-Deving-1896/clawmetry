@@ -206,7 +206,7 @@
   }
 
   function acceptImage(file) {
-    if (_sending) return;
+    if (_sending || _imageLoading) return;
     if (!file || !/^image\/(png|jpeg|webp)$/.test(file.type || '')) {
       showError('That file is not an image. PNG, JPEG or WebP work.');
       return;
@@ -266,6 +266,7 @@
   }
 
   function setScreenshot(dataUrl, name) {
+    _idemKey = null;
     _screenshot = { dataUrl: dataUrl, name: String(name).slice(0, 80),
                     bytes: Math.round(dataUrl.length * 0.75) };
     var fig = $('bug-shot'), im = $('bug-shot-img'), label = $('bug-shot-name');
@@ -280,6 +281,7 @@
   }
 
   function clearScreenshot() {
+    _idemKey = null;
     _screenshot = null;
     var fig = $('bug-shot'); if (fig) fig.hidden = true;
     var drop = $('bug-drop'); if (drop) drop.hidden = false;
@@ -542,6 +544,8 @@
   document.addEventListener('DOMContentLoaded', function () {
     watchNavTop();
     wireScreenshot();
+    var form = $('bug-form');
+    if (form) form.addEventListener('input', function() { if (!_sending) _idemKey = null; });
     var sevInputs = document.querySelectorAll('input[name="bug-severity"]');
     Array.prototype.forEach.call(sevInputs, function (input) {
       input.addEventListener('change', syncSeverity);
