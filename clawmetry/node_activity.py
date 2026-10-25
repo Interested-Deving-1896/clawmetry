@@ -112,6 +112,69 @@ def _process_cpu(counters, previous, measured_at):
     return result, current
 
 
+def _clawmetry_launch_role(argv, cwd=None):
+    """Recognize entry points, never arbitrary argument substrings.
+
+    Arguments stay transient: only the fixed role is persisted. psutil supplies
+    this metadata on Linux, macOS and Windows; denial means unknown software.
+    """
+    if not isinstance(argv, (list, tuple)) or not argv or len(argv) > 256:
+        return None
+    if any(not isinstance(arg, str) for arg in argv):
+        return None
+    def basename(value):
+        return value.replace("\\", "/").rsplit("/", 1)[-1].lower()
+    args = list(argv)
+    executable = basename(args.pop(0))
+    if executable in ("clawmetry", "clawmetry.exe"):
+        pass
+    elif executable.startswith("python"):
+        while args and args[0] in ("-u", "-B", "-E", "-s", "-S", "-I", "-O", "-OO"):
+            args.pop(0)
+        if len(args) >= 2 and args[0] == "-m":
+            module = args[1]
+            args = args[2:]
+            if module == "clawmetry.sync":
+                return "collector"
+            if module not in ("clawmetry", "clawmetry.cli"):
+                return None
+        elif args and basename(args[0]) in ("clawmetry", "clawmetry.exe"):
+            args.pop(0)
+        elif args:
+            # Only this installation's scripts, never an unrelated dashboard.py.
+            script = args.pop(0)
+            root = Path(__file__).resolve().parent
+            if os.path.isabs(script) or cwd:
+                path = (Path(cwd) / script if cwd else Path(script)).resolve()
+                if path == root / "sync.py":
+                    return "collector"
+                if path == root.parent / "dashboard.py":
+                    return "dashboard"
+                if path == root.parent / "desktop" / "app.py":
+                    return "desktop"
+            return None
+        else:
+            return None
+    else:
+        return None
+    return "collector" if args and args[0] == "sync" else "cli" if args and not args[0].startswith("-") else "dashboard"
+
+
+def _process_role(proc, info):
+    if info.get("pid") == os.getpid():
+        return "collector"
+    name = str(info.get("name") or "").lower()
+    if not name.startswith(("python", "clawmetry")):
+        return None
+    try:
+        argv = proc.cmdline()
+        role = _clawmetry_launch_role(argv)
+        return role or _clawmetry_launch_role(argv, cwd=proc.cwd())
+    except Exception:  # noqa: BLE001 - optional platform metadata must not discard a process
+        # AccessDenied/NoSuchProcess must not discard readable resource data.
+        return None
+
+
 def _read_lsof(deadline):
     """Read a fixed local command with bounded memory and lifetime, without a shell."""
     deadline = min(deadline, time.monotonic() + LSOF_TIMEOUT_SECONDS)
@@ -311,36 +374,62 @@ def collect_node_activity(*, preferences=None, node_id="", now=None, psutil_modu
                 previous_cpu = cpu_state.get("samples", {}) if cpu_state.get("source") == source_identity else {}
                 current_cpu = {}
                 process_deadline = min(deadline - 0.75, time.monotonic() + 1.5)
-                candidates = 0
-                for proc in process_iter(["pid", "ppid", "name", "create_time", "memory_info", "cpu_times"], ad_value=None):
+                attrs = ["pid", "ppid", "name", "create_time", "memory_info", "cpu_times"]
+                # Sample our own PID before a large/partial enumeration. Retain
+                # it within the same cap and CPU sampler, not in a new poller.
+                def candidates_iter(attrs=attrs, process_iter=process_iter):
+                    nonlocal partial
+                    try:
+                        own = sensor.Process(os.getpid())
+                        yield own, own.as_dict(attrs=attrs, ad_value=None)
+                    except Exception as exc:  # noqa: BLE001 - enumeration may still provide our PID
+                        log.debug("Node collector process lookup unavailable: %s", type(exc).__name__)
+                    try:
+                        for process in process_iter(attrs, ad_value=None):
+                            yield process, None
+                    except Exception as exc:  # noqa: BLE001 - preserve positive evidence after a failed scan
+                        partial = True
+                        log.debug("Node process enumeration incomplete: %s", type(exc).__name__)
+                candidates, seen = 0, set()
+                for proc, info in candidates_iter():
                     if cap <= 0 or candidates >= MAX_PROCESS_CANDIDATES or time.monotonic() > process_deadline:
                         truncated = True
                         break
                     candidates += 1
                     try:
-                        info = proc.info
+                        if info is None:
+                            info = proc.info
                         started = number(info.get("create_time"))
                         if started is None or not info.get("pid"):
                             partial = True
                             continue
                         pid = int(info["pid"])
                         key = identity(source_identity, pid, started)
+                        if key in seen:
+                            continue
+                        seen.add(key)
                         pid_ids[pid] = key
                         mem = info.get("memory_info")
                         cpu, sample = _process_cpu(info.get("cpu_times"), previous_cpu.get(key), time.monotonic())
                         if sample is not None:
                             current_cpu[key] = sample
-                        rows.append({"id": key, "pid": pid, "parent_pid": info.get("ppid"),
+                        row = {"id": key, "pid": pid, "parent_pid": info.get("ppid"),
                                      "name": clean(info.get("name")) or "Process name unavailable",
                                      "started_at": int(started * 1000), **cpu,
                                      "memory_bytes": number(getattr(mem, "rss", None), True),
-                                     "actor": dict(UNKNOWN_ACTOR)})
+                                     "actor": dict(UNKNOWN_ACTOR)}
+                        role = _process_role(proc, info)
+                        if role:
+                            row["clawmetry_role"] = role
+                        rows.append(row)
                         partial |= info.get("ppid") is None or info.get("name") is None
                     except Exception:
                         partial = True
                 # Prefer recent processes with measurable memory. A cap on
                 # ascending PID enumeration would hide the user's new work.
-                rows.sort(key=lambda row: (row["memory_bytes"] is not None, row["started_at"]), reverse=True)
+                rows.sort(key=lambda row: (row.get("clawmetry_role") == "collector",
+                                           bool(row.get("clawmetry_role")),
+                                           row["memory_bytes"] is not None, row["started_at"]), reverse=True)
                 truncated |= len(rows) > cap
                 rows = rows[:cap]
                 _PROCESS_CPU_SAMPLES[sensor] = {"source": source_identity,

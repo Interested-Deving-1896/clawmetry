@@ -3,7 +3,8 @@
   'use strict';
   var state = {data:null, scope:null, generation:0, pending:null, controller:null, timer:null,
     replay:null, selected:null, view:'observe', lastLoaded:0, bound:false, mutation:false,
-    mutationRequest:null, unconfirmed:null, readRequest:null};
+    mutationRequest:null, unconfirmed:null, readRequest:null, processQuery:'', processPage:0};
+  var PROCESS_ROLES={collector:'Collector',dashboard:'Dashboard',desktop:'Desktop app',cli:'CLI'};
   var UNCONFIRMED='Save not confirmed. The change may still apply. Refresh this node before you retry.';
   var PREFS = [
     ['enabled','Node monitoring','Collect node observations. Turn this off to stop all collection.'],
@@ -205,18 +206,43 @@
     }
     return '<span class="na-not-measured">Not measured</span><small>'+esc(row.cpu_reason||'No comparable CPU samples were recorded.')+'</small>';
   }
+  function processRole(row){return Object.prototype.hasOwnProperty.call(PROCESS_ROLES,row.clawmetry_role)?PROCESS_ROLES[row.clawmetry_role]:'';}
+  function observed(row){var at=epoch(row.observed_at);return row.stale?'Stale observation; '+(at==null?'Observation time unknown':'last observed '+when(row.observed_at)):(at==null?'Observation time unknown':'Observed '+when(row.observed_at));}
+  function processColumns(){return [['Process',function(p){var a=actor(p.actor), role=processRole(p);return (role?'<strong class="na-process-role">ClawMetry '+esc(role)+'</strong><small>'+esc(p.name||'Unnamed process')+'</small>':esc(p.name||'Unnamed process'))+'<small>PID '+esc(p.pid)+(a.kind!=='unattributed'&&a.evidence?' / '+esc(a.label):'')+'</small><small class="na-row-age">'+esc(observed(p))+'</small>';}],['CPU between scans',cpuCell],['Memory',function(p){return finite(p.memory_bytes)?esc(bytes(p.memory_bytes)):'<span class="na-not-measured">Not measured</span>';}]];}
+  function renderProcesses(data){
+    var processes=Array.isArray(data.processes)?data.processes:[], query=state.processQuery.trim().toLowerCase();
+    var ranked=processes.filter(function(p){return !query||[p.name,p.pid,processRole(p)?'ClawMetry '+processRole(p):''].join(' ').toLowerCase().indexOf(query)>=0;}).sort(function(a,b){
+      return Number(!!a.stale)-Number(!!b.stale)||Number(finite(b.cpu_percent))-Number(finite(a.cpu_percent))||
+        (finite(b.cpu_percent)&&finite(a.cpu_percent)?b.cpu_percent-a.cpu_percent:0);
+    });
+    state.processPage=Math.max(0,Math.min(state.processPage,Math.ceil(ranked.length/100)-1));
+    var start=state.processPage*100;
+    text('na-process-results',ranked.length?(start+1)+' to '+Math.min(start+100,ranked.length)+' of '+ranked.length+(query?' matches':' retained processes'):
+      query?'No matching processes in '+processes.length+' retained observations.':'No retained processes.');
+    if(el('na-process-prev'))el('na-process-prev').disabled=state.processPage===0;
+    if(el('na-process-next'))el('na-process-next').disabled=start+100>=ranked.length;
+    if(el('na-process-clear'))el('na-process-clear').disabled=!state.processQuery;
+    if(el('na-processes'))el('na-processes').innerHTML=ranked.length?table(ranked.slice(start,start+100),processColumns()):
+      query?'<p class="na-empty">No matching processes were recorded. Clear the search or check collection coverage.</p>':emptyInventory(data,'processes');
+  }
+  function renderClawmetry(data){
+    var rows=(Array.isArray(data.processes)?data.processes:[]).filter(function(p){return !!processRole(p);});
+    var coverage=(data.coverage||{}).processes||{}, at=epoch(data.collected_at);
+    var stale=at==null||Date.now()-at>(data.stale_after_seconds||120)*1000||rows.some(function(p){return p.stale;});
+    text('na-clawmetry-note',rows.length?'Identified processes on this node'+(coverage.state==='disabled'?'. Collection is off.':stale?'. These observations are stale.':'.'):
+      'ClawMetry may appear under a Python process name.');
+    if(el('na-clawmetry-processes'))el('na-clawmetry-processes').innerHTML=rows.length?table(rows,processColumns()):
+      '<p class="na-empty">'+esc(coverage.state==='disabled'?'Process collection is off. Turn it on in Govern to measure ClawMetry usage.':
+        coverage.state==='unavailable'||coverage.state==='unsupported'?sourceReason(data,'processes')+' Check process coverage in Govern.':
+        'No ClawMetry process was identified in these observations. An updated collector is required. Check process coverage in Govern.')+'</p>';
+  }
   function renderInventory(data) {
     var processes=Array.isArray(data.processes)?data.processes:[], listeners=Array.isArray(data.listeners)?data.listeners:[];
-    function observed(row){var at=epoch(row.observed_at);return row.stale?'Stale observation; '+(at==null?'Observation time unknown':'last observed '+when(row.observed_at)):(at==null?'Observation time unknown':'Observed '+when(row.observed_at));}
     function note(rows){return rows.some(function(r){return r.stale;})?'Includes stale observations':rows.some(function(r){return epoch(r.observed_at)==null;})?'Some observation times are unknown':'From the latest collection';}
     text('na-process-observation-note',note(processes));text('na-listener-observation-note',note(listeners));
     text('na-process-coverage-note','Names identify programs, not who started them. CPU is measured between scans; 100% means one CPU core. '+sourceReason(data,'processes'));
     text('na-listener-coverage-note',sourceReason(data,'listeners')+' A listening port does not prove Internet access.');
-    var ranked=processes.slice().sort(function(a,b){
-      return Number(!!a.stale)-Number(!!b.stale)||Number(finite(b.cpu_percent))-Number(finite(a.cpu_percent))||
-        (finite(b.cpu_percent)&&finite(a.cpu_percent)?b.cpu_percent-a.cpu_percent:0);
-    });
-    if(el('na-processes'))el('na-processes').innerHTML=ranked.length?table(ranked,[['Process',function(p){var a=actor(p.actor);return esc(p.name||'Unnamed process')+'<small>PID '+esc(p.pid)+(a.kind!=='unattributed'&&a.evidence?' / '+esc(a.label):'')+'</small><small class="na-row-age">'+esc(observed(p))+'</small>';}],['CPU between scans',cpuCell],['Memory',function(p){return finite(p.memory_bytes)?esc(bytes(p.memory_bytes)):'<span class="na-not-measured">Not measured</span>';}]]):emptyInventory(data,'processes');
+    renderProcesses(data);renderClawmetry(data);
     if(el('na-listeners'))el('na-listeners').innerHTML=listeners.length?table(listeners,[['Listening address',function(l){var address=l.address||'Address not recorded';if(address.indexOf(':')>=0&&address[0]!=='[')address='['+address+']';return esc(address)+':'+esc(l.port)+'<small>'+esc(l.protocol||'Protocol not recorded')+'</small><small class="na-row-age">'+esc(observed(l))+'</small>';}],['Reported process',function(l){return l.pid!=null?'PID '+esc(l.pid):'Not identified';}],['Connections accepted from',function(l){return esc(l.exposure==='loopback'?'This machine only':l.exposure==='nonloopback'?'Other network interfaces':'Scope not established');}]]):emptyInventory(data,'listeners');
   }
   function coverageHtml(data) {
@@ -268,6 +294,7 @@
   }
   function resetScope(key) {
     invalidate();state.scope=key;state.data=null;state.selected=null;state.lastLoaded=0;
+    state.processQuery='';state.processPage=0;if(el('na-process-search'))el('na-process-search').value='';
     render({available:false,reason:'Reading this node’s recorded observations.',summary:{},coverage:{},events:[],preferences:{}});
     text('na-preference-message','');
   }
@@ -345,11 +372,14 @@
       else if(button.dataset.naEvent!=null){stopReplay();chooseEvent(button.dataset.naEvent,true);}
       else if(button.dataset.naOpen!=null){stopReplay();showView('observe');chooseEvent(button.dataset.naOpen,true);if(el('na-evidence'))el('na-evidence').scrollIntoView({block:'nearest',behavior:reducedMotion()?'auto':'smooth'});}
       else if(button.id==='na-refresh')load(true);
+      else if(button.id==='na-process-clear'){state.processQuery='';state.processPage=0;if(el('na-process-search')){el('na-process-search').value='';el('na-process-search').focus();}renderProcesses(state.data||{});}
+      else if(button.id==='na-process-prev'||button.id==='na-process-next'){state.processPage+=button.id==='na-process-next'?1:-1;renderProcesses(state.data||{});if(el('na-processes'))el('na-processes').scrollTop=0;}
       else if(button.id==='na-play')startReplay();
       else if(button.id==='na-open-guard'&&typeof window.switchTab==='function'){window.switchTab('guard');if(window.guardShowView)window.guardShowView('checks');}
       else if(button.dataset.naDecision){var e=selected();if(e)mutate('reviews',{event_id:e.id,decision:button.dataset.naDecision,reason:el('na-review-reason')?el('na-review-reason').value.replace(/[\r\n\t]/g,' ').trim():''},'na-review-message');}
     });
     root.addEventListener('submit',function(event){event.preventDefault();if(event.target.id!=='na-preferences')return;var body={};PREFS.forEach(function(p){var input=event.target.elements.namedItem(p[0]);if(input&&!input.disabled)body[p[0]]=input.checked;});mutate('preferences',body,'na-preference-message');});
+    root.addEventListener('input',function(event){if(event.target.id==='na-process-search'){state.processQuery=event.target.value;state.processPage=0;renderProcesses(state.data||{});if(el('na-processes'))el('na-processes').scrollTop=0;}});
     if(el('na-scrub'))el('na-scrub').addEventListener('input',function(){stopReplay();var e=events()[Number(this.value)];if(e)chooseEvent(e.id,true);});
   }
   window.loadNodeActivity=function(){bind();return load(false);};
