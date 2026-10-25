@@ -22,3 +22,7 @@ This candidate is not merged, released, installed or verified live. Do not claim
 ## Publication attempts
 
 The local Git add/commit attempt failed because this session cannot create .git/worktrees/process-search/index.lock. The GitHub connector also refused branch creation with HTTP 403, Resource not accessible by integration. No remote branch or pull request was created. Changes remain in the isolated worktree, on feat/process-search-self-usage, without a new local commit.
+
+## Permissions restored and release validation
+
+The earlier sandbox/publication limitations are resolved for this continuation. All 117 focused tests now pass, including the real process/listener check and both browser viewport tests. The actual installed dashboard and collector are identified by the new recognizer. Hosted Factory requirement 29fd5189-7479-4259-8b97-2f74a5d4031b and blueprint 2dffd534-2073-4af2-b943-d6dbed701ee1 version 8 are published and verified. Manifest entries now cite the hosted requirement. Git commit and push succeeded, and release delivery is in progress. Earlier limitations remain here as historical evidence only.
