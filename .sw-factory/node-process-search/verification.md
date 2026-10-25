@@ -1,34 +1,27 @@
-# Candidate verification
+# Process search and live measurements verification
 
-The implementation uses the existing local API and encrypted nodeActivity snapshot. It adds no endpoint, timer or dependency. Own-process observations are sampled before bounded enumeration and use the existing PID/start-time CPU comparison. Software labels do not change actor attribution.
+The Node view searches all retained processes by name, PID and recognized ClawMetry role before pagination. A separate section shows identified collector/dashboard processes with measured CPU and resident memory. Raw command lines are used transiently for exact entry-point recognition and are never serialized.
 
-## Evidence
+One daemon writer worker replaces ingest-loop collection. Full observations remain at 30 seconds; process/resource frames accelerate to two seconds while a bounded viewer lease is active. Request handlers read persisted frames through authenticated daemon RPC. CPU rates retain PID/start-time identity and comparison-gap checks. The browser's one active-view loop preserves search and stops on hidden/off-tab changes.
 
-- Focused unit, store, wiring and JavaScript lifecycle suite: 113 passed, one real listener test excluded after its owned socket could not start in this sandbox.
-- Regression proof against original source: 17 new collector/recognition cases failed and the new JS pagination/result-count assertion failed. Restored candidate passes.
-- Live Jinja template renders the search controls, pagination and monitoring-usage section with unique element IDs.
-- JavaScript syntax, whitespace, English mechanical check and acceptance traceability pass. Coverage is 436/504, with the existing 68 uncovered unchanged.
-- New isolated browser tests cover widths 320 and 1280, role visibility, search beyond the first hundred rows, PID/name/role search, refresh preservation, clear, escaping, page navigation and no search-triggered fetch. Execution awaits an environment that can launch Chromium.
-- New Python has no added Ruff findings. Seven existing BLE001 findings in the collector remain unchanged.
+Cloud frames remain AES-GCM encrypted through the existing authenticated cache. Owned cache reads renew presence for at most 40 seconds; existing wake responses carry only that bounded observation hint independently of slow ingest. Publication has one unsent frame and never blocks sampling. No generic command executes on the wake worker.
 
-## Delivery limits
+## Verification evidence
 
-macOS denies this session access to process enumeration (sysctl) and the owned socket listener. The browser subprocess fails with MachPortRendezvousServer permission denial. The connected browser can inspect the installed Node page, which still shows the old capped list, but its security policy rejects local file preview URLs. No attempt was made to bypass that restriction.
+- Initial focused collector, store, lifecycle and browser suite: 117 passed, including actual process/listener checks and 320/1280 viewport tests.
+- Regression proof against the original source: 17 new collector cases and the JS pagination assertion failed; restored candidate passed.
+- Live cadence and startup/stop guards cover blocked ingest, read-only proxy rejection, lease expiry, expensive-source exclusion, private RPC authentication, delayed/snapshot states and search preservation.
+- Cloud Node/relay/wake/inline-JS suite: 232 passed, including exact owner/node binding, lease expiry and no repeated full-snapshot read.
+- Actual installed local frames advanced by 1.941 and 1.890 seconds. The running browser showed measured collector/dashboard CPU, changing resident memory and CPU bars, with ClawMetry search preserved and Live, every 2 seconds visible.
+- English mechanical checks, acceptance traceability, CI test listing and module map passed. Acceptance coverage is 440/508 with the pre-existing 68 uncovered unchanged.
 
-The local requirements and blueprint were written before source implementation. Hosted Factory publication is pending because the configured keychain API credential was unavailable on the subsequent request. New manifest entries explicitly identify their local source.
+## Release state
 
-This candidate is not merged, released, installed or verified live. Do not claim production completion. Before merge, run the browser and real-process checks with permitted host access, publish the Factory records, and verify the encrypted hosted path. Then follow FLYWHEEL.md for green CI, release, cloud pin and served-artifact verification.
+Public feature PR: https://github.com/vivekchand/clawmetry/pull/6519
+Paired cloud PR: https://github.com/vivekchand/clawmetry-cloud/pull/2661
 
-## Publication attempts
+Release checks are in progress. The feature is not yet publicly released or hosted-live verified. After current-head CI passes, follow the separate release PR, verified published wheel, cloud pin/deploy, encrypted-frame and hosted-browser checks before claiming completion.
 
-The local Git add/commit attempt failed because this session cannot create .git/worktrees/process-search/index.lock. The GitHub connector also refused branch creation with HTTP 403, Resource not accessible by integration. No remote branch or pull request was created. Changes remain in the isolated worktree, on feat/process-search-self-usage, without a new local commit.
+## Drift check evidence
 
-## Permissions restored and release validation
-
-The earlier sandbox/publication limitations are resolved for this continuation. All 117 focused tests now pass, including the real process/listener check and both browser viewport tests. The actual installed dashboard and collector are identified by the new recognizer. Hosted Factory requirement 29fd5189-7479-4259-8b97-2f74a5d4031b and blueprint 2dffd534-2073-4af2-b943-d6dbed701ee1 version 8 are published and verified. Manifest entries now cite the hosted requirement. Git commit and push succeeded, and release delivery is in progress. Earlier limitations remain here as historical evidence only.
-
-## Live cadence acceptance
-
-The user requested htop-like behavior after seeing a 139-second CPU comparison gap. Tried the installed htop with a one-second refresh. The expanded requirement and blueprint were published before the cadence correction. One independent worker now samples live resource frames every two seconds during a bounded viewer lease, with full observations every 30 seconds. The ingest-loop trigger was removed. The first installed test exposed a startup proxy handle; the worker now reacquires the writer after the local service marks ownership, and refuses read-only proxies.
-
-Actual installed API frames advanced by 1.941 and 1.890 seconds. The live local browser displayed measured collector/dashboard CPU, changing resident memory and CPU bars while preserving the ClawMetry search. Browser live state reads Live, every 2 seconds. CPU gap rejection and PID/start-time checks remain intact. Targeted tests cover blocked ingest, lease expiry, slow-source exclusion, private RPC auth, live JS updates and ephemeral sealed viewing requests. Cloud tests cover sealed leases, encrypted frames, owner/node binding and no repeated full snapshot fetch.
+The first live-cadence drift verdict cited older frontend behavior. Current renderInventory delegates to renderProcesses and renderClawmetry; those functions implement retained-row filtering/pagination and the dedicated self-usage section. schedule uses a 2000ms live interval, load requests live=1, and the old ten/fifteen second period is an explicit older-collector fallback. The hosted blueprint now names these functions and contracts for review. No check is bypassed.
