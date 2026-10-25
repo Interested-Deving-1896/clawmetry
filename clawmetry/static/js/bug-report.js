@@ -267,7 +267,10 @@
 
   function setScreenshot(dataUrl, name) {
     _idemKey = null;
-    _screenshot = { dataUrl: dataUrl, name: String(name).slice(0, 80),
+    var format = /^data:image\/(png|jpeg|webp);/.exec(dataUrl);
+    var extension = format ? (format[1] === 'jpeg' ? 'jpg' : format[1]) : 'png';
+    name = String(name).replace(/\.[^.]+$/, '').slice(0, 70) + '.' + extension;
+    _screenshot = { dataUrl: dataUrl, name: name,
                     bytes: Math.round(dataUrl.length * 0.75) };
     var fig = $('bug-shot'), im = $('bug-shot-img'), label = $('bug-shot-name');
     if (im) im.src = dataUrl;
