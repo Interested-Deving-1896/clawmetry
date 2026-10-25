@@ -33,6 +33,7 @@ import re
 import sys
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 
 from flask import Blueprint, jsonify, request
 
@@ -183,10 +184,13 @@ def collect_diagnostics(client: dict = None) -> dict:
                        ("viewport", 40), ("locale", 20), ("theme", 20)):
         val = client.get(key)
         if val:
+            if key == "page" and val not in ("local dashboard", "hosted dashboard"):
+                continue
             diag[key] = str(val)[:limit]
-    errors = client.get("console_errors")
-    if isinstance(errors, list) and errors:
-        diag["console_errors"] = [str(e)[:300] for e in errors[:10]]
+    # Browser errors can embed prompts, paths and credentials. Only a count is safe.
+    count = client.get("console_error_count")
+    if isinstance(count, int) and not isinstance(count, bool):
+        diag["console_error_count"] = max(0, min(count, 10))
     return diag
 
 
@@ -221,7 +225,20 @@ def _post_to_cloud(payload: dict) -> tuple[dict, int]:
 @bp_support.route("/api/bug-report", methods=["POST"])
 def api_bug_report():
     """Take a bug report from the dashboard and forward it to the intake."""
-    data = request.get_json(silent=True) or {}
+    origin = request.headers.get("Origin")
+    if origin and urlsplit(origin).netloc != request.host:
+        return jsonify(ok=False, error="Please send the report from your ClawMetry dashboard."), 403
+    if request.content_length and request.content_length > 3 * 1024 * 1024:
+        return jsonify(ok=False, error="Please choose a smaller screenshot."), 413
+    raw = request.stream.read(3 * 1024 * 1024 + 1)
+    if len(raw) > 3 * 1024 * 1024:
+        return jsonify(ok=False, error="Please choose a smaller screenshot."), 413
+    try:
+        data = json.loads(raw)
+    except (ValueError, UnicodeError):
+        data = None
+    if not isinstance(data, dict):
+        return jsonify(ok=False, error="Please reopen the report form and try again."), 400
     title = str(data.get("title") or "").strip()[:MAX_TITLE]
     body = str(data.get("body") or data.get("description") or "").strip()[:MAX_BODY]
     if not title:

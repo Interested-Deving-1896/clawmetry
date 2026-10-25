@@ -4379,3 +4379,12 @@ body.cm-assistant-active #license-expired-banner[data-ending-trial="true"] { dis
 @media (prefers-reduced-motion: reduce) {
   .bug-sev, .bug-send, .bug-secondary, .bug-field input, .bug-field textarea { transition: none; }
 }
+
+/* Always reachable, including when a narrow screen hides the sidebar. */
+.bug-float{position:fixed;right:18px;top:50%;z-index:900;display:flex;align-items:center;gap:9px;padding:12px 16px;border:1px solid #fa887c;border-radius:24px;background:#ed5143;color:#fff;font:600 14px/1.2 Manrope,system-ui,sans-serif;box-shadow:0 4px 18px #0004;cursor:pointer}
+.bug-float svg{width:20px;height:20px}.bug-float:hover{background:#d93f32}.bug-float:focus-visible{outline:2px solid #fa887c;outline-offset:4px}
+.bug-types{display:flex;flex-wrap:wrap;gap:8px}.bug-types legend{margin-bottom:8px}.bug-types .bug-help{display:inline;font-weight:400;margin-left:5px}.bug-types label{font-size:12px;padding:7px 9px;border:1px solid var(--border-primary);border-radius:7px;cursor:pointer}.bug-types input{accent-color:#ed5143;vertical-align:middle}.bug-types label:has(:checked){border-color:#fa887c;background:#ed514315}
+.bug-overlay .bug-severity{display:grid;grid-template-columns:1fr 1fr}.bug-overlay .bug-sev{flex-direction:column;gap:2px;padding:8px 11px}.bug-form{gap:15px}
+@media(max-width:700px){.bug-float{top:auto;bottom:18px;right:14px}.bug-types .bug-help{display:block;margin-left:0}.bug-overlay .bug-severity{grid-template-columns:1fr}}
+
+.bug-priority summary{color:var(--text-muted);font-size:12px;cursor:pointer}.bug-priority .bug-severity{margin-top:10px}.bug-overlay .bug-form{gap:12px}.bug-overlay .bug-field textarea{min-height:80px}.bug-overlay .bug-counter{margin-top:2px}

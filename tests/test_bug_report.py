@@ -190,10 +190,9 @@ def test_client_context_is_clipped_not_trusted():
         "page": "p" * 5000, "user_agent": "u" * 5000,
         "console_errors": ["e" * 5000] * 50,
         "unexpected_key": "should be dropped"})
-    assert len(diag["page"]) <= 200
+    assert "page" not in diag
     assert len(diag["user_agent"]) <= 300
-    assert len(diag["console_errors"]) <= 10
-    assert all(len(e) <= 300 for e in diag["console_errors"])
+    assert "console_errors" not in diag
     assert "unexpected_key" not in diag
 
 
@@ -312,3 +311,35 @@ def test_reopening_shows_the_form_not_the_last_receipt():
     body = js.split("window.openBugModal", 1)[1].split("window.closeBugModal", 1)[0]
     assert "resetBugForm" in body, "openBugModal leaves a stale receipt up"
     assert "preventScroll" in js, "focusing the first field scrolls the dialog"
+
+
+def test_prominent_bug_control_and_issue_checkboxes_render():
+    import dashboard as d
+    from flask import render_template_string
+    with d.app.test_request_context('/'):
+        html = render_template_string(d.DASHBOARD_HTML, version=d.__version__, legacy_nav=False, v2_enabled=False, is_pro=False)
+    assert 'class="bug-float"' in html
+    assert html.count('name="bug-category"') == 3
+    assert 'public issue' in html and 'stay private' in html
+
+
+@pytest.mark.parametrize('raw', ['[]', 'null', 'true', '{broken'])
+def test_malformed_report_is_a_human_error(client, raw):
+    response = client.post('/api/bug-report', data=raw, content_type='application/json')
+    assert response.status_code == 400
+    assert 'try again' in response.json['error']
+
+
+def test_report_rejects_cross_origin_submission(client):
+    response = client.post('/api/bug-report', json={'title': 'test'}, headers={'Origin': 'https://elsewhere.example'})
+    assert response.status_code == 403
+
+
+def test_diagnostics_exclude_secret_urls_and_raw_errors():
+    diagnostics = support.collect_diagnostics({'page': '/node/123?token=SECRET', 'console_errors': ['SECRET /home/person/private'], 'console_error_count': 2})
+    assert 'SECRET' not in json.dumps(diagnostics)
+    assert diagnostics['console_error_count'] == 2
+    from pathlib import Path
+    script = (Path(__file__).resolve().parents[1] / 'clawmetry/static/js/bug-report.js').read_text()
+    assert 'location.search' not in script
+    assert 'ctx.console_errors' not in script

@@ -11,6 +11,10 @@
      report that went somewhere.
 
      Behaviour lives in static/js/bug-report.js. -->
+<button type="button" class="bug-float" onclick="openBugModal()" aria-haspopup="dialog" aria-controls="bug-overlay">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="7" width="10" height="14" rx="5"/><path d="M9 7V5a3 3 0 0 1 6 0v2M12 8v12M3 9l4 2M17 11l4-2M3 17l4-2M17 15l4 2M2 13h5M17 13h5"/></svg>
+  Report a bug
+</button>
 <div class="modal-overlay bug-overlay" id="bug-overlay" role="dialog" aria-modal="true"
      aria-labelledby="bug-modal-title" onclick="if(event.target===this)closeBugModal()">
   <div class="modal-card bug-card">
@@ -18,7 +22,7 @@
     <div class="modal-header">
       <div class="modal-header-left">
         <div class="modal-title" id="bug-modal-title">Report a bug</div>
-        <div class="bug-subtitle">Something in ClawMetry itself is wrong? This reaches the people who build it.</div>
+        <div class="bug-subtitle">Tell us what happened. Your report and screenshot go straight to Vivek.</div>
       </div>
       <div class="modal-header-right">
         <div class="modal-close" onclick="closeBugModal()" aria-label="Close" role="button" tabindex="0">×</div>
@@ -39,11 +43,19 @@
 
         <label class="bug-field">
           <span class="bug-label">What happened, in your own words</span>
-          <textarea id="bug-body" rows="5" maxlength="5000"
+          <textarea id="bug-body" rows="3" maxlength="4800"
                     placeholder="What you did, what happened, and what you expected instead."></textarea>
-          <span class="bug-counter"><span id="bug-body-count">0</span>/5000</span>
+          <span class="bug-counter"><span id="bug-body-count">0</span>/4800</span>
         </label>
 
+        <fieldset class="bug-field bug-types">
+          <legend class="bug-label">What kind of issue? <span class="bug-help">Optional, choose any that apply</span></legend>
+          <label><input type="checkbox" name="bug-category" value="Display issue"> Display issue</label>
+          <label><input type="checkbox" name="bug-category" value="Wrong or missing data"> Wrong or missing data</label>
+          <label><input type="checkbox" name="bug-category" value="Something stopped working"> Something stopped working</label>
+        </fieldset>
+
+        <details class="bug-priority"><summary id="bug-priority-label">Priority: Normal (change)</summary>
         <fieldset class="bug-field bug-severity">
           <legend class="bug-label">How much is it holding you up</legend>
           <label class="bug-sev" data-sev="blocking">
@@ -67,6 +79,7 @@
             <span class="bug-sev-note">Cosmetic, or a small annoyance</span>
           </label>
         </fieldset>
+        </details>
 
         <label class="bug-field">
           <span class="bug-label">Where we reply</span>
@@ -103,6 +116,8 @@
         </details>
 
         <div class="bug-error" id="bug-error" role="alert" hidden></div>
+
+        <p class="bug-help">Your report text and app details become a public issue. Your email and screenshot stay private to the ClawMetry team.</p>
 
         <div class="bug-actions">
           <button type="submit" class="bug-send" id="bug-send">Send report</button>

@@ -26,6 +26,8 @@
   var _diagnostics = null;
   var _screenshot = null;      // {dataUrl, name, bytes}
   var _lastFocus = null;
+  var _sending = false;
+  var _imageLoading = false;
 
   /* Capture console errors so a report can carry what the page already
      knew was wrong. Capped, and only ever sent with an explicit Send. */
@@ -84,14 +86,16 @@
 
   function clientContext() {
     var ctx = {
-      page: String(location.pathname + location.search).slice(0, 200),
+      page: window.CLOUD_MODE ? 'hosted dashboard' : 'local dashboard',
       tab: currentTab(),
       user_agent: navigator.userAgent,
       viewport: window.innerWidth + 'x' + window.innerHeight,
       locale: navigator.language || '',
       theme: document.body.getAttribute('data-theme') || ''
     };
-    if (_consoleErrors.length) ctx.console_errors = _consoleErrors.slice(0, 10);
+    // Error strings and URLs can contain credentials, prompts or local paths.
+    // Report only the count; the reporter supplies the actual issue in the form.
+    if (_consoleErrors.length) ctx.console_error_count = _consoleErrors.length;
     return ctx;
   }
 
@@ -109,7 +113,7 @@
     if (receipt && !receipt.hidden) {
       window.resetBugForm();
     }
-    _idemKey = newIdemKey();
+    if (!_idemKey) _idemKey = newIdemKey();
     overlay.classList.add('open');
     renderMyReports();
     loadDiagnostics();
@@ -129,6 +133,7 @@
   };
 
   window.closeBugModal = function () {
+    if (_sending) return;
     var overlay = $('bug-overlay');
     if (overlay) overlay.classList.remove('open');
     document.removeEventListener('keydown', onKeydown);
@@ -138,6 +143,15 @@
 
   function onKeydown(e) {
     if (e.key === 'Escape') window.closeBugModal();
+    if (e.key === 'Tab') {
+      var nodes = Array.prototype.filter.call($('bug-overlay').querySelectorAll(
+        'input, textarea, button, a[href], summary, [tabindex="0"]'),
+        function(n) { return !n.disabled && n.getClientRects().length; });
+      if (!nodes.length) return;
+      var first = nodes[0], last = nodes[nodes.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
   }
 
   /* ── diagnostics preview ──────────────────────────────────────────── */
@@ -192,13 +206,20 @@
   }
 
   function acceptImage(file) {
-    if (!file || !/^image\//.test(file.type || '')) {
+    if (_sending) return;
+    if (!file || !/^image\/(png|jpeg|webp)$/.test(file.type || '')) {
       showError('That file is not an image. PNG, JPEG or WebP work.');
       return;
     }
+    if (file.size > 20 * 1024 * 1024) {
+      showError('Please choose an image smaller than 20 MB. We shrink it before sending.');
+      return;
+    }
+    _imageLoading = true;
     var reader = new FileReader();
     reader.onload = function () { downscale(String(reader.result), file.name || 'screenshot'); };
     reader.onerror = function () {
+      _imageLoading = false;
       showError('We could not read that image. Try saving it again, or send '
         + 'the report without it.');
     };
@@ -208,6 +229,7 @@
   function downscale(dataUrl, name) {
     var img = new Image();
     img.onload = function () {
+      _imageLoading = false;
       var scale = Math.min(1, MAX_EDGE / Math.max(img.width, img.height));
       var w = Math.max(1, Math.round(img.width * scale));
       var h = Math.max(1, Math.round(img.height * scale));
@@ -236,6 +258,7 @@
       setScreenshot(out || dataUrl, name);
     };
     img.onerror = function () {
+      _imageLoading = false;
       showError('We could not read that image. Try saving it again, or send '
         + 'the report without it.');
     };
@@ -294,6 +317,8 @@
   /* ── submit ───────────────────────────────────────────────────────── */
   window.submitBugReport = function (event) {
     if (event) event.preventDefault();
+    if (_sending) return false;
+    if (_imageLoading) { showError('Your screenshot is still being prepared. Please try again in a moment.'); return false; }
     var btn = $('bug-send');
     var errBox = $('bug-error');
     var title = ($('bug-title') || {}).value || '';
@@ -302,10 +327,13 @@
       return false;
     }
     var sevInput = document.querySelector('input[name="bug-severity"]:checked');
+    var types = Array.prototype.map.call(document.querySelectorAll('[name="bug-category"]:checked'), function(c) { return c.value; });
+    var description = (($('bug-body') || {}).value || '').trim();
+    if (types.length) description = 'Issue types: ' + types.join(', ') + '\n\n' + description;
     var payload = {
       idem_key: _idemKey || (_idemKey = newIdemKey()),
       title: title.trim(),
-      body: (($('bug-body') || {}).value || '').trim(),
+      body: description,
       severity: sevInput ? sevInput.value : 'normal',
       email: (($('bug-email') || {}).value || '').trim(),
       surface: currentTab(),
@@ -318,12 +346,15 @@
     }
 
     if (errBox) errBox.hidden = true;
+    _sending = true;
     if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+    var controller = new AbortController();
+    var timer = setTimeout(function() { controller.abort(); }, 30000);
 
     fetch('/api/bug-report', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload), signal: controller.signal
     })
       .then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (j) {
@@ -331,8 +362,9 @@
         });
       })
       .then(function (res) {
+        clearTimeout(timer); _sending = false;
         if (btn) { btn.disabled = false; btn.textContent = 'Send report'; }
-        if (!res.body || !res.body.ok) {
+        if (res.status >= 400 || !res.body || !res.body.ok || !/^CM-[0-9A-HJ-NP-Z]{8}$/.test(res.body.ticket || '')) {
           showError(res.body && res.body.error
             ? res.body.error
             : 'We could not send that just now, so nothing was lost. '
@@ -342,6 +374,7 @@
         showReceipt(res.body, payload);
       })
       .catch(function () {
+        clearTimeout(timer); _sending = false;
         if (btn) { btn.disabled = false; btn.textContent = 'Send report'; }
         showError('We could not reach ClawMetry, so nothing was sent. Check '
           + 'your connection and press Send report again. Your text is still here.');
@@ -495,7 +528,11 @@
     var rows = document.querySelectorAll('.bug-sev');
     Array.prototype.forEach.call(rows, function (row) {
       var input = row.querySelector('input[type="radio"]');
-      if (input && input.checked) row.setAttribute('data-checked', '');
+      if (input && input.checked) {
+        row.setAttribute('data-checked', '');
+        var priority = $('bug-priority-label');
+        if (priority) priority.textContent = 'Priority: ' + input.value.charAt(0).toUpperCase() + input.value.slice(1) + ' (change)';
+      }
       else row.removeAttribute('data-checked');
     });
   }
