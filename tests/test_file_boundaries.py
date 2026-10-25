@@ -5,7 +5,7 @@ import pytest
 from flask import Flask, jsonify
 
 import dashboard
-from routes import infra, sessions, skills
+from routes import infra, meta, sessions, skills
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -31,6 +31,7 @@ def surface(monkeypatch, tmp_path):
     app.register_blueprint(infra.bp_memory)
     app.register_blueprint(skills.bp_skills)
     app.register_blueprint(sessions.bp_sessions)
+    app.register_blueprint(meta.bp_auth)
     monkeypatch.setattr(skills, "_find_skill_dir", lambda _: str(workspace))
 
     @app.route("/api/boundary-probe", methods=["GET", "POST"])
@@ -128,6 +129,18 @@ def test_authenticated_reverse_proxy_still_works(surface):
     response = client.get("/api/file?path=ok.txt", base_url="http://dashboard.example",
                           headers={"X-Forwarded-For": "203.0.113.1", "Authorization": "Bearer boundary-test-token"})
     assert response.status_code == 200
+
+
+@pytest.mark.parametrize("authorized", [False, True])
+@pytest.mark.parametrize("headers", [{"Host": "evil.example"}, {"X-Forwarded-For": "203.0.113.1"}])
+def test_bootstrap_keeps_its_stricter_refusal_contract(surface, authorized, headers):
+    client, _, _ = surface
+    headers = dict(headers)
+    if authorized:
+        headers["Authorization"] = "Bearer boundary-test-token"
+    response = client.get("/api/auth/detected-token", headers=headers)
+    assert response.status_code == 403
+    assert "token" not in response.get_json()
 
 
 @pytest.mark.parametrize("path", [None, [], {}, 3, "bad\0path"])

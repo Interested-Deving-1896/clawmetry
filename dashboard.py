@@ -8238,8 +8238,10 @@ def _check_auth():
                     "crossOriginBlocked": True,
                 }
             ), 403
-    if request.path == "/api/auth/check":
-        return  # Auth check endpoint is always accessible
+    if request.path in ("/api/auth/check", "/api/auth/detected-token"):
+        # Bootstrap checks its stricter direct-loopback rule in the handler,
+        # including when a caller supplies otherwise valid credentials.
+        return
     if request.path == "/api/gw/config":
         # Gateway setup must work before auth is configured, but only from
         # loopback: this route opens an outbound connection to a caller-supplied
