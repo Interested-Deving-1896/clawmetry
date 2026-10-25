@@ -3,7 +3,7 @@
   'use strict';
   var state = {data:null, scope:null, generation:0, pending:null, controller:null, timer:null,
     replay:null, selected:null, view:'observe', lastLoaded:0, bound:false, mutation:false,
-    mutationRequest:null, unconfirmed:null, readRequest:null, processQuery:'', processPage:0, liveData:null, liveUnsupported:false};
+    mutationRequest:null, unconfirmed:null, readRequest:null, processQuery:'', processPage:0, liveData:null, liveUnsupported:false, liveMisses:0, liveStarted:Date.now()};
   var PROCESS_ROLES={collector:'Collector',dashboard:'Dashboard',desktop:'Desktop app',cli:'CLI'};
   var UNCONFIRMED='Save not confirmed. The change may still apply. Refresh this node before you retry.';
   var PREFS = [
@@ -246,7 +246,7 @@
   function liveStatus() {
     var data=state.liveData, at=data&&epoch(data.collected_at), measured=data&&(data.processes||[]).some(function(p){return finite(p.cpu_percent);});
     var fresh=at!=null&&Date.now()-at<8000;
-    text('na-live-state',state.liveUnsupported?'Snapshot updates':!data?'Starting live measurements':!fresh?'Live updates delayed':measured?'Live · every 2 seconds':'Sampling CPU');
+    text('na-live-state',state.liveUnsupported?'Snapshot updates':!data?(Date.now()-state.liveStarted>10000?'Waiting for live data':'Starting live measurements'):!fresh?'Live updates delayed':measured?'Live · every 2 seconds':'Sampling CPU');
     if(el('na-live-state'))el('na-live-state').dataset.live=String(!!(fresh&&measured));
   }
   function renderInventory(data) {
@@ -307,7 +307,7 @@
   }
   function resetScope(key) {
     invalidate();state.scope=key;state.data=null;state.selected=null;state.lastLoaded=0;
-    state.liveData=null;state.liveUnsupported=false;liveStatus();state.processQuery='';state.processPage=0;if(el('na-process-search'))el('na-process-search').value='';
+    state.liveData=null;state.liveUnsupported=false;state.liveMisses=0;state.liveStarted=Date.now();liveStatus();state.processQuery='';state.processPage=0;if(el('na-process-search'))el('na-process-search').value='';
     render({available:false,reason:'Reading this node’s recorded observations.',summary:{},coverage:{},events:[],preferences:{}});
     text('na-preference-message','');
   }
@@ -336,10 +336,12 @@
         if(!response.ok)throw new Error(data.detail||data.message||data.error||data.reason||'The recorded observations could not be loaded.');
         if(!data||typeof data!=='object')throw new Error('The node returned an unreadable observation.');
         if(live&&data.live===true){
-          if(data.available!==false){state.liveData=data;var display=inventoryData();summary(display);renderInventory(display);}
+          if(data.available!==false&&(!state.liveData||epoch(data.collected_at)>=epoch(state.liveData.collected_at))){state.liveData=data;state.liveMisses=0;var display=inventoryData();summary(display);renderInventory(display);}
+          else if(++state.liveMisses>=5&&!((state.data.capabilities||{}).live_metrics)){state.liveUnsupported=true;}
           liveStatus();
         }else{
           if(live)state.liveUnsupported=true;
+          else if((data.capabilities||{}).live_metrics)state.liveUnsupported=false;
           state.data=data;state.lastLoaded=Date.now();render(data);
           if(state.liveData){summary(inventoryData());renderInventory(inventoryData());}
           liveStatus();

@@ -16,7 +16,6 @@ import tempfile
 import time
 import glob
 import base64
-import hashlib
 import secrets
 import logging
 import platform
@@ -600,7 +599,7 @@ def _graceful_shutdown(reason: str, *, force_exit: bool) -> None:
     stop_delivery()
 
     from clawmetry.node_activity_service import stop_node_activity
-    stop_node_activity()
+    stop_node_activity(timeout=0.2)
 
     # Finish the journal tail before tearing down its shared writer connection.
     from clawmetry.asimov.daemon import stop as _stop_asimov
@@ -26107,7 +26106,7 @@ def run_daemon() -> None:
             from clawmetry.config import is_cloud_disabled
             if is_cloud_disabled() or not _sync_allowed() or not config.get("api_key") or not config.get("encryption_key"):
                 return
-            owner = hashlib.sha256(config["api_key"].encode()).hexdigest()
+            owner = _owner_hash_for_token(config["api_key"])
             _post("/ingest/cache", {"node_id": config["node_id"],
                   "cache_key": "node_activity_live:" + owner + ":" + config["node_id"],
                   "shape": "node_activity_live", "ttl": 12,

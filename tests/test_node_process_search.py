@@ -210,3 +210,19 @@ def test_live_worker_refuses_a_startup_proxy_instead_of_silently_polling_it():
     from clawmetry.local_store import _ProxyStore
     with pytest.raises(RuntimeError,match='daemon writer'):
         service.start_node_activity(_ProxyStore())
+
+
+def test_shutdown_during_collection_does_not_start_a_late_write(tmp_path,monkeypatch):
+    import threading
+    from clawmetry import node_activity_service as service
+    from tests.test_node_activity import Store
+    store=Store();stopping=threading.Event()
+    def collect(**kwargs):
+        stopping.set()
+        return collector.collect_node_activity(psutil_module=Sensor(),home=tmp_path,**kwargs)
+    service._LAST_TICKS.clear()
+    monkeypatch.setattr(service,'collect_node_activity',collect)
+    try:
+        assert service.tick_node_activity(store,stop_event=stopping) is None
+        assert not store.query_node_activity()['available']
+    finally:store._conn.close()

@@ -287,7 +287,7 @@ class NodeActivityStoreMixin:
                                  "review_limit": MAX_REVIEWS, "reviews_per_event_limit": MAX_REVIEWS_PER_EVENT,
                                  "process_sighting_limit": MAX_PROCESS_SIGHTINGS,
                                  "process_program_limit": MAX_PROCESS_PROGRAMS}
-            body["capabilities"] = {"preferences_writable": True, "reviews_writable": True}
+            body["capabilities"] = {"preferences_writable": True, "reviews_writable": True, "live_metrics": True}
             # Collector source caps already bound a full pass. Persist every
             # change, with findings first, before advancing comparison state.
             events.sort(key=lambda event: not event.get("finding"))
@@ -338,7 +338,7 @@ class NodeActivityStoreMixin:
             if event["id"] in by_id:
                 event["review"] = by_id[event["id"]]
         body["samples"] = [json.loads(r[0]) for r in reversed(self._fetch("SELECT payload FROM node_activity_samples ORDER BY observed_at DESC LIMIT 120", []))]
-        body["capabilities"] = {"preferences_writable": True, "reviews_writable": True}
+        body["capabilities"] = {"preferences_writable": True, "reviews_writable": True, "live_metrics": True}
         for source in ("resources", *SOURCE_NAMES):
             if not body["preferences"]["enabled"] or (source in body["preferences"] and not body["preferences"][source]):
                 body.setdefault("coverage", {}).setdefault(source, {})["state"] = "disabled"
