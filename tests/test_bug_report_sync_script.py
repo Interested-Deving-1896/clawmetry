@@ -118,3 +118,10 @@ def test_a_screenshot_is_named_but_never_embedded_in_the_public_issue():
 
 def test_no_screenshot_means_no_mention():
     assert "screenshot" not in sync.issue_body(_REPORT).lower()
+
+
+def test_bridge_token_can_read_checkout_and_write_issues():
+    from pathlib import Path
+    import yaml
+    workflow = yaml.safe_load((Path(_ROOT) / '.github/workflows/bug-report-sync.yml').read_text())
+    assert workflow['permissions'] == {'contents': 'read', 'issues': 'write'}
