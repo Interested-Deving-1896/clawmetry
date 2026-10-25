@@ -11,10 +11,6 @@
      report that went somewhere.
 
      Behaviour lives in static/js/bug-report.js. -->
-<button type="button" class="bug-float" onclick="openBugModal()" aria-haspopup="dialog" aria-controls="bug-overlay">
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="7" width="10" height="14" rx="5"/><path d="M9 7V5a3 3 0 0 1 6 0v2M12 8v12M3 9l4 2M17 11l4-2M3 17l4-2M17 15l4 2M2 13h5M17 13h5"/></svg>
-  Report a bug
-</button>
 <div class="modal-overlay bug-overlay" id="bug-overlay" role="dialog" aria-modal="true"
      aria-labelledby="bug-modal-title" onclick="if(event.target===this)closeBugModal()">
   <div class="modal-card bug-card">

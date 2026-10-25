@@ -318,7 +318,12 @@ def test_prominent_bug_control_and_issue_checkboxes_render():
     from flask import render_template_string
     with d.app.test_request_context('/'):
         html = render_template_string(d.DASHBOARD_HTML, version=d.__version__, legacy_nav=False, v2_enabled=False, is_pro=False)
-    assert 'class="bug-float"' in html
+    assert 'id="left-nav-report"' in html
+    assert 'class="bug-header"' in html
+    assert 'bug-float' not in html
+    nav = html.split('<aside', 1)[1].split('</aside>', 1)[0]
+    assert 'id="left-nav-report"' in nav
+    assert '<svg' in nav.split('id="left-nav-report"', 1)[1].split('</button>', 1)[0]
     assert html.count('name="bug-category"') == 3
     assert 'public issue' in html and 'stay private' in html
 
