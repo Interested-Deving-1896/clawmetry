@@ -1018,7 +1018,7 @@ jobs:
         # -m 'not quarantine': skip any tests listed in tests/quarantine.txt
         # (marked by conftest.py:pytest_collection_modifyitems via quarantine.txt).
         # Quarantined tests still run daily in quarantine-sweep.yml.
-        run: python3 -m pytest tests/test_api.py -v --tb=short -m 'not quarantine'
+        run: python3 -m pytest tests/test_api.py tests/test_file_boundaries.py -v --tb=short -m 'not quarantine'
 
   # ── MOAT verifier (hermetic, hard-fail) ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   # Issue #1491 / PRD #1133 invariant #3: "A regression in either direction
