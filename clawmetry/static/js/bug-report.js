@@ -512,13 +512,14 @@
   function syncNavTop() {
     var nav = document.getElementById('left-nav');
     if (!nav) return;
-    var top = Math.max(0, Math.round(nav.getBoundingClientRect().top + window.scrollY));
+    var top = Math.max(0, Math.round(nav.getBoundingClientRect().top));
     document.documentElement.style.setProperty('--cm-nav-top', top + 'px');
   }
 
   function watchNavTop() {
     syncNavTop();
     window.addEventListener('resize', syncNavTop);
+    window.addEventListener('scroll', syncNavTop, {passive:true});
     // Banners appear and are dismissed long after load.
     try {
       var shell = document.querySelector('.app-shell');

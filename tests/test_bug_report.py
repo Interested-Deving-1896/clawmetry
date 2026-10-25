@@ -356,3 +356,28 @@ def test_upstream_codes_never_reach_the_reporter(client, monkeypatch, upstream):
     response = client.post('/api/bug-report', json={'title': 'Something broke'})
     assert response.status_code == 502
     assert response.json['error'].startswith('We could not file')
+
+
+def test_sidebar_height_uses_viewport_position_after_scrolling():
+    """A page scroll must not be counted twice when sizing the sticky sidebar."""
+    from pathlib import Path
+    import subprocess
+    script_path = Path(__file__).resolve().parents[1] / 'clawmetry/static/js/bug-report.js'
+    harness = r'''
+const vm = require('node:vm'), fs = require('node:fs');
+const events = {}, values = {};
+const context = {
+  window: {scrollY:200, addEventListener:(name,fn)=>{events[name]=fn;}},
+  document: {
+    addEventListener:(name,fn)=>{events[name]=fn;},
+    getElementById:id=>id==='left-nav'?{getBoundingClientRect:()=>({top:150})}:null,
+    querySelector:()=>null, querySelectorAll:()=>[],
+    documentElement:{style:{setProperty:(name,value)=>{values[name]=value;}}}
+  }
+};
+vm.runInNewContext(fs.readFileSync(process.argv[1],'utf8'),context);
+events.DOMContentLoaded();
+console.log(JSON.stringify(values));
+'''
+    values = json.loads(subprocess.check_output(['node', '-e', harness, str(script_path)], text=True))
+    assert values['--cm-nav-top'] == '150px'
