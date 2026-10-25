@@ -1,0 +1,30 @@
+<link rel="stylesheet" href="{{ url_for('static', filename='css/bug-report.css', v=version) }}">
+<button type="button" id="bug-report-open" class="bug-report-trigger" aria-haspopup="dialog" aria-controls="bug-report-dialog">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="7" width="10" height="14" rx="5"/><path d="M9 7V5a3 3 0 0 1 6 0v2M12 8v12M3 9l4 2M17 11l4-2M3 17l4-2M17 15l4 2M2 13h5M17 13h5"/></svg>
+  <span>Report a bug</span>
+</button>
+<dialog id="bug-report-dialog" class="bug-report-dialog" aria-labelledby="bug-report-title" aria-describedby="bug-report-intro" data-version="{{ version }}">
+  <div class="bug-report-heading"><div><h2 id="bug-report-title">Something not right?</h2><p id="bug-report-intro">Send a bug report straight to Vivek.</p></div><button type="button" id="bug-report-close" aria-label="Close bug report">&times;</button></div>
+  <form id="bug-report-form">
+    <fieldset id="bug-report-fields">
+      <label for="bug-report-description">What happened?</label>
+      <textarea id="bug-report-description" minlength="10" maxlength="10000" required rows="4" placeholder="What were you trying to do? What happened instead?" autofocus></textarea>
+      <p class="bug-report-hint">Steps to reproduce it help us fix it faster.</p>
+      <div class="bug-report-types"><span>What kind of issue? <small>(optional)</small></span><div>
+        <label><input type="checkbox" name="bug-category" value="display"> Display issue</label>
+        <label><input type="checkbox" name="bug-category" value="data"> Wrong or missing data</label>
+        <label><input type="checkbox" name="bug-category" value="broken"> Something stopped working</label>
+      </div></div>
+      <label for="bug-report-file" class="bug-report-upload"><strong>Attach a screenshot <small>(optional)</small></strong><span>Choose an image, drop it here, or paste it into this form</span><span class="bug-report-hint">PNG, JPEG or WebP, up to 4 MB</span><input id="bug-report-file" type="file" accept="image/png,image/jpeg,image/webp"></label>
+      <div id="bug-report-attachment" hidden><img id="bug-report-preview" alt="Screenshot to attach"><span id="bug-report-filename"></span><button type="button" id="bug-report-remove">Remove</button></div>
+      <label for="bug-report-email">Your email <small>(optional, so we can reply)</small></label>
+      <input id="bug-report-email" type="email" maxlength="254" autocomplete="email" placeholder="you@example.com">
+      <label class="bug-report-details"><input type="checkbox" id="bug-report-details" checked> Include app version, current tab, runtime and browser</label>
+      <p class="bug-report-hint">Only this report, your attachment and the details you choose are sent to ClawMetry support. Check your screenshot for private information.</p>
+    </fieldset>
+    <p id="bug-report-status" role="status" aria-live="polite"></p>
+    <div class="bug-report-actions"><button type="button" id="bug-report-cancel">Cancel</button><button type="submit" id="bug-report-send">Send bug report</button></div>
+  </form>
+  <div id="bug-report-success" hidden><div class="bug-report-check" aria-hidden="true">✓</div><h3>Report sent. Thank you!</h3><p>Your report has been emailed to Vivek.<br>If you left your email, we can follow up with you.</p><button type="button" id="bug-report-done">Back to ClawMetry</button></div>
+</dialog>
+<script src="{{ url_for('static', filename='js/bug-report.js', v=version) }}" defer></script>

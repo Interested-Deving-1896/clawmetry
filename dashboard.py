@@ -121,6 +121,7 @@ from routes.health import bp_health
 from routes.alerts import bp_alerts, bp_budget
 from routes.channels import bp_channels
 from routes.overview import bp_overview
+from routes.bug_report import bp_bug_report
 from routes.trial import bp_trial
 from routes.onboarding import bp_onboarding
 from routes.components import bp_components
@@ -6560,6 +6561,7 @@ def detect_config(args=None):
         app.register_blueprint(bp_runtime_ingest)
     app.register_blueprint(bp_otlp_traces)
     app.register_blueprint(bp_overview)
+    app.register_blueprint(bp_bug_report)
     app.register_blueprint(bp_trial)
     app.register_blueprint(bp_onboarding)
     app.register_blueprint(bp_security)
@@ -7191,6 +7193,7 @@ DASHBOARD_HTML = r"""
 </head>
 <body data-theme="dark" class="booting has-profile-menu">
 {% include 'partials/overlays.html' %}
+{% include 'partials/bug-report.html' %}
 <div class="zoom-wrapper" id="zoom-wrapper">
 <div class="nav">
   <h1><a href="https://clawmetry.com" style="display:flex;align-items:center;gap:7px;text-decoration:none;color:inherit"><img src="/static/img/logo.svg" width="22" height="22" style="border-radius:4px;vertical-align:middle;flex-shrink:0" alt="ClawMetry"><span><span style="color:var(--text-primary)">Claw</span><span style="color:#E5443A">Metry</span></span></a></h1>
