@@ -319,6 +319,25 @@ async function run() {
   h.answer(h.requests[3],h.payload('old-collector'));await newNode;
   assert.match(selfTable.innerHTML,/updated collector/,'old snapshots provide upgrade guidance without an invented total');
   assert.doesNotMatch(selfTable.innerHTML,/0%/);
+  h=harness();c=h.context;
+  h.nodes.set('na-live-state',{textContent:'',dataset:{}});
+  h.nodes.set('na-processes',{innerHTML:''});
+  const fullRead=c.loadNodeActivity();h.answer(h.requests[0],h.payload('live-node'));await fullRead;
+  assert.equal(h.delays.get(c.cmNodeActivity.getState().timer),2000,'live refresh uses one two-second timer');
+  const savedFull=c.cmNodeActivity.getState().data;
+  c.cmNodeActivity.getState().processQuery='clawmetry';
+  for(let i=0;i<2;i++){
+    h.advance(2000);h.timers.get(c.cmNodeActivity.getState().timer)();
+    assert.equal(h.requests[i+1].url,'/api/node-activity?live=1');
+    const frame=Object.assign(h.payload('live-node'),{live:true,processes:[{pid:99,name:'python3',clawmetry_role:'collector',cpu_percent:12+i,memory_bytes:1048576,observed_at:c.Date.now()}]});
+    const pending=c.cmNodeActivity.getState().pending;h.answer(h.requests[i+1],frame);await pending;
+    assert.equal(c.cmNodeActivity.getState().data,savedFull,'live frames do not refetch or replace event history');
+    assert.match(h.nodes.get('na-processes').innerHTML,new RegExp((12+i)+'%'));
+    assert.equal(c.cmNodeActivity.getState().processQuery,'clawmetry');
+  }
+  assert.match(h.nodes.get('na-live-state').textContent,/Live/);
+  assert.equal(h.nodes.get('na-live-state').dataset.live,'true');
+  c.document.hidden=true;h.listeners.visibilitychange();assert.equal(h.timers.size,0,'hidden pages stop the live loop');
   console.log('Node activity JS contracts and lifecycle passed.');
 }
 run().catch(error => {console.error(error); process.exit(1);});

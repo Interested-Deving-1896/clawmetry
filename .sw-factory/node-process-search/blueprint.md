@@ -33,3 +33,7 @@ Context: partial collection and shared RSS make a single total misleading. Decis
 Preserve the Node screen's existing dark/light theme tokens, type scale and mint accent. Add a restrained full-width ClawMetry section above the two inventory columns. Keep controls left aligned: labeled search input, clear button, result count, then previous/next. Use existing panel and table styling; focus uses the existing accent. On narrow screens the input and controls wrap without horizontal page overflow. No new decoration, animation, font or branding palette is needed for this task. The unique hierarchy is the direct view of monitoring cost, while the rest stays visually quiet.
 
 Reference: https://psutil.io/ documents Process name, cmdline, cpu_times and memory_info across supported OSes. RSS is resident memory; process CPU uses elapsed counter deltas with one core equal to 100 percent.
+
+## Live cadence addition
+
+The hosted blueprint now also covers the htop-like resource view, two-second frames during bounded viewing leases, independent daemon worker, daemon-writer startup ownership, slow-source separation and encrypted cloud cache delivery. The 30-second history cadence is separate from live process metrics. The implementation remains on the existing Node components and HTTP routes.

@@ -26,3 +26,9 @@ The local Git add/commit attempt failed because this session cannot create .git/
 ## Permissions restored and release validation
 
 The earlier sandbox/publication limitations are resolved for this continuation. All 117 focused tests now pass, including the real process/listener check and both browser viewport tests. The actual installed dashboard and collector are identified by the new recognizer. Hosted Factory requirement 29fd5189-7479-4259-8b97-2f74a5d4031b and blueprint 2dffd534-2073-4af2-b943-d6dbed701ee1 version 8 are published and verified. Manifest entries now cite the hosted requirement. Git commit and push succeeded, and release delivery is in progress. Earlier limitations remain here as historical evidence only.
+
+## Live cadence acceptance
+
+The user requested htop-like behavior after seeing a 139-second CPU comparison gap. Tried the installed htop with a one-second refresh. The expanded requirement and blueprint were published before the cadence correction. One independent worker now samples live resource frames every two seconds during a bounded viewer lease, with full observations every 30 seconds. The ingest-loop trigger was removed. The first installed test exposed a startup proxy handle; the worker now reacquires the writer after the local service marks ownership, and refuses read-only proxies.
+
+Actual installed API frames advanced by 1.941 and 1.890 seconds. The live local browser displayed measured collector/dashboard CPU, changing resident memory and CPU bars while preserving the ClawMetry search. Browser live state reads Live, every 2 seconds. CPU gap rejection and PID/start-time checks remain intact. Targeted tests cover blocked ingest, lease expiry, slow-source exclusion, private RPC auth, live JS updates and ephemeral sealed viewing requests. Cloud tests cover sealed leases, encrypted frames, owner/node binding and no repeated full snapshot fetch.

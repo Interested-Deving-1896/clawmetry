@@ -6,7 +6,7 @@ A user could not find ClawMetry in the Node process list or determine its resour
 
 ## Terminology
 
-Retained process: a current or explicitly stale observation stored by the collector.
+Retained process: a current or explicitly stale observation stored by the collector.\
 ClawMetry process: the collector itself or a process with a recognized ClawMetry executable, module or installed script entry point. This identifies software, not the person who started it.
 
 ## Requirements
@@ -31,3 +31,14 @@ As a node owner, I want to see ClawMetry CPU and memory so that I can assess mon
 ## Non-goals, alternatives and risks
 
 No new poller, no process controls, no claim that the process list covers the entire host, and no proportional/shared-memory estimate. Memory is RSS and can count shared pages more than once across processes. No lifetime-average CPU. Searching raw command lines was rejected because arguments can contain secrets. Raising the visible row cap alone was rejected because it still makes discovery difficult. Search filters only retained observations, and the UI says so. Recognition uses exact entry points rather than arbitrary substrings; unrecognized or inaccessible processes stay unlabeled. Rollback removes additive role metadata and UI without a schema migration.
+
+### REQ-OBS-NODE-SEARCH-003: Live measurements
+
+As a node owner, I want changing CPU and memory measurements while I watch the Node view, so that I can inspect activity as I would in htop. The live incident showed a 139-second ingest cycle invalidating the CPU comparison interval.
+
+* AC-OBS-NODE-SEARCH-003.1: When the Node view is visible and active, the system shall sample and display process CPU and memory about every two seconds independently of slow ingest or startup backfill.
+* AC-OBS-NODE-SEARCH-003.2: When the view is hidden or left, the browser shall stop its live requests and the collector shall return to a slower cadence after a bounded viewing lease expires.
+* AC-OBS-NODE-SEARCH-003.3: When live readings arrive, the system shall preserve the search text and distinguish fresh measurements, initial sampling, delayed updates and snapshot fallback.
+* AC-OBS-NODE-SEARCH-003.4: When viewed through cloud, the system shall deliver the live measurements as encrypted bounded frames through the existing authenticated cache and relay, without increasing full system-snapshot frequency.
+
+The cadence correction replaces ingest-loop collection with one independent daemon worker. Full listener/settings/history work remains on a 30-second cadence. Only bounded process/resource frames use the two-second viewing cadence. Cloud publication uses a bounded latest-frame queue; network work cannot delay measurement. No host collection occurs in a request handler.

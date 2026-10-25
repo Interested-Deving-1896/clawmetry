@@ -94,7 +94,7 @@ def _process_cpu(counters, previous, measured_at):
     user = number(getattr(counters, "user", None))
     system = number(getattr(counters, "system", None))
     result = {"cpu_percent": None, "cpu_interval_seconds": None,
-              "cpu_reason": "CPU needs a second observation for this process."}
+              "cpu_reason": "CPU starts after the next measurement."}
     if user is None or system is None:
         result["cpu_reason"] = "CPU counters are unavailable for this process."
         return result, None
@@ -102,7 +102,7 @@ def _process_cpu(counters, previous, measured_at):
     if previous is not None:
         elapsed = measured_at - previous[2]
         if not 0.1 <= elapsed <= 120:
-            result["cpu_reason"] = "CPU observations are too close together or too far apart."
+            result["cpu_reason"] = "Waiting for a new CPU sample after a collection delay."
         elif user < previous[0] or system < previous[1]:
             result["cpu_reason"] = "CPU counters changed; a new interval is needed."
         else:
@@ -284,7 +284,7 @@ def _lsof_listeners(data, source_identity, cap):
 
 
 def collect_node_activity(*, preferences=None, node_id="", now=None, psutil_module=None,
-                          fingerprint_key=None, home=None, budget_seconds=3.0):
+                          fingerprint_key=None, home=None, budget_seconds=3.0, resources_only=False):
     """Return public metadata plus private source state for the daemon writer.
 
     No command line, environment, file content or file digest is public. Polling
@@ -355,7 +355,7 @@ def collect_node_activity(*, preferences=None, node_id="", now=None, psutil_modu
     pid_ids = {}
     for source, cap in (("processes", MAX_PROCESSES), ("listeners", MAX_LISTENERS),
                         ("logins", MAX_LOGINS)):
-        if not enabled or (source != "logins" and not prefs[source]):
+        if (resources_only and source != "processes") or not enabled or (source != "logins" and not prefs[source]):
             save(source, [], "disabled")
             continue
         if sensor is None:
@@ -510,7 +510,7 @@ def collect_node_activity(*, preferences=None, node_id="", now=None, psutil_modu
                      else "The source could not be read within this scan.")
             log.debug("Node %s scan incomplete: %s", source, type(exc).__name__)
 
-    if not enabled or not prefs["sensitive_files"]:
+    if resources_only or not enabled or not prefs["sensitive_files"]:
         save("sensitive_files", [], "disabled")
     elif not fingerprint_key:
         save("sensitive_files", [], "unavailable", "The private comparison key is unavailable.")

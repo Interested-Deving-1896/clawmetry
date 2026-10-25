@@ -3067,6 +3067,30 @@
       "doc": "Process search and ClawMetry resource visibility",
       "doc_id": "29fd5189-7479-4259-8b97-2f74a5d4031b",
       "text": "When process metadata is persisted or synchronized, the system shall omit command lines, environments and argument values while retaining role and measurement metadata."
+    },
+    {
+      "id": "AC-OBS-NODE-SEARCH-003.1",
+      "doc": "Process search and ClawMetry resource visibility",
+      "doc_id": "29fd5189-7479-4259-8b97-2f74a5d4031b",
+      "text": "When the Node view is visible and active, the system shall sample and display process CPU and memory about every two seconds independently of slow ingest or startup backfill."
+    },
+    {
+      "id": "AC-OBS-NODE-SEARCH-003.2",
+      "doc": "Process search and ClawMetry resource visibility",
+      "doc_id": "29fd5189-7479-4259-8b97-2f74a5d4031b",
+      "text": "When the view is hidden or left, the browser shall stop its live requests and the collector shall return to a slower cadence after a bounded viewing lease expires."
+    },
+    {
+      "id": "AC-OBS-NODE-SEARCH-003.3",
+      "doc": "Process search and ClawMetry resource visibility",
+      "doc_id": "29fd5189-7479-4259-8b97-2f74a5d4031b",
+      "text": "When live readings arrive, the system shall preserve the search text and distinguish fresh measurements, initial sampling, delayed updates and snapshot fallback."
+    },
+    {
+      "id": "AC-OBS-NODE-SEARCH-003.4",
+      "doc": "Process search and ClawMetry resource visibility",
+      "doc_id": "29fd5189-7479-4259-8b97-2f74a5d4031b",
+      "text": "When viewed through cloud, the system shall deliver the live measurements as encrypted bounded frames through the existing authenticated cache and relay, without increasing full system-snapshot frequency."
     }
   ]
 }

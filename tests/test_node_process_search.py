@@ -127,3 +127,86 @@ def test_self_is_deduplicated_and_preserved_when_enumeration_fails(tmp_path, mon
     assert len(result["processes"]) == 1
     assert result["processes"][0]["clawmetry_role"] == "collector"
     assert result["coverage"]["processes"]["state"] == ("partial" if enumeration_denied else "complete")
+
+
+def test_live_worker_measures_during_blocked_ingest_and_expires_view(tmp_path, monkeypatch):
+    """Live collection proceeds while ingest is blocked.
+
+    AC-OBS-NODE-SEARCH-003.1
+    AC-OBS-NODE-SEARCH-003.2
+    """
+    import threading
+    import time
+    from clawmetry import node_activity_service as service
+    from tests.test_node_activity import Store
+    service.stop_node_activity()
+    service._LAST_TICKS.clear()
+    monkeypatch.setattr(service, 'INTERVAL_SECONDS', .3)
+    monkeypatch.setattr(service, 'LIVE_INTERVAL_SECONDS', .1)
+    monkeypatch.setattr(service, 'VIEW_LEASE_SECONDS', .15)
+    monkeypatch.setattr(collector, '_read_lsof', lambda deadline: (b'', False))
+    sensor = Sensor()
+    sensor.error = None
+    def collect(**kwargs):
+        return collector.collect_node_activity(psutil_module=sensor, home=tmp_path, **kwargs)
+    monkeypatch.setattr(service, 'collect_node_activity', collect)
+    store = Store()
+    gate = threading.Event()
+    ingest = threading.Thread(target=lambda: gate.wait(3))
+    ingest.start()
+    try:
+        assert service.start_node_activity(store, node_id='live-test') is True
+        assert service.start_node_activity(store, node_id='live-test') is False
+        deadline = time.monotonic() + 3
+        stamps = set()
+        frame = None
+        while time.monotonic() < deadline:
+            frame = store.query_node_activity_live()
+            if frame.get('collected_at'):
+                stamps.add(frame['collected_at'])
+            if len(stamps) >= 2 and frame.get('processes') and frame['processes'][0]['cpu_percent'] is not None:
+                break
+            time.sleep(.03)
+        assert not gate.is_set(), 'Ingest has not completed'
+        assert len(stamps) >= 2 and frame['processes'][0]['cpu_percent'] == 0
+        assert frame['processes'][0]['cpu_interval_seconds'] < .5
+        assert 'events' not in frame and 'samples' not in frame
+        time.sleep(.2)
+        assert not service._view_active(), 'A stopped browser cannot leave a permanent fast poller'
+    finally:
+        service.stop_node_activity()
+        gate.set()
+        ingest.join(3)
+        store._conn.close()
+
+
+def test_resource_only_pass_does_not_scan_listeners_files_or_logins(tmp_path):
+    sensor = Sensor()
+    def forbidden(*a, **kw):
+        pytest.fail('A fast metric pass must not collect slow sources')
+    sensor.net_connections = forbidden
+    sensor.users = forbidden
+    result = collector.collect_node_activity(psutil_module=sensor, resources_only=True,
+                                               home=tmp_path, fingerprint_key=b'k'*32)
+    assert result['public']['processes']
+    assert result['public']['coverage']['listeners']['state'] == 'disabled'
+    assert result['public']['coverage']['sensitive_files']['state'] == 'disabled'
+
+
+def test_live_rpc_requires_daemon_token_and_carries_no_control_surface():
+    """The private live-read RPC remains authenticated.
+
+    AC-OBS-NODE-SEARCH-003.4
+    """
+    from flask import Flask
+    from routes.local_query import bp_local_query
+    app = Flask(__name__)
+    app.register_blueprint(bp_local_query)
+    assert app.test_client().post('/__local_query__/query_node_activity_live', json={'kwargs':{}}).status_code == 401
+
+
+def test_live_worker_refuses_a_startup_proxy_instead_of_silently_polling_it():
+    from clawmetry import node_activity_service as service
+    from clawmetry.local_store import _ProxyStore
+    with pytest.raises(RuntimeError,match='daemon writer'):
+        service.start_node_activity(_ProxyStore())

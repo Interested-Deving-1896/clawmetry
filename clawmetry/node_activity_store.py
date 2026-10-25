@@ -306,6 +306,25 @@ class NodeActivityStoreMixin:
             self._prune_node_activity_locked(now, hours, limit)
         return self.query_node_activity()
 
+    def record_node_activity_live(self, frame):
+        if self._read_only:
+            raise RuntimeError("Live measurements require the daemon writer")
+        with self._write_lock:
+            self._node_put_locked("live", frame)
+
+    def query_node_activity_live(self):
+        from clawmetry.node_activity_service import touch_node_activity_view
+        touch_node_activity_view()
+        rows = self._fetch("SELECT value FROM node_activity_meta WHERE key='live'", [])
+        body = json.loads(rows[0][0]) if rows else dict(unavailable("Waiting for the first live measurement."), live=True)
+        prefs = self.get_node_activity_state()["preferences"]
+        body["preferences"] = prefs
+        if not prefs["enabled"] or not prefs["processes"]:
+            body["processes"] = []
+        if not prefs["enabled"]:
+            body.update(available=False, summary={})
+        return body
+
     def query_node_activity(self):
         rows = self._fetch("SELECT value FROM node_activity_meta WHERE key='public'", [])
         body = json.loads(rows[0][0]) if rows else unavailable()

@@ -11,6 +11,7 @@
     </div>
     <nav class="na-views" aria-label="Node activity views"><button type="button" data-na-view="observe" aria-current="page">Observe</button><button type="button" data-na-view="govern">Govern</button><button type="button" data-na-view="guard">Guard</button></nav>
     <section data-na-panel="observe">
+      <div class="na-live-strip"><span id="na-live-state" role="status">Starting live measurements</span><span>CPU and memory update while you watch. Other observations update separately.</span></div>
       <section class="na-panel na-observation" aria-label="Selected recorded observation"><div class="na-panel-heading"><h3>What was observed</h3><span>Choose an observation below, or replay the sequence</span></div><div class="na-evidence" id="na-evidence" aria-label="Selected event evidence"><p class="na-empty">Recorded observations will appear here after collection.</p></div></section>
       <section class="na-panel na-history"><div class="na-panel-heading"><div><h3>Follow the sequence</h3><span id="na-history-note">Recorded observations and changes</span></div><div class="na-player"><button id="na-play" type="button" disabled>Replay events</button><input id="na-scrub" type="range" min="0" max="0" value="0" aria-label="Selected recorded event" disabled><span id="na-step">0 events</span></div></div><div id="na-events" class="na-events"><p class="na-empty">No recorded events are available.</p></div></section>
       <section class="na-panel na-clawmetry" aria-labelledby="na-clawmetry-title">
