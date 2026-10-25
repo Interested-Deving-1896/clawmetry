@@ -18,13 +18,14 @@
   }
   function attach(file) {
     if (busy || !file) return;
+    clearImage();
     if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
       status('Please choose a PNG, JPEG or WebP screenshot.'); return;
     }
     if (!file.size || file.size > 4 * 1024 * 1024) {
       status('Please choose a screenshot smaller than 4 MB.'); return;
     }
-    clearImage(); screenshot = file; previewUrl = URL.createObjectURL(file);
+    screenshot = file; previewUrl = URL.createObjectURL(file);
     el('preview').src = previewUrl; el('filename').textContent = file.name || 'Screenshot';
     el('attachment').hidden = false; status('');
   }
