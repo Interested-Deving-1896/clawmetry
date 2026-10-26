@@ -3386,12 +3386,13 @@ def _migrate_policy_actions_scope(conn) -> None:
             created_at BIGINT NOT NULL,
             PRIMARY KEY (node_id, runtime, session_id, policy_id, step_index))
     """)
-    node_expr = "COALESCE(node_id, '')" if 'node_id' in cols else "''"
-    conn.execute(f"""
+    if 'node_id' not in cols:
+        conn.execute("ALTER TABLE policy_actions ADD COLUMN node_id VARCHAR DEFAULT ''")
+    conn.execute("""
         INSERT INTO policy_actions__scoped
           (node_id, session_id, policy_id, step_index, runtime, action, kind,
            reason, evidence, enforced, result_ok, result_detail, created_at)
-        SELECT {node_expr}, session_id, policy_id, step_index, COALESCE(runtime, ''),
+        SELECT COALESCE(node_id, ''), session_id, policy_id, step_index, COALESCE(runtime, ''),
                action, kind, reason, evidence, enforced, result_ok, result_detail, created_at
         FROM policy_actions
     """)
@@ -11712,7 +11713,9 @@ class LocalStore(SecurityIngestStoreMixin, NodeActivityStoreMixin, AgentMetaMixi
                 "session_id": sid,
                 "agent_type": str(agent_type or "custom"),
                 "agent_id": str(agent_id or "main"),
-                "node_id": node_id,
+                # Match tool_events_for_span's virtual receiver identity when
+                # an exporter omitted node.id. Explicit source nodes survive.
+                "node_id": node_id or "otlp",
                 "title": str(root_name or service_name or sid)[:200],
                 "started_at": _iso_utc(started),
                 "last_active_at": _iso_utc(last),

@@ -159,6 +159,12 @@ class IncidentStoreMixin:
             "(SELECT incident_id FROM incident_episodes WHERE last_seen < ?)", [cutoff_ms])
         self._conn.execute("DELETE FROM incident_episodes WHERE last_seen < ?", [cutoff_ms])
 
+    def _episode_row_locked(self, incident_id):
+        """Read the fixed episode columns with a bound identity, under its transaction."""
+        return self._conn.execute(
+            f"SELECT {_SELECT} FROM incident_episodes WHERE incident_id=?",
+            [incident_id]).fetchone()
+
     def record_incident_observation(self, *, incident, node_id, observed_at=None):
         """Idempotently observe an episode. Invalid input is logged and dropped."""
         if self._read_only:
@@ -193,9 +199,7 @@ class IncidentStoreMixin:
             head = self._conn.execute(
                 "SELECT incident_id FROM incident_heads WHERE node_id=? AND runtime=? "
                 "AND session_id=? AND kind=?", scope).fetchone()
-            old_raw = self._conn.execute(
-                f"SELECT {_SELECT} FROM incident_episodes WHERE incident_id=?",
-                [head[0]]).fetchone() if head else None
+            old_raw = self._episode_row_locked(head[0]) if head else None
             old = _row(old_raw)
             preserve_head = False
             if old and incident["kind"] in SECURITY_EPISODE_KINDS:
@@ -210,9 +214,7 @@ class IncidentStoreMixin:
                         # Delayed impact must not borrow the head's freshness.
                         # A stable identity keeps periodic replay idempotent.
                         preserve_head = True
-                        old_raw = self._conn.execute(
-                            f"SELECT {_SELECT} FROM incident_episodes WHERE incident_id=?",
-                            [historical_id]).fetchone()
+                        old_raw = self._episode_row_locked(historical_id)
                         old = _row(old_raw)
             if old and old["state"] == "recovered":
                 recovery_at = (old.get("recovery_ref") or {}).get("ts")
@@ -245,9 +247,7 @@ class IncidentStoreMixin:
                     "INSERT INTO incident_heads VALUES (?, ?, ?, ?, ?) "
                     "ON CONFLICT (node_id,runtime,session_id,kind) DO UPDATE SET "
                     "incident_id=excluded.incident_id", [*scope, incident_id])
-            result = _row(self._conn.execute(
-                f"SELECT {_SELECT} FROM incident_episodes WHERE incident_id=?",
-                [incident_id]).fetchone())
+            result = _row(self._episode_row_locked(incident_id))
             self._project_incident_locked(result)
             return result
 
@@ -304,9 +304,7 @@ class IncidentStoreMixin:
             return None
         from clawmetry.local_store import _txn
         with self._write_lock, _txn(self._conn):
-            old = _row(self._conn.execute(
-                f"SELECT {_SELECT} FROM incident_episodes WHERE incident_id=?",
-                [incident_id]).fetchone())
+            old = _row(self._episode_row_locked(incident_id))
             if not old or old["state"] == "recovered" or old["kind"] not in LIFECYCLE_KINDS:
                 return old
             if (proof["ts"] is None or old["last_evidence_at"] is None
@@ -354,8 +352,7 @@ class IncidentStoreMixin:
             raise ValueError("invalid acknowledgement time")
         from clawmetry.local_store import _txn
         with self._write_lock, _txn(self._conn):
-            old = _row(self._conn.execute(
-                f"SELECT {_SELECT} FROM incident_episodes WHERE incident_id=?", [incident_id]).fetchone())
+            old = _row(self._episode_row_locked(incident_id))
             if not old:
                 return None
             watermark = self._conn.execute(

@@ -1,7 +1,8 @@
 """Bounded security evaluation of committed events, independent of session age.
 
-One page per wake; no filesystem reads or network activity under the writer
-lock. The cursor follows ingestion rather than the source event timestamp.
+At most one page per priority/backfill lane per wake; no filesystem reads or
+network activity under the writer lock. Cursors follow committed journal
+positions rather than source event timestamps.
 """
 from __future__ import annotations
 
@@ -40,12 +41,15 @@ def _runtime(row):
 def _cursor(settings, now_ms):
     raw = settings.get(CURSOR_KEY)
     if raw is None:
-        return None, None
+        return None, None, None
     obj = json.loads(raw)
-    if (obj.get("version") != 2 or type(obj.get("position")) is not int
+    if (not isinstance(obj, dict) or obj.get("version") != 2 or type(obj.get("position")) is not int
             or not isinstance(obj.get("epoch"), str)):
         raise ValueError("Invalid security cursor; evidence inspection needs repair")
-    return obj["position"], obj["epoch"]
+    priority = obj.get("priority_position")
+    if priority is not None and (type(priority) is not int or priority < 0):
+        raise ValueError("Invalid security priority cursor; evidence inspection needs repair")
+    return obj["position"], obj["epoch"], priority
 
 
 def _deliver(store, incident):
@@ -76,30 +80,63 @@ def _policy(store, incidents, row):
             incident=incident, policy_id=policy_id))
 
 
-def process_batch(store, *, now=None, limit=PAGE_SIZE, deliver=None, apply_policies=None):
-    """Handle one page. A failed write leaves its cursor unchanged for retry."""
+def process_batch(store, *, now=None, limit=PAGE_SIZE, deliver=None, apply_policies=None,
+                  recover_priority=False):
+    """Inspect a bounded fresh page before complete historical backfill.
+
+    Both lanes use the same evaluator and durable response graph. A failed
+    write leaves both positions unchanged. Startup may hand priority to the
+    retained tail; every skipped interval remains owned by the FIFO cursor.
+    """
     from clawmetry import detectors, guard_checks
     from clawmetry.detector_money import SECURITY_KINDS
     now_ms = int((time.time() if now is None else now) * 1000)
     settings = store.query_security_settings()
-    position, epoch = _cursor(settings, now_ms)
+    position, epoch, priority_position = _cursor(settings, now_ms)
     if any(os.environ.get(key, "1") == "0" for key in
            ("CLAWMETRY_DETECTORS", "CLAWMETRY_STUCK_DETECT")):
         return {"processed": 0, "findings": 0, "status": "disabled"}
+    page_limit = max(1, min(PAGE_SIZE, int(limit)))
     journal = store.query_security_changes(
-        position=position, epoch=epoch, limit=max(1, min(PAGE_SIZE, int(limit))),
+        position=position, epoch=epoch, limit=page_limit,
         bootstrap_after=max(0, now_ms - INITIAL_LOOKBACK_MS))
     page = journal["rows"]
     if not page and not journal["history_gap"]:
         return {"processed": 0, "findings": 0, "status": "idle"}
-    groups = defaultdict(list)
+    priority_page = []
+    priority_gap = False
+    if epoch == journal["epoch"] and priority_position is not None and priority_position > journal["head"]:
+        raise ValueError("Security priority cursor exceeds committed history")
+    if journal["position"] < journal["head"]:
+        floor = journal["floor"]
+        if (recover_priority or priority_position is None or journal["history_gap"] or epoch != journal["epoch"]
+                or priority_position < floor):
+            priority_position = max(floor, journal["head"] - page_limit)
+        # FIFO may already own a later position than the saved priority lane.
+        priority_position = max(priority_position, journal["position"])
+        if priority_position < journal["head"]:
+            priority = store.query_security_changes(
+                position=priority_position, epoch=journal["epoch"], limit=page_limit)
+            if priority["epoch"] != journal["epoch"] or priority["history_gap"]:
+                raise RuntimeError("Security journal changed between processing lanes")
+            priority_page = priority["rows"]
+            priority_position = priority["position"]
+            priority_gap = priority["history_gap"]
+    else:
+        priority_position = journal["position"]
+    # Keep lane groups separate: combining a fresh and historical chunk for
+    # one session would select the historical anchor and hide the fresh call.
+    groups = []
     skipped = 0
-    for row in page:
-        key = (str(row.get("node_id") or ""), _runtime(row), str(row.get("session_id") or ""))
-        if all(key):
-            groups[key].append(row)
-        else:
-            skipped += 1
+    for lane in (priority_page, page):
+        scoped = defaultdict(list)
+        for row in lane:
+            key = (str(row.get("node_id") or ""), _runtime(row), str(row.get("session_id") or ""))
+            if all(key):
+                scoped[key].append(row)
+            else:
+                skipped += 1
+        groups.extend(scoped.items())
     disabled = guard_checks.disabled_kinds(settings)
     selected = SECURITY_KINDS.intersection(detectors.DETECTOR_KINDS)
     excluded = set(detectors.DETECTOR_KINDS).difference(selected) | disabled
@@ -108,7 +145,7 @@ def process_batch(store, *, now=None, limit=PAGE_SIZE, deliver=None, apply_polic
     baselines = {}
     deliver = (lambda incident: store.enqueue_security_notification(incident=incident)) if deliver is None else deliver
     apply_policies = _policy if apply_policies is None else apply_policies
-    for (node_id, runtime, sid), rows in groups.items():
+    for (node_id, runtime, sid), rows in groups:
         session = store.query_security_session(session_id=sid, node_id=node_id, runtime=runtime)
         facts = {"cwd": (session or {}).get("cwd") or ""}
         if runtime not in baselines:
@@ -153,19 +190,23 @@ def process_batch(store, *, now=None, limit=PAGE_SIZE, deliver=None, apply_polic
                     # worker performs network I/O independently of inspection.
                     if incident.get("incident_state") == "active":
                         deliver(incident)
-    cursor = {"version": 2, "position": journal["position"], "epoch": journal["epoch"]}
+    cursor = {"version": 2, "position": journal["position"], "epoch": journal["epoch"],
+              "priority_position": priority_position}
     encoded = json.dumps(cursor, sort_keys=True, separators=(",", ":"))
-    history_gap = journal["history_gap"] or settings.get("guard.security.history_gap") == "true"
+    history_gap = journal["history_gap"] or priority_gap or settings.get("guard.security.history_gap") == "true"
+    backfill_pending = journal["position"] < journal["head"]
     status = {
         "last_pass_ms": now_ms, "processed": len(page), "findings": count,
         "unscoped": skipped, "limitations": limitations,
-        "page_full": len(page) == max(1, min(PAGE_SIZE, int(limit))),
+        "priority_processed": len(priority_page), "backfill_pending": backfill_pending,
+        "page_full": len(page) == page_limit,
         "history_gap": history_gap,
-        "status": "partial" if skipped or history_gap or limitations else "inspected"}
+        "status": "partial" if skipped or history_gap or limitations or backfill_pending else "inspected"}
     store.commit_security_progress(cursor=encoded, status=status, history_gap=history_gap)
     if store.query_security_settings().get(CURSOR_KEY) != encoded:
         raise RuntimeError("Security cursor persistence was not confirmed")
-    return {"processed": len(page), "findings": count, "status": status["status"]}
+    return {"processed": len(page), "priority_processed": len(priority_page),
+            "findings": count, "status": status["status"]}
 
 
 def start(store):
@@ -176,6 +217,7 @@ def start(store):
             return _THREAD
         def worker():
             captured_at = 0.0
+            recover_priority = True
             while True:
                 _WAKE.wait(timeout=30)
                 _WAKE.clear()
@@ -189,7 +231,8 @@ def start(store):
                 except Exception:
                     log.exception("Protection configuration evidence unavailable")
                 try:
-                    result = process_batch(store)
+                    result = process_batch(store, recover_priority=recover_priority)
+                    recover_priority = False
                     if result["processed"]:
                         _WAKE.set()  # bounded backlog drain, one page per second
                 except Exception:

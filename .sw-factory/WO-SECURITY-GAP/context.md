@@ -13,7 +13,7 @@
 - New Factory requirement created before product edits. Component blueprint and implementation plan preceded product edits.
 - Existing features retained: runtime pre-tool gates, secret-value scanning, same-command upload detection, injection detector, workspace inventory, scanner SARIF/provenance.
 - Branch: feat/agent-security-gap
-- Cloud delivery: https://github.com/vivekchand/clawmetry-cloud/pull/2666; OSS PR pending
+- Cloud delivery: https://github.com/vivekchand/clawmetry-cloud/pull/2666; OSS delivery: https://github.com/vivekchand/clawmetry/pull/6530
 
 - Native proof: real Claude Code and Copilot protected-write denials with ordinary allowed work; a real Claude boundary call ingested as eight events and one durable security finding, inspected in Guard history and investigation.
 - Cursor native proof remains unavailable because the CLI requires authentication. No native sandbox or arbitrary-process network containment was established. Guard scanner coverage remains unknown; the existing PR provenance/SARIF workflow remains the independent code-review path.

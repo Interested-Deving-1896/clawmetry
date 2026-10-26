@@ -209,6 +209,34 @@ Independent verification: **147 tests passed in 13.50 seconds** across ladder/mi
 
 **Scoped policy-latch verdict: APPROVED.** Native control identity on a real running agent and final publication/deployment evidence remain the parent's verification work.
 
+
+### Independent priority/backfill assessment and review
+
+Reviewer: security_detection_audit. The reviewer authored actual-store regressions and benchmark experiments, but did not implement the priority service or query changes. security_gate_audit independently reviewed the seven new regression cases.
+
+The FIFO-only timing issue is material. The existing journal writer retains about 100,000 receipts, pruning at 110,000; a million retained receipts is not a normal reachable case. Even at the one-second minimum cadence, 100,000/128 pages require about13 minutes before reaching a new tail append. Isolated complete-page measurements with 128 interleaved scopes required roughly 386 ms process CPU on early pages; applying the existing duty formula yields about 67 minutes at that observed page cost. Late pages with full 200-event context were more expensive. These are calculated equivalents, not a measured full-queue drain or evidence of typical customer load. A short completed session is excluded from the periodic active-session pass, and its new evidence can become stale before FIFO processing reaches it.
+
+The minimal repair reuses one exact evaluator and the same incident, policy and outbox graph. One bounded priority page precedes one FIFO page. The durable cursor keeps both positions in one progress transaction. Boot/recovery handoff can prioritize the retained tail while every skipped interval stays owned by FIFO; healthy priority advances monotonically. Lane groups remain separate so a historical anchor cannot hide a fresh call. Epoch/floor races and read/evidence/progress failures retain both durable positions. Backfill remains explicitly partial; the feature does not assert complete inspection while earlier activity is pending.
+
+Independent actual-store tests captured six red failures before the implementation. All seven cases now pass: completed/active fresh evidence on the first bounded pass, complete FIFO visitation and delayed old-source discovery, overlap episode/outbox/policy-latch deduplication, both-cursor failure rollback, restart handoff and skipped-interval preservation, and same-episode identity after aging before FIFO replay. The broader six-suite run passed **184 tests in 9.55 seconds**. Only harmless synthetic tool arguments were inspected; no command, native process signal or external notification was executed.
+
+Sanitized benchmark evidence is saved at evidence/security-priority-benchmark.json. With 100,000 old receipts plus one fresh completed-session credential read, the warm measured local finding/outbox response was 113 ms with one historical scope,302ms with10 scopes, and3.005s with 128 interleaved scopes. The complete dual-page passes consumed 160 ms, 381 ms and 3.519 s process CPU respectively. FIFO advanced only to 128 while priority reached 100001. Each distribution used six actual passes, discarding the first from the five-sample warm mean. Calculated sleep was not executed. This demonstrates a bounded first-pass response on the fixture, not a production latency SLA; the existing process-wide CPU target and 60-second sleep ceiling remain unchanged.
+
+**Priority service source verdict: APPROVED.** Remaining limits include sustained input beyond capacity, independent native prevention, network delivery latency and deployed behavior. These are not broadened by the source or benchmark evidence.
+
+
+### Independent OTLP scope regression remediation review
+
+Reviewer: security_detection_audit. Scope: the materialized-session node fallback in local_store.py and changed assertions in test_otlp_trace_guard_redaction.py and test_otlp_span_parity_sources_content.py. protection_coverage authored this remediation.
+
+The old bare-signature assertions were replaced with stronger scoped checks: exact prefix plus full 24-hex suffix format, an independently computed expected scope digest, node/runtime/kind and durable incident ID. Existing redaction, after-the-fact provenance, non-controllability and encrypted hosted roundtrip assertions remain intact.
+
+The tests exposed a real producer inconsistency rather than only stale assertions. Span tool events already use the virtual receiver node "otlp" when the exporter omits node.id; materialized sessions retained NULL. The exact Guard filter consequently withheld the valid scoped incident. Session materialization now uses the same fallback while preserving explicit exporter nodes. No scope filter was weakened, and telemetry-only sessions retain their observation/control restrictions. Two new real-receiver tests cover missing and explicit node identities.
+
+Independent verification: **32 tests passed in 9.89 seconds** across both complete files. The destructive-looking commands remain inert span attribute strings; no native control or network notification was executed by these tests. The encrypted snapshot roundtrip remains part of the validation.
+
+**OTLP remediation source verdict: APPROVED.** This does not substitute for hosted deployment verification or claim an agent seen only through telemetry can be controlled.
+
 ### Approval owner compatibility follow-up
 
 The hosted path exposed a downgrade hazard: an older policy parser ignores the digest field. Bound policies now serialize an impossible command regex for legacy readers; aware readers authorize only the exact digest. New daemons advertise the v1 action-binding capability when fetching cloud policies. The cloud stores only opaque digest/runtime metadata for this purpose; raw arguments and cwd remain node-local. Two local tests exercise serialization and capability negotiation.
@@ -270,3 +298,59 @@ Source is ready for PR and CI. The full work order remains incomplete until requ
 Scope-owner final local rerun:140 tests passed, with the three then-open coverage-owned B10/partial-status regressions excluded. A further focused escalation run passed36 before the last two scope-fact mismatch probes were appended. Missing exact session facts now skips periodic response and raises in strict handling; it never supplies zero-filled authority for a generic policy. Explicit row runtime is consistent with its in-memory scope key. Persisted timing memo keys are domain-tagged readable JSON arrays, keeping legacy native-ID strings separate from exact scope keys.
 
 Compatibility consequence: historical rows without reliable node scope conservatively suppress compatible policy ladders. They remain visible as unknown scope instead of being assigned to a guessed node or reused as escalation authority. A deliberate new policy identity can establish fresh exact-scope history. This behavior avoids replaying a control during upgrade.
+
+
+## Priority inspection coverage disclosure
+
+Authored by protection-coverage agent after the parent identified historical backfill delaying new evidence. This delta is limited to the existing protection-evidence builder and Guard renderer; the parent owns the priority ingestion mechanism and its timing verification.
+
+The node-status projection now carries a strictly typed `backfill_pending` flag and bounded `priority_processed` count alongside FIFO `processed`. Pending backfill remains partial coverage. With a fresh positive priority count the existing Guard row says recent activity was inspected while earlier activity remains pending. Without that positive evidence it only states that earlier inspection remains pending. Stale, unavailable and disabled states retain their meanings, and history-gap disclosure remains visible. No new endpoint or poll was added.
+
+Four new builder cases and actual shipped-JavaScript behavior assertions failed before this change and pass after it. The protection/cloud-slice suite passed **40 tests**; direct renderer assertions, JavaScript syntax and whitespace checks passed. Independent gate-audit review was requested; its verdict is recorded separately. No all-clear, runtime-prevention or end-to-end latency claim follows from these disclosure tests.
+
+
+Independent gate review identified a wording blocker in the priority disclosure: `priority_processed` counts receipts rather than proving source-event freshness or successful inspection of each row. The positive-count copy was corrected to “Newer records were processed while earlier activity remains pending inspection.” Zero/unknown priority counts continue to disclose pending earlier activity only. The earlier wording in the authorship checkpoint above is superseded by this correction. Typed fields, stale/unavailable handling and history-gap disclosure remain unchanged. The same 40 focused tests pass after the revised shipped-JavaScript assertions; syntax and whitespace checks pass. Final independent approval is recorded by the gate auditor separately.
+
+## Independent priority disclosure and regression-source review
+
+Reviewer: security_gate_audit. Read-only source review of the protection-evidence builder/Guard disclosure authored by protection_coverage and the seven priority regression cases authored by security_detection_audit. The reviewer did not author these deltas. Parent-owned priority service implementation is outside this scoped verdict.
+
+The builder accepts only a real Boolean backfill flag and a bounded integer priority receipt count, keeps pending history partial, and preserves stale/unavailable/disabled meanings. The shipped renderer retains pending-history and history-gap disclosure without an all-clear or prevention claim. One blocking wording issue was corrected during review: a positive priority count measures selected receipt processing, which can include historical-source or unscoped records; it did not establish that recent source activity was successfully inspected. The final copy now states, "Newer records were processed while earlier activity remains pending inspection." It reports the receipt-level fact without upgrading it into source freshness or complete inspection.
+
+Independent test-source review approved all seven priority cases. They use real temporary stores and real detector/policy paths, with only boundary fault injection and a forbidden actuator stub. The cases meaningfully cover completed/active fresh findings ahead of historical FIFO, eventual old-source attack discovery, overlap identity and outbox/policy idempotence, both-cursor retention on actual read/evidence/progress failures, startup tail handoff without discarding the skipped FIFO interval, and same-evidence episode identity after aging. These tests assert observable evidence/progress outcomes rather than mocking expected detector outputs. They do not prove wall-clock latency under sustained ingestion or native runtime prevention.
+
+Independent verification: protection/cloud-slice tests passed40; the seven priority regressions passed7; whitespace checks passed. **Scoped UI disclosure and priority-test-source verdict: APPROVED.** Review of the service algorithm, broader recovery behavior, performance, publication and live verification remains with its assigned reviewer and the parent.
+
+
+## OTLP CI contract and producer-scope remediation
+
+Parent-assigned triage reproduced both OTLP failures with protobuf enabled. Actual stored rows were critical observed-only security findings with `daemon_detect_file_blast_radius:<24 hex>` signatures; legacy exact-name lookups missed them. The two tests now validate the scoped namespace, full suffix format, independently calculated SHA-256 scope digest, and node/kind/incident metadata. Existing severity, provenance, non-control and encrypted hosted roundtrip assertions remain intact.
+
+The stricter lookup exposed a real hosted parity regression: spans without `node.id` produced tool events under the existing virtual receiver node `otlp`, while their materialized sessions retained NULL node identity. The exact-scope filter correctly refused to join them. The parent authorized a producer repair: `materialize_sessions_from_spans` now uses that same existing virtual identity only when the source node is absent. Explicit exporter node IDs survive unchanged; no scope-filter or control semantics changed. A new two-case regression verifies absent and explicit source nodes through real intake and stored session/tool rows.
+
+Both original files independently pass **32 tests**. The detector auditor independently reviewed and approved the source/test remediation. A clean temporary OSS virtualenv installed the exact hash-pinned CI base and OTLP requirements; decoder availability was asserted and clawmetry-pro was absent. All **201 tests in the complete 15-file OTLP CI job passed in 36.25 seconds** on local macOS/Python 3.14. One warning came from a compatibility-listener thread during socket teardown (`Bad file descriptor`); no test failed. This local run does not replace Linux/Python 3.11 CI. The developer environment with an installed Pro profile showed four additional daemon-free profile-path failures, which were absent from this clean OSS environment and from the original CI log; no unrelated production or test behavior was changed to hide them.
+
+Whitespace checks passed. No commit or release was performed by this delegated lane.
+
+
+### CI remediation and scanner checkpoint
+
+The first OSS head passed most checks but failed two OTLP compatibility cases and the Bandit count ratchet. The strict scoped projection exposed both an obsolete exact-signature test lookup and a real producer mismatch: received tool events used virtual node otlp while a materialized session retained NULL. The producer now keeps the same virtual identity for absent node.id and preserves explicit exporter nodes. All severity, observation-only control, provenance and encrypted hosted assertions remain. A clean hash-pinned OSS environment passed the full 201-test OTLP job; independent review passed both complete affected files.
+
+Bandit 1.9.4 from the CI hash-pinned requirements completed with 308 medium-or-higher findings, zero HIGH findings and zero parse errors. Static migration SQL and a shared fixed-column, bound-ID episode read removed duplicated query constructions. There is no new suppression and no relaxed threshold; the ratchet tightens from 309 to 308. The two new ingest query builders use fixed column/runtime expression construction with bound source values; the count is not a claim that existing repository findings are resolved. Summary evidence is adjacent.
+
+The load-review refinement is independently approved above and has separate synthetic load evidence, explicitly distinct from native runtime proof. Release and hosted verification remain pending.
+
+## Independent static-SQL reuse and OTLP scope review
+
+Reviewer: security_gate_audit. Read-only review of parent-authored migration/episode SQL refactors and protection_coverage's OTLP producer fallback/tests. No product edits were made by this reviewer.
+
+The schema19 migration now adds its absent unknown node_id column inside the existing outer schema transaction, then uses a static INSERT/SELECT with COALESCE for legacy NULL values. It preserves the same readable composite identities and conservative unknown-scope semantics. An independent actual DuckDB fault injection after ALTER and before copy confirmed rollback restores both the original schema and historical row, removes the temporary scoped table, and permits a successful retry. Existing startup rollback regressions also pass.
+
+All five identical incident-by-ID lookup sites now reuse _episode_row_locked. Its selected column names are fixed module constants and its incident ID remains a bound SQL parameter. Observation, historical replay, recovery and acknowledgement call it under the same existing writer-lock/transaction boundaries; return decoding is unchanged. The two remaining security-ingest SQL builders use fixed imported column identifiers, fixed runtime-expression fragments and generated parameter placeholders; runtime/node/session/event values remain bound. No new suppression or scan-ratchet relaxation is part of these refactors.
+
+OTLP materialization now assigns the established virtual node identity 'otlp' only when the exporter omitted its node, matching tool_events_for_span. Explicit source node IDs remain unchanged. The two formerly legacy signature lookups now require the exact scoped signal identity plus readable node/runtime/kind and durable incident ID, retaining observed-after-the-fact and redaction assertions. The new actual-receiver cases verify both missing and explicit node identity across materialized session and generated tool events.
+
+Independent verification:120 migration/escalation, incident lifecycle and evidence-recency tests passed;32 OTLP parity/redaction tests passed. Python compilation and whitespace checks passed. The local unpinned Bandit run completed before cancellation was attempted, but this review makes no baseline-count claim; the parent's pinned CI-equivalent scanner owns that result.
+
+**Scoped functional and SQL-safety verdict: APPROVED.** These tests do not establish deployed OTLP delivery, native prevention, live latency or release completion.

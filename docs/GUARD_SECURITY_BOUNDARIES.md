@@ -29,6 +29,10 @@ The daemon uses the existing committed event-change journal.
 It follows durable positions rather than source timestamps or the machine clock.
 Completed sessions remain eligible for security inspection.
 A journal retention gap stays visible. It does not establish a clean inspection.
+Newer committed records have a bounded priority lane while complete historical
+backfill continues. Startup can hand priority to the retained tail; the FIFO
+cursor still owns every skipped interval. Both positions commit together.
+Guard reports pending backfill separately. Page and CPU budgets still apply.
 
 Each finding references only the source steps that support it.
 Unrelated later activity cannot make an old credential read current.

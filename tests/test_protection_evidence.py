@@ -296,3 +296,25 @@ def test_truncated_hook_search_preserves_positive_configuration_only(monkeypatch
     assert result["state"] == "configured"
     assert result["inspection_complete"] is False
     assert "execution_verified" not in result
+
+
+def test_priority_inspection_discloses_pending_history_and_bounded_progress():
+    """AC-GOV-SBG-002.1/.3 AC-GOV-SBG-004.1: current work does not certify history."""
+    from clawmetry.protection_evidence import build
+    value = build(_row(), inspection={"status": "inspected", "last_pass_ms": 1000000,
+        "backfill_pending": True, "priority_processed": 3, "processed": 128}, now=1000)["node_inspection"]
+    assert value["state"] == "partial"
+    assert value["backfill_pending"] is True
+    assert value["priority_processed"] == 3
+    assert value["processed"] == 128
+    assert "clean" not in value
+
+
+@pytest.mark.parametrize("pending,count", [("true", True), (1, -1), (None, 1000001)])
+def test_priority_inspection_rejects_malformed_progress(pending, count):
+    """AC-GOV-SBG-004.1: absent or invalid progress stays unknown."""
+    from clawmetry.protection_evidence import build
+    value = build(_row(), inspection={"status": "partial", "last_pass_ms": 1000000,
+        "backfill_pending": pending, "priority_processed": count}, now=1000)["node_inspection"]
+    assert value["backfill_pending"] is None
+    assert value["priority_processed"] is None

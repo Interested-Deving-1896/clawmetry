@@ -129,7 +129,8 @@ def _isolation(row, policies, now_ms):
 def _inspection(status, now_ms):
     result = {"state": "unknown", "scope": "node", "source": "incremental_security_ingest",
               "last_pass_ms": None, "processed": None, "unscoped": None, "limitations": None,
-              "page_full": None, "history_gap": None}
+              "page_full": None, "history_gap": None,
+              "backfill_pending": None, "priority_processed": None}
     if not isinstance(status, dict):
         return result
     stamp = _number(status.get("last_pass_ms"))
@@ -140,14 +141,17 @@ def _inspection(status, now_ms):
     result["state"] = state if state in ("inspected", "partial", "unavailable", "disabled") else "unknown"
     if result["state"] == "inspected" and status.get("page_full") is True:
         result["state"] = "backlog"
+    if result["state"] in ("inspected", "backlog") and status.get("backfill_pending") is True:
+        result["state"] = "partial"
     if not _recent(stamp, now_ms):
         result["state"] = "stale"
-    for name in ("processed", "unscoped", "limitations"):
+    for name in ("processed", "unscoped", "limitations", "priority_processed"):
         val = status.get(name)
         if type(val) is int and 0 <= val <= 1_000_000:
             result[name] = val
     result["page_full"] = status.get("page_full") if type(status.get("page_full")) is bool else None
     result["history_gap"] = status.get("history_gap") if type(status.get("history_gap")) is bool else None
+    result["backfill_pending"] = status.get("backfill_pending") if type(status.get("backfill_pending")) is bool else None
     return result
 
 

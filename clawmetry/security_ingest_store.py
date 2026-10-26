@@ -60,7 +60,7 @@ class SecurityIngestStoreMixin:
             "SELECT epoch,floor FROM event_change_head WHERE singleton=1", [])[0]
         if after_epoch != current_epoch or position < after_floor:
             raise RuntimeError("Security journal changed during inspection")
-        return dict(rows=result, epoch=current_epoch, head=head, history_gap=gap,
+        return dict(rows=result, epoch=current_epoch, head=head, floor=floor, history_gap=gap,
                     position=rows[-1][0] if rows else position)
 
     def query_security_window(self, *, session_id, node_id, runtime, position, limit=200):

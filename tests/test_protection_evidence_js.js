@@ -38,4 +38,20 @@ assert(html.includes('Inspection unavailable'));
 assert(!html.includes('<img'));
 assert(!html.includes('<script'));
 assert(!html.includes('SECRET'));
+// AC-GOV-SBG-002.1/.3 AC-GOV-SBG-004.1: priority receipt processing does not certify pending history.
+html = sandbox.guardProtectionEvidence({protection: {schema_version: 1,
+  node_inspection: {state: 'partial', backfill_pending: true, priority_processed: 2}}});
+assert(html.includes('Newer records were processed while earlier activity remains pending inspection'));
+assert(!html.includes('Some activity has no confirmed scope'));
+assert(!html.includes('all clear'));
+html = sandbox.guardProtectionEvidence({protection: {schema_version: 1,
+  node_inspection: {state: 'partial', backfill_pending: true, priority_processed: 0, history_gap: true}}});
+assert(html.includes('Earlier activity remains pending inspection'));
+assert(html.includes('Earlier activity is unavailable for inspection'));
+assert(!html.includes('Newer records were processed'));
+html = sandbox.guardProtectionEvidence({protection: {schema_version: 1,
+  node_inspection: {state: 'unavailable', backfill_pending: true, priority_processed: 2}}});
+assert(html.includes('Inspection unavailable'));
+assert(!html.includes('Newer records were processed'));
+
 console.log('PASS protection evidence rendering');

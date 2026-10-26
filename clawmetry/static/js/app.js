@@ -33870,11 +33870,16 @@ function guardProtectionEvidence(session) {
   var controlWords = control.state === 'available' ? 'Controls available, outcome unverified'
     : control.state === 'unavailable' ? 'Controls unavailable' : 'Control capability unknown';
   var inspection = proof.node_inspection || {};
-  var inspectionWords = {inspected: 'A page of activity was inspected', partial: 'Some activity has no confirmed scope',
+  var inspectionWords = {inspected: 'A page of activity was inspected', partial: 'Some activity could not be fully inspected',
     backlog: 'More activity remains to inspect', unavailable: 'Inspection unavailable', disabled: 'Inspection is off',
     stale: 'No recent inspection record', unknown: 'Inspection evidence unknown'};
   var inspectionText = inspectionWords[inspection.state] || inspectionWords.unknown;
-  if (inspection.state === 'partial' && inspection.history_gap === true) inspectionText = 'Earlier activity is unavailable for inspection';
+  if (inspection.backfill_pending === true && ['partial', 'inspected', 'backlog'].indexOf(inspection.state) !== -1) {
+    inspectionText = Number.isInteger(inspection.priority_processed) && inspection.priority_processed > 0
+      ? 'Newer records were processed while earlier activity remains pending inspection'
+      : 'Earlier activity remains pending inspection';
+  }
+  if (inspection.state === 'partial' && inspection.history_gap === true) inspectionText += '. Earlier activity is unavailable for inspection';
   if (inspection.last_pass_ms) inspectionText += '. Last pass ' + guardAgo(inspection.last_pass_ms);
   var rows = [
     ['Activity', proof.observation && proof.observation.state === 'pending' ? 'Waiting for recorded activity' : 'Recorded activity'],
